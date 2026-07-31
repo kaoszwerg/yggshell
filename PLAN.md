@@ -68,15 +68,28 @@ The reason the product exists: enriching an AI development harness.
 - [x] Branch history, drawn: lanes assigned as the walk proceeds, merges given their own lane, refs
       labelled on the commit they point at.
 - [x] The history covers **every local branch**, sorted by commit time, with a colour per lane.
+- [x] **Inside tmux the working directory comes from tmux itself** (`pane_current_path`), polled by the
+      active tab. Measured: tmux consumes OSC 7 and forwards nothing, with or without its DCS
+      passthrough. The upside is subtraction — inside tmux no shell integration is installed at all.
+- [x] **The layout the tool needed:** branch fixed on top, changes and history each in their own scroll
+      region with a draggable divider between them whose position is remembered as a share of the
+      height (`Splitter` gained a horizontal mode; `Row` is the new activatable-row primitive).
+- [x] **Reading, not just listing.** A changed file opens its diff; a commit opens in full — whole
+      message, author, parents, files with `+n −m`, each of which opens its own diff inside that commit.
+      In a panel over the terminal (Escape closes), with syntax highlighting from `shiki`: tokens rather
+      than HTML, our palette rather than a stock theme, and no WASM.
 - [ ] Still open here: fish and other shells get no hook (fish reports OSC 7 itself; the rest do not).
-      Remote-only branches are not drawn — only local ones and HEAD.
+      Remote-only branches are not drawn — only local ones and HEAD. A diff is highlighted per hunk, so
+      a hunk starting inside a block comment can be mis-coloured.
 
-## Phase 4 — Terminal configuration (next up)
+## Phase 4 — Terminal configuration (in progress)
 
 Ordered as they should be built; each is discussed before it starts (rule:clarify-and-plan).
 
-- [ ] **Which shell to start.** Today it is `$SHELL` with no way to change it. The first real gap in
-      Settings → Terminal, and the smallest.
+- [x] **Which shell to start** (Settings → Terminal). A list the backend produced, never a text field:
+      `terminal_open` takes no command line on purpose (ADR-PROJ-001 §5), and a free-text shell path
+      would have handed that back. `/etc/shells` + `$SHELL` on Unix, the known interpreters on Windows;
+      checked when stored and again before a spawn.
 - [ ] **iTerm2 theme import** (`.itermcolors`, a plist of 0–1 float components). Parse in Rust, store
       per theme, hand the 16+ ANSI colours to `TerminalSurface`'s theme object — which already takes
       them from `PALETTE`, so the seam exists.
