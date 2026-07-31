@@ -1,0 +1,36 @@
+#!/bin/sh
+# YggShell command-line launcher.
+#
+#   ygg              open a terminal in the current directory
+#   ygg ~/project    open a terminal in that directory
+#   ygg file.txt     open a terminal in the directory holding that file
+#
+# Installed from Settings › Tools; it is a copy, so it keeps working while the app is being rebuilt.
+#
+# WHY `open -a` AND NOT THE BINARY DIRECTLY: launching the executable would start a SECOND instance,
+# with its own window, beside the one already running — and on macOS a second instance of a bundled
+# app is a broken thing (no dock entry of its own, no focus). `open` hands the path to the instance
+# that is already there, and starts it only if none is. Both routes end up in the same place: an
+# "opened" run event, validated in src-tauri/src/launch.rs.
+set -eu
+
+target=${1:-.}
+
+if [ ! -e "$target" ]; then
+  printf 'ygg: %s does not exist\n' "$target" >&2
+  exit 1
+fi
+
+# Resolved here as well as in the app: `open` resolves a relative path against ITS OWN working
+# directory, not the shell's, so `ygg .` would otherwise land somewhere unrelated.
+if [ -d "$target" ]; then
+  resolved=$(cd "$target" && pwd)
+else
+  resolved=$(cd "$(dirname "$target")" && pwd)/$(basename "$target")
+fi
+
+app=${YGGSHELL_APP:-YggShell}
+
+# No -g: somebody who typed `ygg .` is asking to be looking at a terminal, the same way `code .`
+# brings the editor forward. Opening it behind the window they are already in would be a puzzle.
+exec open -a "$app" "$resolved"

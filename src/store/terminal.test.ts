@@ -172,3 +172,42 @@ describe("what a tab is running", () => {
     }
   });
 });
+
+/**
+ * Opening a tab somewhere specific, for `ygg <dir>` and Finder's "Open With".
+ *
+ * The distinction from `openPane` is the whole point: an ordinary new tab starts wherever the shell
+ * would, and this one starts where somebody named — so the directory has to survive all the way to
+ * the shell rather than being a title the tab merely displays.
+ */
+describe("opening a tab in a named directory", () => {
+  beforeEach(reset);
+
+  it("opens a tab that already knows where it is", () => {
+    const key = useTerminalStore.getState().openPaneIn("/home/s/project");
+    const opened = useTerminalStore.getState().panes.find((p) => p.key === key);
+    expect(opened?.cwd).toBe("/home/s/project");
+  });
+
+  it("focuses it, because the user just asked for it", () => {
+    useTerminalStore.getState().openPane();
+    const key = useTerminalStore.getState().openPaneIn("/home/s/project");
+    expect(useTerminalStore.getState().activeKey).toBe(key);
+  });
+
+  it("opens a second tab for a second request, rather than reusing the first", () => {
+    // Two `ygg` invocations are two pieces of work. Reusing a tab would take the user away from
+    // whatever is running in it.
+    const first = useTerminalStore.getState().openPaneIn("/a");
+    const second = useTerminalStore.getState().openPaneIn("/b");
+    expect(second).not.toBe(first);
+    expect(useTerminalStore.getState().panes).toHaveLength(2);
+  });
+
+  it("does not persist the directory as a profile decision", () => {
+    // It is where this tab started, not a preference — the next ordinary tab must not inherit it.
+    useTerminalStore.getState().openPaneIn("/a");
+    const key = useTerminalStore.getState().openPane();
+    expect(useTerminalStore.getState().panes.find((p) => p.key === key)?.cwd).toBeNull();
+  });
+});

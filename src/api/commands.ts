@@ -2,6 +2,7 @@
 // ADR-CORE-005). Run `npm run gen:types` after touching Rust DTOs.
 import { invoke } from "@tauri-apps/api/core";
 import type { BuildInfo } from "../bindings/BuildInfo";
+import type { CliInstall } from "../bindings/CliInstall";
 import type { CrashReport } from "../bindings/CrashReport";
 import type { LogRecord } from "../bindings/LogRecord";
 import type { SettingsDto } from "../bindings/SettingsDto";
@@ -101,6 +102,21 @@ export const api = {
       tmuxSession: opts.tmuxSession ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,
     }),
+  /**
+   * Directories handed to the app before the interface could listen — `ygg <dir>` on a cold start,
+   * or a folder opened from Finder while the window was still loading.
+   *
+   * Draining, not reading: each request opens one tab, and a reload must not reopen terminals the
+   * user already has.
+   */
+  pendingLaunches: () => invoke<string[]>("pending_launches"),
+  /**
+   * Put `ygg` and `yggshell` on the user's PATH. Only ever called from the button that offers it.
+   *
+   * Reports where they went and whether that directory is on PATH — installed and not found is a
+   * worse outcome than not installed, so the caller has to be able to say so.
+   */
+  installCli: () => invoke<CliInstall>("install_cli"),
   /** Open an http(s) URL in the default browser (routed through the backend so it is logged). */
   openExternal: (url: string) => invoke<void>("open_external", { url }),
   /**

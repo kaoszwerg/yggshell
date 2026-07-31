@@ -189,6 +189,18 @@ export const en = {
   "settings.window.trayHint":
     "“Minimize to tray” keeps the app running in the system tray with an Open/Quit menu.",
 
+  // ── The command-line launcher ────────────────────────────────────────────────────────────────
+  "cli.title": "Command line",
+  "cli.description": "Open a terminal here from any shell, or from Finder.",
+  "cli.install": "Install ygg command",
+  "cli.installing": "Installing…",
+  "cli.installed": "Installed in {directory} — {names}",
+  "cli.notOnPath":
+    "{directory} is not on your PATH, so the shell will not find it yet. Add it to your shell profile, then open a new terminal.",
+  "cli.failed": "Could not install the launcher: {reason}",
+  "cli.usage":
+    "ygg opens a terminal in the current directory; ygg <path> opens one there. Finder offers YggShell under Open With for any folder — that needs no installation.",
+
   // ── About ────────────────────────────────────────────────────────────────────────────────────
   "about.title": "About",
   "about.close": "Close About",

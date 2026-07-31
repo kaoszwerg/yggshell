@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
+import { CliInstaller } from "../components/settings/CliInstaller";
 import { StatusBarEditor } from "../components/settings/StatusBarEditor";
 import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
@@ -319,13 +320,18 @@ function SelectionChoice() {
 function ToolsSection() {
   const t = useT();
   return (
-    <HudPanel
-      accent="cyan"
-      label={t("settings.git.title")}
-      description={t("settings.git.description")}
-    >
-      <GitRemoteChoice />
-    </HudPanel>
+    <>
+      <HudPanel accent="cyan" label={t("cli.title")} description={t("cli.description")}>
+        <CliInstaller />
+      </HudPanel>
+      <HudPanel
+        accent="cyan"
+        label={t("settings.git.title")}
+        description={t("settings.git.description")}
+      >
+        <GitRemoteChoice />
+      </HudPanel>
+    </>
   );
 }
 

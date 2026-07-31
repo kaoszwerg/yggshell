@@ -4,11 +4,13 @@
 //! modules are added alongside these as the app grows — this file stays the single place where the
 //! app is assembled.
 
+pub mod cli_install;
 pub mod commands;
 pub mod crash;
 pub mod dto;
 pub mod error;
 pub mod git;
+pub mod launch;
 pub mod logging;
 pub mod profile;
 pub mod settings;
@@ -32,7 +34,10 @@ use tokio::sync::broadcast::error::RecvError;
 pub fn run() {
     crash::install_panic_hook();
 
-    let result = tauri::Builder::default()
+    let app = tauri::Builder::default()
+        // Paths handed in from outside — `ygg <dir>` and Finder's "Open With" — queue here until the
+        // window is listening. A cold start emits before the webview exists (`launch::Pending`).
+        .manage(launch::Pending::default())
         // Persist + restore window size and position across runs.
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
@@ -57,6 +62,8 @@ pub fn run() {
             commands::get_settings,
             commands::update_settings,
             commands::list_shells,
+            commands::pending_launches,
+            commands::install_cli,
             commands::list_terminal_themes,
             commands::import_terminal_theme,
             commands::save_terminal_theme,
@@ -79,19 +86,32 @@ pub fn run() {
             commands::git::git_commit,
             commands::git::git_commit_file_diff,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!());
 
     // Reached only when the BUILDER failed (a bad context, a window that could not be constructed) —
     // `App::run` exits the process itself on the happy path. This used to be a bare `.expect()`: a
     // panic printed to a stderr that, under `windows_subsystem = "windows"`, nobody is reading.
-    if let Err(e) = result {
-        crash::fatal(
-            "startup",
-            "The application could not start.",
-            &format!("tauri failed to build: {e:#}"),
-            crash::EXIT_STARTUP,
-        );
-    }
+    let app = match app {
+        Ok(app) => app,
+        Err(e) => {
+            crash::fatal(
+                "startup",
+                "The application could not start.",
+                &format!("tauri failed to build: {e:#}"),
+                crash::EXIT_STARTUP,
+            );
+        }
+    };
+
+    // `run` with a handler rather than `run()`: macOS delivers "open these folders in this app" as a
+    // run event, which is how both `ygg <dir>` and Finder's Open With reach us. It fires on a cold
+    // start too, before the webview exists — `launch::Pending` is what makes that case work.
+    app.run(|handle, event| {
+        if let tauri::RunEvent::Opened { urls } = event {
+            let paths: Vec<String> = urls.iter().map(ToString::to_string).collect();
+            launch::handle_urls(handle, &paths);
+        }
+    });
 }
 
 /// Everything the app needs before the first frame. Fallible on purpose: the caller turns any failure

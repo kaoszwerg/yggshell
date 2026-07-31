@@ -106,8 +106,15 @@ export interface TerminalState {
    * zero instead of instantly reopening one.
    */
   bootstrap: () => void;
-  /** Open a tab and focus it, optionally with a profile. Returns its key. */
-  openPane: (profileId?: string | null) => string;
+  /** Open a tab and focus it, optionally with a profile and a starting directory. Returns its key. */
+  openPane: (profileId?: string | null, cwd?: string | null) => string;
+  /**
+   * Open a tab that starts in a named directory — `ygg <dir>`, Finder's "Open With".
+   *
+   * A second tab every time, never a reused one: two invocations are two pieces of work, and taking
+   * the user away from whatever is running in an existing tab is not what they asked for.
+   */
+  openPaneIn: (cwd: string) => string;
   /** Remove a tab and choose a sensible neighbour to focus. */
   closePane: (key: string) => void;
   setActive: (key: string) => void;
@@ -163,7 +170,7 @@ export const useTerminalStore = create<TerminalState>()(
         get().openPane();
       },
 
-      openPane: (profileId = null) => {
+      openPane: (profileId = null, cwd = null) => {
         const key = `term-${nextKey++}`;
         set((s) => ({
           panes: [
@@ -171,7 +178,7 @@ export const useTerminalStore = create<TerminalState>()(
             {
               key,
               title: "Terminal",
-              cwd: null,
+              cwd,
               profileId,
               themeId: null,
               plain: false,
@@ -187,6 +194,8 @@ export const useTerminalStore = create<TerminalState>()(
         }));
         return key;
       },
+
+      openPaneIn: (cwd) => get().openPane(null, cwd),
 
       closePane: (key) =>
         set((s) => ({

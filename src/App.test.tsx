@@ -8,6 +8,9 @@ import { APP_NAME } from "./lib/app";
 vi.mock("./api/commands", () => ({
   api: {
     appVersion: vi.fn().mockResolvedValue("0.1.0"),
+    // The app root asks for launch requests queued before the interface existed (`ygg <dir>` on a
+    // cold start). Nothing queued here.
+    pendingLaunches: vi.fn().mockResolvedValue([]),
     buildInfo: vi.fn().mockResolvedValue({
       version: "0.1.0",
       channel: "dev",

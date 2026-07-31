@@ -11,6 +11,7 @@ import { SettingsView } from "./views/SettingsView";
 import { useScrollTop } from "./hooks/useScrollTop";
 import { useApplyUiScale } from "./hooks/useUiScale";
 import { useSyncLocale } from "./hooks/useT";
+import { useLaunchRequests } from "./hooks/useLaunchRequests";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
 import { useUiStore } from "./store/ui";
 
@@ -26,6 +27,8 @@ export default function App() {
   // The interface language is mirrored into the UI store so the first frame is already right; this
   // is where the stored setting — the durable one — reaches that mirror (`hooks/useT`).
   useSyncLocale();
+  // `ygg <dir>` and Finder's "Open With" both land here as a new terminal in that directory.
+  useLaunchRequests();
   useNativeContextMenuGuard();
 
   return (

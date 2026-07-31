@@ -8,6 +8,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`ygg` and `yggshell` open a terminal where you are.** `ygg` uses the current directory, `ygg
+  <path>` the one you name, and a file resolves to the directory holding it. Install it from Settings
+  › Tools › Command line — nothing is written to your PATH until you press the button, and it says
+  where the scripts went and whether that directory is on your PATH.
+- **Finder offers YggShell under "Open With" for any folder**, and that needs no installation at all.
+  Registered as an *alternate* handler on purpose: the app offers itself, it does not try to take
+  folders away from Finder.
+- Both routes converge on one validated path. What arrives is a **working directory** — never a
+  command line (ADR-PROJ-001 §5): it must exist, a file becomes its parent, and it is canonicalised
+  so the tab, the shell and the Git tool agree about where they are.
+
+### Fixed
+
+- **A launch on a cold start no longer lands in the wrong directory.** The path arrives while the
+  webview is still loading, so the event reaches nobody; it is now queued in the backend and drained
+  by the interface as soon as it is listening. Both halves are needed and both are measured against a
+  built bundle — the event alone breaks the cold start, the queue alone breaks the running app.
+
+### Added
+
 - **The interface speaks German as well as English.** English is the default and the source; German
   is chosen in Settings › Appearance › Language, and applies immediately without a restart. Each
   language is listed in itself ("Deutsch", not "German") — somebody who has landed in a language they

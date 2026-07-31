@@ -185,6 +185,18 @@ export const de: Translations = {
   "settings.window.trayHint":
     "„In die Menüleiste“ lässt die App im Hintergrund weiterlaufen, mit einem Menü zum Öffnen und Beenden.",
 
+  // ── The command-line launcher ────────────────────────────────────────────────────────────────
+  "cli.title": "Kommandozeile",
+  "cli.description": "Von jeder Shell aus — oder aus dem Finder — hier ein Terminal öffnen.",
+  "cli.install": "ygg-Befehl installieren",
+  "cli.installing": "Wird installiert…",
+  "cli.installed": "Installiert in {directory} — {names}",
+  "cli.notOnPath":
+    "{directory} liegt nicht in deinem PATH, die Shell findet den Befehl also noch nicht. Nimm das Verzeichnis in dein Shell-Profil auf und öffne ein neues Terminal.",
+  "cli.failed": "Der Befehl konnte nicht installiert werden: {reason}",
+  "cli.usage":
+    "ygg öffnet ein Terminal im aktuellen Verzeichnis, ygg <Pfad> eines dort. Der Finder bietet YggShell für jeden Ordner unter „Öffnen mit“ an — dafür ist keine Installation nötig.",
+
   // ── About ────────────────────────────────────────────────────────────────────────────────────
   "about.title": "Über",
   "about.close": "Über-Dialog schließen",

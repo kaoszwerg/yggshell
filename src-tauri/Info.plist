@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Merged into the generated Info.plist by Tauri (bundle.macOS looks for this file next to
+  tauri.conf.json). Everything here is a macOS integration point Tauri's config cannot express.
+
+  WHAT THIS DOES: registers the app as something a FOLDER can be opened with, so Finder offers
+  "Open With ▸ YggShell" on a directory, and `open -a YggShell <dir>` works from a shell — which is
+  what the `ygg` launcher is built on.
+
+  WHY `public.folder` AND NOT `ext: ["*"]`: Tauri's fileAssociations only speak in extensions, and a
+  wildcard there would register this app as an opener for EVERY file on the machine — it would appear
+  in every "Open With" menu in the system. A UTI says what is actually meant: folders, nothing else.
+
+  LSHandlerRank Alternate: the app offers itself, it does not claim to be the default handler for
+  folders. Finder is. Taking that over would be a hostile thing for a terminal to do.
+
+  The path a folder arrives on is validated in src/launch.rs before anything acts on it: it is a
+  working directory for a shell the settings choose, never a command line (ADR-PROJ-001 §5).
+-->
+<plist version="1.0">
+  <dict>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleTypeName</key>
+        <string>Folder</string>
+        <key>CFBundleTypeRole</key>
+        <string>Viewer</string>
+        <key>LSHandlerRank</key>
+        <string>Alternate</string>
+        <key>LSItemContentTypes</key>
+        <array>
+          <string>public.folder</string>
+        </array>
+      </dict>
+    </array>
+  </dict>
+</plist>

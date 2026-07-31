@@ -9,7 +9,7 @@ use crate::dto::{
 };
 use crate::error::{AppError, Result};
 use crate::state::AppState;
-use tauri::State;
+use tauri::{Manager, State};
 
 /// Record a fatal error from the UI runtime (ADR-CORE-037, ADR-APP-032).
 ///
@@ -173,6 +173,61 @@ pub fn update_settings(
         "update_settings ok"
     );
     Ok(next)
+}
+
+/// Put `ygg` and `yggshell` on the user's PATH.
+///
+/// **Only ever on request.** Writing to a directory on someone's PATH is not something an app does
+/// because it launched; it is a button, the way editors do it (`cli_install`).
+///
+/// The script is a bundled resource, copied rather than symlinked so it survives the app being
+/// replaced — and read through Tauri's resource resolver, never a path assembled by hand, because a
+/// bundle lays out differently on every platform (rule:rust-conventions).
+#[tauri::command]
+pub fn install_cli(app: tauri::AppHandle) -> Result<crate::cli_install::CliInstall> {
+    tracing::info!("install_cli");
+    // `resources/cli/ygg`, not `cli/ygg`: Tauri copies a declared resource keeping its path relative
+    // to the crate root, so the tree inside the bundle starts with `resources/` too. Same join the
+    // bundled themes use (`theme::bundled`) — verified against a built .app rather than assumed.
+    let script_path = app
+        .path()
+        .resolve("resources/cli/ygg", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| {
+            AppError::Other(format!("the launcher script is missing from the app: {e}"))
+        })?;
+    let script = std::fs::read_to_string(&script_path)
+        .map_err(|e| AppError::io(script_path.to_string_lossy(), e))?;
+
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
+    // The PATH of the process, which on macOS is the login shell's — the app inherits it through the
+    // same mechanism that gives a terminal its environment.
+    let path_var = std::env::var("PATH").unwrap_or_default();
+
+    let result = crate::cli_install::install(
+        &script,
+        &crate::cli_install::default_candidates(&home),
+        &path_var,
+    )?;
+    tracing::info!(directory = %result.directory, on_path = result.on_path, "install_cli ok");
+    Ok(result)
+}
+
+/// Directories handed to the app before the interface could listen.
+///
+/// **Why a pull and not only a push.** `ygg ~/project` on a cold start delivers its path while the
+/// webview is still loading, so the event reaches nobody. The frontend calls this once it is
+/// listening and gets what it missed. Draining is deliberate: each request opens one tab, and a
+/// reload must not reopen terminals the user already has.
+#[tauri::command]
+pub fn pending_launches(state: State<'_, crate::launch::Pending>) -> Vec<String> {
+    let paths = state.drain();
+    if !paths.is_empty() {
+        tracing::info!(count = paths.len(), "handing over queued launch requests");
+    }
+    paths
 }
 
 /// The shells this machine offers, for Settings to choose from.

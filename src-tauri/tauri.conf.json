@@ -50,6 +50,6 @@
         "template": "windows/installer.nsi"
       }
     },
-    "resources": ["resources/themes/*.yggtheme"]
+    "resources": ["resources/themes/*.yggtheme", "resources/cli/ygg"]
   }
 }
