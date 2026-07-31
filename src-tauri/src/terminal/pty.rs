@@ -33,11 +33,21 @@ impl Size {
 /// The readable half of a PTY. Handed to the reader thread and read until EOF.
 pub type Output = Box<dyn Read + Send>;
 
+/// What is running on the PTY, because the two must be ended in opposite ways.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionKind {
+    /// A shell we started. Closing takes its whole process group with it.
+    Shell,
+    /// A tmux *client*. Closing must DETACH it and nothing more.
+    TmuxClient,
+}
+
 /// A live PTY and the handles needed to drive it from the session registry.
 pub struct Pty {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    kind: SessionKind,
 }
 
 /// Waits for the child to exit. Owned by the reader thread, which is the one that learns about EOF
@@ -52,6 +62,15 @@ pub struct Spawned {
     pub output: Output,
     pub wait: Wait,
     pub program: String,
+}
+
+/// How a session should be started: the program, its arguments, and how it must be ended.
+pub struct Spawn<'a> {
+    pub program: &'a str,
+    pub args: &'a [String],
+    pub kind: SessionKind,
+    pub cwd: Option<&'a Path>,
+    pub size: Size,
 }
 
 impl Wait {
@@ -101,17 +120,29 @@ impl Pty {
             .map_err(|e| AppError::Other(format!("terminal get_size: {e}")))
     }
 
-    /// End the session.
+    /// End the session — and what that means depends on what is running.
     ///
-    /// Two things happen, and both matter. The child is killed directly, and the master is dropped —
-    /// which is what reaches the rest of the tree: closing the controlling terminal makes the kernel
-    /// send `SIGHUP` to the foreground process **group**, so a build, a test runner or an AI harness
-    /// started inside the shell goes down with it instead of being orphaned. Killing the shell alone
-    /// would leave them running with no terminal to report to.
+    /// **A shell is killed with everything it started.** The child is killed directly and the master
+    /// is dropped, which makes the kernel send `SIGHUP` to the foreground process **group**: a build,
+    /// a test runner or an AI harness started inside it goes down with the tab instead of being
+    /// orphaned with no terminal to report to.
+    ///
+    /// **A tmux client is only detached.** Killing it would be exactly wrong — the whole point of a
+    /// multiplexer is that the work outlives the window looking at it. So nothing is killed here:
+    /// dropping the master hangs up the client's PTY, tmux treats that as a detach, and the *server*
+    /// is a separate daemon in its own session that neither the kill nor the group `SIGHUP` would have
+    /// reached anyway. Closing a tab, or the whole app, therefore leaves the session running.
     pub fn close(mut self) {
-        if let Err(e) = self.killer.kill() {
-            // Already gone is the common case, and it is not a failure worth surfacing.
-            tracing::debug!(error = %e, "terminal child was already gone when closed");
+        match self.kind {
+            SessionKind::Shell => {
+                if let Err(e) = self.killer.kill() {
+                    // Already gone is the common case, and not a failure worth surfacing.
+                    tracing::debug!(error = %e, "terminal child was already gone when closed");
+                }
+            }
+            SessionKind::TmuxClient => {
+                tracing::info!("detaching from tmux — the session keeps running");
+            }
         }
         drop(self.writer);
         drop(self.master);
@@ -123,7 +154,14 @@ impl Pty {
 /// **The program is chosen here, never by the caller and never by the webview** (ADR-PROJ-001 §5).
 /// A terminal runs arbitrary code as the user — that is its purpose — but the webview must not be
 /// able to decide *what* is started, so no command line crosses the IPC boundary.
-pub fn spawn(cwd: Option<&Path>, size: Size) -> Result<Spawned> {
+pub fn spawn(request: Spawn<'_>) -> Result<Spawned> {
+    let Spawn {
+        program,
+        args,
+        kind,
+        cwd,
+        size,
+    } = request;
     let size = size.sane();
     let pair = native_pty_system()
         .openpty(portable_pty::PtySize {
@@ -134,15 +172,17 @@ pub fn spawn(cwd: Option<&Path>, size: Size) -> Result<Spawned> {
         })
         .map_err(|e| AppError::Other(format!("openpty: {e}")))?;
 
-    let program = default_shell();
-    let mut cmd = CommandBuilder::new(&program);
+    let mut cmd = CommandBuilder::new(program);
+    for arg in args {
+        cmd.arg(arg);
+    }
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
     // Teach the shell to report its working directory (OSC 7), so the Git tool knows which
     // repository it is looking at. Best-effort: an empty integration means the shell starts exactly
     // as it otherwise would (see `shell_integration`).
-    let integration = crate::terminal::shell_integration::prepare(&program);
+    let integration = crate::terminal::shell_integration::prepare(program);
     for arg in &integration.args {
         cmd.arg(arg);
     }
@@ -179,10 +219,11 @@ pub fn spawn(cwd: Option<&Path>, size: Size) -> Result<Spawned> {
             master: pair.master,
             writer,
             killer,
+            kind,
         },
         output,
         wait: Wait(child),
-        program,
+        program: program.to_string(),
     })
 }
 
@@ -191,7 +232,7 @@ pub fn spawn(cwd: Option<&Path>, size: Size) -> Result<Spawned> {
 /// Read from the environment rather than taken from `CommandBuilder::new_default_prog()` so the
 /// resolved program can be *logged*: "a session failed to start" is not actionable, "`/bin/fish`
 /// failed to start" is.
-fn default_shell() -> String {
+pub fn default_shell() -> String {
     #[cfg(windows)]
     let (var, fallback) = ("COMSPEC", "cmd.exe");
     #[cfg(not(windows))]
@@ -206,6 +247,19 @@ fn default_shell() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A plain-shell request, which is what these tests are about.
+    fn shell_spawn(size: Size) -> Spawn<'static> {
+        Spawn {
+            program: SHELL.get_or_init(default_shell),
+            args: &[],
+            kind: SessionKind::Shell,
+            cwd: None,
+            size,
+        }
+    }
+
+    static SHELL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
     #[test]
     fn a_zero_dimension_never_reaches_the_kernel() {
@@ -234,7 +288,7 @@ mod tests {
 
     #[test]
     fn a_session_starts_echoes_and_exits() {
-        let spawned = spawn(None, Size { rows: 24, cols: 80 }).expect("spawn");
+        let spawned = spawn(shell_spawn(Size { rows: 24, cols: 80 })).expect("spawn");
         let Spawned {
             mut pty,
             mut output,
@@ -267,7 +321,7 @@ mod tests {
         // Deliberately does NOT wait for the child: nothing drains the output here, so a shell that
         // kept printing would fill the PTY buffer and block forever — which is exactly how the first
         // version of this test hung. In production the reader thread always drains.
-        let Spawned { pty, .. } = spawn(None, Size { rows: 24, cols: 80 }).expect("spawn");
+        let Spawned { pty, .. } = spawn(shell_spawn(Size { rows: 24, cols: 80 })).expect("spawn");
 
         pty.resize(Size {
             rows: 50,

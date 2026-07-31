@@ -41,10 +41,35 @@ pub struct SettingsDto {
     /// emulator, so the WebView zoom cannot drag it along.
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f64,
+    /// Whether a new terminal joins tmux, and whether it may create a session (ADR-PROJ-001).
+    #[serde(default)]
+    pub tmux_mode: TmuxMode,
+    /// The session to attach. Empty means "whatever is running" for `attach`, and a default name for
+    /// `attach-or-create` — see `terminal::tmux`.
+    #[serde(default)]
+    pub tmux_session: String,
     /// When true, closing the window hides the app to a system-tray icon instead of quitting, so it
     /// keeps running in the background (ADR-APP-021). Default `false` — a fresh app is a normal window.
     #[serde(default)]
     pub minimize_to_tray: bool,
+}
+
+/// What a new terminal does about tmux.
+///
+/// Three states rather than a boolean, because "join a session if one is running, otherwise just give
+/// me a shell" and "always have a session, creating one if needed" are different wishes, and a toggle
+/// can only express one of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "../../src/bindings/")]
+pub enum TmuxMode {
+    /// Start the shell directly. The default: tmux is a choice, not an assumption.
+    #[default]
+    Off,
+    /// Attach to a running session, or fall back to the shell when there is none.
+    Attach,
+    /// Attach to a session, creating it when it is not there.
+    AttachOrCreate,
 }
 
 /// A fatal error from the **UI runtime**, on its way into the durable on-device crash record
@@ -77,6 +102,8 @@ impl Default for SettingsDto {
         Self {
             ui_scale: default_ui_scale(),
             terminal_font_size: default_terminal_font_size(),
+            tmux_mode: TmuxMode::Off,
+            tmux_session: String::new(),
             minimize_to_tray: false,
         }
     }
@@ -97,6 +124,8 @@ mod tests {
     fn settings_roundtrip_through_json() {
         let s = SettingsDto {
             terminal_font_size: 13.0,
+            tmux_mode: TmuxMode::Off,
+            tmux_session: String::new(),
             ui_scale: 1.25,
             minimize_to_tray: true,
         };

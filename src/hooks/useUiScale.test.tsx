@@ -20,7 +20,13 @@ vi.mock("../api/commands", () => ({
 import { api } from "../api/commands";
 
 function settings(ui_scale: number): SettingsDto {
-  return { ui_scale, terminal_font_size: 13, minimize_to_tray: false };
+  return {
+    ui_scale,
+    terminal_font_size: 13,
+    tmux_mode: "off",
+    tmux_session: "",
+    minimize_to_tray: false,
+  };
 }
 
 function makeWrapper(qc: QueryClient) {

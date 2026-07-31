@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/commands";
+import type { TmuxMode } from "../bindings/TmuxMode";
 
 /** Read the persisted user settings (async/server state owned by TanStack Query, cached 60s). */
 export function useSettings() {
@@ -14,8 +15,13 @@ export function useSettings() {
 export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (opts: { uiScale?: number; terminalFontSize?: number; minimizeToTray?: boolean }) =>
-      api.updateSettings(opts),
+    mutationFn: (opts: {
+      uiScale?: number;
+      terminalFontSize?: number;
+      tmuxMode?: TmuxMode;
+      tmuxSession?: string;
+      minimizeToTray?: boolean;
+    }) => api.updateSettings(opts),
     onSuccess: (data) => qc.setQueryData(["settings"], data),
   });
 }

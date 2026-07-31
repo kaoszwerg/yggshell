@@ -73,6 +73,8 @@ The reason the product exists: enriching an AI development harness.
 
 ## Later — discussed before it is built
 
+- [x] tmux: attach on start, optionally create, optionally a named session — and closing a tab or
+      the app **detaches**, never kills.
 - [ ] iTerm2 theme import, per-tab theme selection.
 - [ ] Theme editor.
 - [ ] Granular per-terminal configuration.

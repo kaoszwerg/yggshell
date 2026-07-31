@@ -30,6 +30,8 @@ describe("useSettings", () => {
     const settings: SettingsDto = {
       ui_scale: 1.1,
       terminal_font_size: 13,
+      tmux_mode: "off",
+      tmux_session: "",
       minimize_to_tray: false,
     };
     vi.mocked(api.getSettings).mockResolvedValue(settings);
@@ -64,6 +66,8 @@ describe("useUpdateSettings", () => {
     const updated: SettingsDto = {
       ui_scale: 1.25,
       terminal_font_size: 13,
+      tmux_mode: "off",
+      tmux_session: "",
       minimize_to_tray: false,
     };
     vi.mocked(api.updateSettings).mockResolvedValue(updated);

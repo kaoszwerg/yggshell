@@ -7,6 +7,7 @@
 //! the user typed into (ADR-PROJ-001 §5, rule:security).
 
 use crate::error::Result;
+use crate::state::AppState;
 use crate::terminal::{pty::Size, SessionId, TerminalRegistry};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
@@ -23,13 +24,24 @@ use tauri::State;
 pub fn terminal_open(
     app: tauri::AppHandle,
     registry: State<'_, TerminalRegistry>,
+    state: State<'_, AppState>,
     on_output: Channel<InvokeResponseBody>,
     rows: u16,
     cols: u16,
     cwd: Option<String>,
 ) -> Result<SessionId> {
     tracing::info!(rows, cols, ?cwd, "terminal_open");
-    let id = registry.open(app, on_output, cwd.map(Into::into), Size { rows, cols })?;
+    // tmux is a persisted preference, not something the webview may choose per call — the same rule
+    // as the shell itself (ADR-PROJ-001 §5).
+    let settings = state.settings.get();
+    let id = registry.open(
+        app,
+        on_output,
+        cwd.map(Into::into),
+        Size { rows, cols },
+        settings.tmux_mode,
+        &settings.tmux_session,
+    )?;
     tracing::debug!(session = id, "terminal_open ok");
     Ok(id)
 }

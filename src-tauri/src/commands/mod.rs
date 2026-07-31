@@ -4,7 +4,7 @@
 pub mod git;
 pub mod terminal;
 
-use crate::dto::{BuildInfo, CrashReport, SettingsDto};
+use crate::dto::{BuildInfo, CrashReport, SettingsDto, TmuxMode};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use tauri::State;
@@ -117,18 +117,26 @@ pub fn update_settings(
     state: State<'_, AppState>,
     ui_scale: Option<f64>,
     terminal_font_size: Option<f64>,
+    tmux_mode: Option<TmuxMode>,
+    tmux_session: Option<String>,
     minimize_to_tray: Option<bool>,
 ) -> Result<SettingsDto> {
     tracing::info!(
         ?ui_scale,
         ?terminal_font_size,
+        ?tmux_mode,
+        ?tmux_session,
         ?minimize_to_tray,
         "update_settings"
     );
     let was_tray = state.settings.get().minimize_to_tray;
-    let next = state
-        .settings
-        .update(ui_scale, terminal_font_size, minimize_to_tray)?;
+    let next = state.settings.update(
+        ui_scale,
+        terminal_font_size,
+        tmux_mode,
+        tmux_session,
+        minimize_to_tray,
+    )?;
     if next.minimize_to_tray != was_tray {
         crate::tray::set_enabled(&app, next.minimize_to_tray);
     }

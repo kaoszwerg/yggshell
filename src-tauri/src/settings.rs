@@ -5,7 +5,7 @@
 //! an in-memory copy behind an `RwLock`; every write persists immediately, so a crash can never
 //! lose more than the write in flight.
 
-use crate::dto::SettingsDto;
+use crate::dto::{SettingsDto, TmuxMode};
 use crate::error::{AppError, Result};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -69,6 +69,8 @@ impl SettingsStore {
         &self,
         ui_scale: Option<f64>,
         terminal_font_size: Option<f64>,
+        tmux_mode: Option<TmuxMode>,
+        tmux_session: Option<String>,
         minimize_to_tray: Option<bool>,
     ) -> Result<SettingsDto> {
         let next = {
@@ -83,6 +85,14 @@ impl SettingsStore {
                 guard.terminal_font_size =
                     size.clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
             }
+            if let Some(mode) = tmux_mode {
+                guard.tmux_mode = mode;
+            }
+            if let Some(session) = tmux_session {
+                // Trimmed here so an accidental space cannot make a name silently different from the
+                // one the user believes they typed.
+                guard.tmux_session = session.trim().to_string();
+            }
             if let Some(tray) = minimize_to_tray {
                 guard.minimize_to_tray = tray;
             }
@@ -92,6 +102,8 @@ impl SettingsStore {
         tracing::info!(
             ui_scale = next.ui_scale,
             terminal_font_size = next.terminal_font_size,
+            tmux_mode = ?next.tmux_mode,
+            tmux_session = %next.tmux_session,
             minimize_to_tray = next.minimize_to_tray,
             "settings updated"
         );
@@ -146,7 +158,9 @@ mod tests {
     fn update_persists_and_reloads() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
-        let next = store.update(Some(1.25), None, None).expect("update");
+        let next = store
+            .update(Some(1.25), None, None, None, None)
+            .expect("update");
         assert_eq!(next.ui_scale, 1.25);
 
         let reloaded = SettingsStore::load(dir.path());
@@ -158,9 +172,13 @@ mod tests {
     fn ui_scale_is_clamped_on_write_and_read() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
-        let high = store.update(Some(9.0), None, None).expect("update");
+        let high = store
+            .update(Some(9.0), None, None, None, None)
+            .expect("update");
         assert_eq!(high.ui_scale, MAX_UI_SCALE);
-        let low = store.update(Some(0.1), None, None).expect("update");
+        let low = store
+            .update(Some(0.1), None, None, None, None)
+            .expect("update");
         assert_eq!(low.ui_scale, MIN_UI_SCALE);
 
         std::fs::write(dir.path().join("settings.json"), r#"{"ui_scale":42.0}"#).expect("write");
@@ -179,7 +197,9 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
         assert!(!store.get().minimize_to_tray);
-        let next = store.update(None, None, Some(true)).expect("update");
+        let next = store
+            .update(None, None, None, None, Some(true))
+            .expect("update");
         assert!(next.minimize_to_tray);
         assert!(SettingsStore::load(dir.path()).get().minimize_to_tray);
     }
@@ -205,10 +225,14 @@ mod font_size_tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
 
-        store.update(Some(1.25), None, None).expect("scale");
+        store
+            .update(Some(1.25), None, None, None, None)
+            .expect("scale");
         assert_eq!(store.get().terminal_font_size, 13.0, "text size untouched");
 
-        store.update(None, Some(18.0), None).expect("size");
+        store
+            .update(None, Some(18.0), None, None, None)
+            .expect("size");
         assert_eq!(store.get().ui_scale, 1.25, "ui scale untouched");
         assert_eq!(store.get().terminal_font_size, 18.0);
     }
@@ -220,14 +244,14 @@ mod font_size_tests {
 
         assert_eq!(
             store
-                .update(None, Some(400.0), None)
+                .update(None, Some(400.0), None, None, None)
                 .expect("high")
                 .terminal_font_size,
             MAX_TERMINAL_FONT_SIZE
         );
         assert_eq!(
             store
-                .update(None, Some(0.0), None)
+                .update(None, Some(0.0), None, None, None)
                 .expect("low")
                 .terminal_font_size,
             MIN_TERMINAL_FONT_SIZE

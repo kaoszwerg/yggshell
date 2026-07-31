@@ -2,12 +2,29 @@ import { useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { Button } from "../components/ui/Button";
 import { HudPanel } from "../components/ui/HudPanel";
+import { TextField } from "../components/ui/TextField";
 import { Tabs } from "../components/ui/Tabs";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
 import { useSettings, useUpdateSettings } from "../hooks/useSettings";
+import type { TmuxMode } from "../bindings/TmuxMode";
 
 const UI_SCALES = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
 const TERMINAL_FONT_SIZES = [11, 12, 13, 14, 16, 18, 20] as const;
+
+/** Three states, because "join one if it is running" and "always have one" are different wishes. */
+const TMUX_MODES: { id: TmuxMode; label: string; hint: string }[] = [
+  { id: "off", label: "Off", hint: "Start the shell directly." },
+  {
+    id: "attach",
+    label: "Attach if running",
+    hint: "Join an existing session; start a plain shell when there is none.",
+  },
+  {
+    id: "attach-or-create",
+    label: "Attach or create",
+    hint: "Always end up in a session, creating it the first time.",
+  },
+];
 
 /**
  * The sections, in the order they are read down the left-hand side.
@@ -130,7 +147,77 @@ function TerminalSection() {
           How much output fits on screen. The UI scale under Appearance sizes the chrome around it.
         </span>
       </div>
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
+      <TmuxControls />
     </HudPanel>
+  );
+}
+
+/** tmux: whether a terminal joins a session, and which one. */
+function TmuxControls() {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const mode: TmuxMode = settings.data?.tmux_mode ?? "off";
+  const session = settings.data?.tmux_session ?? "";
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? session;
+
+  const commit = () => {
+    if (draft === null || draft === session) return;
+    update.mutate({ tmuxSession: draft });
+    setDraft(null);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-dim text-xs">tmux</span>
+        <div className="flex flex-wrap gap-1">
+          {TMUX_MODES.map((m) => (
+            <Button
+              key={m.id}
+              aria-pressed={mode === m.id}
+              active={mode === m.id}
+              onClick={() => update.mutate({ tmuxMode: m.id })}
+              className="px-3 py-1 text-xs"
+            >
+              {m.label}
+            </Button>
+          ))}
+        </div>
+        <span className="text-dim text-xs">
+          {TMUX_MODES.find((m) => m.id === mode)?.hint} Closing a tab or the app{" "}
+          <strong className="text-fg">detaches</strong> — a session is never killed from here.
+        </span>
+      </div>
+
+      {mode === "off" ? null : (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-dim text-xs" htmlFor="tmux-session">
+            Session name
+          </label>
+          <TextField
+            id="tmux-session"
+            value={value}
+            placeholder={mode === "attach" ? "any running session" : "yggshell"}
+            className="max-w-xs font-mono"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setDraft(null);
+            }}
+          />
+          <span className="text-dim text-xs">
+            Left empty, &ldquo;attach&rdquo; joins whatever is running and &ldquo;attach or
+            create&rdquo; uses <code>yggshell</code>. A name cannot contain <code>:</code> or{" "}
+            <code>.</code> — tmux reads those as a window or pane.
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 

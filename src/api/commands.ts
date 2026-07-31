@@ -5,6 +5,7 @@ import type { BuildInfo } from "../bindings/BuildInfo";
 import type { CrashReport } from "../bindings/CrashReport";
 import type { LogRecord } from "../bindings/LogRecord";
 import type { SettingsDto } from "../bindings/SettingsDto";
+import type { TmuxMode } from "../bindings/TmuxMode";
 
 /**
  * Typed facade over the backend `#[tauri::command]` surface. Every IPC call in the app flows through
@@ -27,11 +28,15 @@ export const api = {
   updateSettings: (opts: {
     uiScale?: number;
     terminalFontSize?: number;
+    tmuxMode?: TmuxMode;
+    tmuxSession?: string;
     minimizeToTray?: boolean;
   }) =>
     invoke<SettingsDto>("update_settings", {
       uiScale: opts.uiScale ?? null,
       terminalFontSize: opts.terminalFontSize ?? null,
+      tmuxMode: opts.tmuxMode ?? null,
+      tmuxSession: opts.tmuxSession ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,
     }),
   /** Open an http(s) URL in the default browser (routed through the backend so it is logged). */

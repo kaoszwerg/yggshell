@@ -46,6 +46,15 @@ describe("api", () => {
     expect(mockInvoke).toHaveBeenCalledWith("get_settings");
   });
 
+  /** The response shape is not what these tests are about — the request payload is. */
+  const settings = () => ({
+    ui_scale: 1,
+    terminal_font_size: 13,
+    tmux_mode: "off" as const,
+    tmux_session: "",
+    minimize_to_tray: false,
+  });
+
   describe("updateSettings", () => {
     // Every field travels on every call, absent ones as null: the backend treats null as "leave it
     // alone", so a payload that simply omits a key would be indistinguishable from one that never
@@ -60,6 +69,8 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 1.25,
         terminalFontSize: null,
+        tmuxMode: null,
+        tmuxSession: null,
         minimizeToTray: null,
       });
     });
@@ -76,16 +87,20 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: 18,
+        tmuxMode: null,
+        tmuxSession: null,
         minimizeToTray: null,
       });
     });
 
     it("pins the payload shape: minimizeToTray sent, the rest default to null", async () => {
-      mockInvoke.mockResolvedValue({ ui_scale: 1, terminal_font_size: 13, minimize_to_tray: true });
+      mockInvoke.mockResolvedValue(settings());
       await api.updateSettings({ minimizeToTray: true });
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        tmuxMode: null,
+        tmuxSession: null,
         minimizeToTray: true,
       });
     });
@@ -100,6 +115,22 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        tmuxMode: null,
+        tmuxSession: null,
+        minimizeToTray: null,
+      });
+    });
+
+    it("carries the tmux preference on its own", async () => {
+      // tmux is three separate decisions; a call that changes the mode must not silently carry a
+      // session name the user did not touch.
+      mockInvoke.mockResolvedValue(settings());
+      await api.updateSettings({ tmuxMode: "attach-or-create" });
+      expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
+        uiScale: null,
+        terminalFontSize: null,
+        tmuxMode: "attach-or-create",
+        tmuxSession: null,
         minimizeToTray: null,
       });
     });
@@ -114,6 +145,8 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 0.8,
         terminalFontSize: 20,
+        tmuxMode: null,
+        tmuxSession: null,
         minimizeToTray: true,
       });
     });

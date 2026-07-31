@@ -6,6 +6,7 @@
 
 pub mod pty;
 pub mod shell_integration;
+pub mod tmux;
 
 use crate::dto::TerminalExit;
 use crate::error::{AppError, Result};
@@ -107,14 +108,28 @@ impl TerminalRegistry {
         output: Channel<InvokeResponseBody>,
         cwd: Option<PathBuf>,
         size: Size,
+        tmux_mode: crate::dto::TmuxMode,
+        tmux_session: &str,
     ) -> Result<SessionId> {
         let cwd = validate_cwd(cwd)?;
-        let spawned = pty::spawn(cwd.as_deref(), size)?;
+        // What actually runs: the shell, or tmux wrapping it. Decided here rather than in `pty`, so
+        // that module stays about pseudo-terminals and nothing else.
+        let shell = pty::default_shell();
+        let launch = tmux::launch(tmux_mode, tmux_session, &shell);
+        let kind = launch.kind;
+        let spawned = pty::spawn(pty::Spawn {
+            program: &launch.program,
+            args: &launch.args,
+            kind,
+            cwd: cwd.as_deref(),
+            size,
+        })?;
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 
         tracing::info!(
             session = id,
             program = %spawned.program,
+            ?kind,
             rows = size.rows,
             cols = size.cols,
             cwd = %cwd.as_deref().map_or("<inherited>".into(), |p| p.display().to_string()),
