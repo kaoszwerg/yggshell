@@ -1,7 +1,7 @@
 ---
 id: mem:open-work-backlog
 title: Open follow-up work on YggShell
-tldr: "Live backlog + the diagnoses behind them: OSC 7 in tmux unverified, zsh EOL mark, HISTFILE locking, no screenshots without Screen Recording."
+tldr: "Live backlog + the measurements behind it: tmux uses pane_current_path (not OSC 7), the zsh % was a resize race, HISTFILE locking, GUI PATH, screenshots."
 scope: project
 load: conditional
 triggers:
@@ -44,25 +44,35 @@ type: project
 the measurement costs an hour that has already been spent. `PLAN.md` holds the feature roadmap — this
 holds defects, their evidence, and the traps around them.
 
+## Closed — but read the measurement before you touch it again
+
+Both of these were re-diagnosed once already because the note here said something the measurement
+later contradicted. The measurements are kept so the next agent does not pay for them twice.
+
+- **OSC 7 inside tmux — closed, and the approach that shipped is not the one written down here
+  before.** The DCS-passthrough hook was measured and it does not work: an end-to-end probe counted
+  **0** OSC 7 sequences and **0** passthrough DCS reaching the outer terminal, with and without
+  `-e ZDOTDIR=…` on `new-session` (tmux panes inherit the *server's* environment, and `ZDOTDIR` is
+  not in `update-environment`). What works is asking tmux — `display-message -p '#{pane_current_path}'`
+  — which the same probe showed answering correctly. So inside tmux the frontend polls `terminal_cwd`
+  every 2 s and **no shell integration is installed at all**. Do not re-attempt the passthrough.
+- **The `%` at the top of a fresh terminal — closed.** It was ours, and it was a race, not the shell
+  integration: it appeared with and without the hook. zsh's mark is `%` + (`COLUMNS`-1) spaces + CR +
+  `ESC[K`, which erases itself when the shell and the emulator agree on the width. A measurement that
+  landed while `terminal_open` was still in flight used to be **dropped** (`if (opening.current)
+  return`), so the shell drew for a stale, wider window, the spaces wrapped, and the erase cleared the
+  second line. `TerminalView` now parks that geometry and applies it when the session id arrives, and
+  has tests. Measurements behind it, so nobody repeats them: `$COLUMNS`/`stty size` match the spawn
+  size exactly (the column-mismatch-at-spawn theory in this file was wrong); xterm.js fed zsh's exact
+  bytes leaves `%` at 80 real vs. 100 believed columns and nothing at 100 vs. 100.
 ## Defects with a diagnosis, not yet closed
 
-- **OSC 7 inside tmux — fix written, NOT verified.** tmux consumes OSC 7 for its own
-  `pane_current_path` and does not forward it, so the Git tool stops following `cd` in a tmux session.
-  The hook in `shell_integration.rs` now wraps the sequence in tmux's DCS passthrough
-  (`ESC P tmux; <esc-doubled> ESC \`) and turns on `allow-passthrough` for its own pane. **Nobody has
-  seen this work.** Verify by: enabling tmux in Settings → Terminal, opening a terminal, `cd` into a
-  repository, and watching the Git tool. If it fails, check `tmux show -p allow-passthrough` inside
-  the pane first.
-- **zsh prints its `%` end-of-line mark at the top of a fresh terminal.** Reproduced in a captured
-  PTY stream: our OSC 7 goes out, then `ESC[1m ESC[7m %`. Removing the hook's immediate self-call did
-  **not** fix it, so the cause is elsewhere — most likely a column mismatch (zsh's `COLUMNS` vs the
-  emulator's real width) making zsh's `mark + COLUMNS-1 spaces + CR` wrap instead of overwrite. Next
-  step: capture the stream and compare `stty size` inside the session against `term.cols`.
 - **`zsh: locking failed for <appdata>/shell/.zsh_history: no such file or directory`** was seen once
   in a probe. macOS' `/etc/zshrc` sets `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` and runs *between*
   our generated `.zshenv` and `.zshrc`, which is why the repair line in `.zshrc` exists. Verified
   working once (`HISTFILE=/Users/…/.zsh_history`, 2939 entries) — so this is either a probe artefact
-  or a path the repair misses. Re-check with tmux enabled, which changed which files get written.
+  or a path the repair misses. **Inside tmux the question no longer arises**: no rc file is generated
+  there at all any more. It can therefore only affect a plain shell session.
 
 ## Things that are true and will bite you
 

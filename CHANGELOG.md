@@ -80,6 +80,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The stray `%` at the top of a fresh terminal.** It was a race in this app, not the shell. zsh
+  draws its end-of-line mark as `%` + (`COLUMNS`-1) spaces + CR + erase-line, which erases itself —
+  *if* the shell and the emulator agree on the width. They did not always: the settings query
+  resolves shortly after a terminal mounts, the font size changes with it and the pane re-measures,
+  and that second measurement was **dropped** whenever it landed while `terminal_open` was still in
+  flight. The shell then drew for a wider window, the spaces wrapped onto a second line, and the
+  erase cleared the wrong one. A geometry measured during the open is now remembered and applied the
+  moment the session exists.
+  - Measured, not reasoned: a PTY probe showed `$COLUMNS` and `stty size` matching what was passed
+    exactly (so the backlog's column-mismatch-at-spawn theory was wrong), and the mark appearing with
+    *and without* our shell integration; feeding zsh's exact byte sequence into the emulator at 80
+    real vs. 100 believed columns leaves `%` on the first line, at 100 vs. 100 it leaves nothing.
+  - `TerminalView` now has tests at all — the view where this lived had none.
 - **The Git tool now follows a `cd` inside tmux.** It never did: tmux consumes OSC 7 for its own
   `pane_current_path` and does not forward it, so the sequence the shell hook emits was measured
   arriving zero times at the outer terminal — wrapping it in tmux's DCS passthrough changed nothing.

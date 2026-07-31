@@ -143,6 +143,8 @@ function Pane({
   const handle = useRef<TerminalHandle>(null);
   const sessionId = useRef<SessionId | null>(null);
   const opening = useRef(false);
+  /** Geometry measured while the open call was still in flight. Applied the moment it lands. */
+  const pending = useRef<{ rows: number; cols: number } | null>(null);
   const settings = useSettings();
   // UI scale and text size are separate questions: how big the chrome is, and how much output fits.
   // The WebView zoom multiplies EVERYTHING, so the emulator is handed a size divided by that zoom —
@@ -157,6 +159,13 @@ function Pane({
 
   // The session is opened from the FIRST measurement, never before it: the shell must be told the
   // real geometry at spawn time, or its first prompt is drawn for a window that does not exist.
+  //
+  // A measurement that lands DURING the open must not be dropped either, and it does land: the
+  // settings query resolves a moment after the terminal mounts, the font size changes with it, and
+  // the pane re-measures. Losing that left the shell believing the window was wider than it is —
+  // whereupon zsh's end-of-line mark, which is drawn as `%` + (COLUMNS-1) spaces + CR + erase-line,
+  // wrapped onto a second line and the erase cleared the wrong one. The stray `%` on the first line
+  // of a fresh terminal was that, and nothing to do with the shell integration.
   const onResize = useCallback(
     (rows: number, cols: number) => {
       const id = sessionId.current;
@@ -164,8 +173,12 @@ function Pane({
         terminalApi.resize(id, rows, cols).catch(survivable("resize"));
         return;
       }
-      if (opening.current) return;
+      if (opening.current) {
+        pending.current = { rows, cols };
+        return;
+      }
       opening.current = true;
+      const spawnedAt = { rows, cols };
 
       terminalApi
         .open({
@@ -178,11 +191,17 @@ function Pane({
           onSession(paneKey, id);
           setTitle(paneKey, `Terminal ${id + 1}`);
           handle.current?.focus();
+
+          const latest = pending.current;
+          pending.current = null;
+          if (!latest || (latest.rows === spawnedAt.rows && latest.cols === spawnedAt.cols)) return;
+          terminalApi.resize(id, latest.rows, latest.cols).catch(survivable("resize"));
         })
         .catch((error: unknown) => {
           // Surfaced where the user is looking, not just in the log. The pane stays open so the
           // message can be read (rule:logging — never swallowed, always surfaced).
           opening.current = false;
+          pending.current = null;
           handle.current?.write(notice(`could not start a terminal: ${String(error)}`));
         });
     },
