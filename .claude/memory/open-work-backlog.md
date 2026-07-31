@@ -1,7 +1,7 @@
 ---
 id: mem:open-work-backlog
 title: Open follow-up work on YggShell
-tldr: "Live backlog + the measurements behind it: tmux uses pane_current_path (not OSC 7), the zsh % was a resize race, HISTFILE locking, GUI PATH, screenshots."
+tldr: "Traps this repo already paid for — hud-panel beats `absolute`, flat config REPLACES rule options — plus the live backlog and its measurements."
 scope: project
 load: conditional
 triggers:
@@ -25,6 +25,23 @@ triggers:
     history,
     screenshot,
     upstream,
+    css,
+    layer,
+    tailwind,
+    position,
+    absolute,
+    overlay,
+    panel,
+    eslint,
+    lint,
+    gate,
+    flat-config,
+    no-restricted-syntax,
+    diff,
+    xterm,
+    theme,
+    itermcolors,
+    profile,
   ]
 applies-to:
   [
@@ -33,6 +50,9 @@ applies-to:
     ".claude/memory/**",
     "governance/**",
     "src-tauri/src/terminal/**",
+    "src/**",
+    "eslint.config.project.mjs",
+    "scripts/project/**",
     "PLAN.md",
   ]
 type: project
@@ -73,6 +93,26 @@ later contradicted. The measurements are kept so the next agent does not pay for
   working once (`HISTFILE=/Users/…/.zsh_history`, 2939 entries) — so this is either a probe artefact
   or a path the repair misses. **Inside tmux the question no longer arises**: no rc file is generated
   there at all any more. It can therefore only affect a plain shell session.
+
+## Traps this session paid for — do not re-learn them
+
+- **`.hud-panel` pins `position: relative`, and unlayered CSS beats every `@layer` — including
+  Tailwind's utilities.** `className="hud-panel absolute inset-0"` therefore does NOT float: the
+  element stays in the flow, `inset-0` does nothing, and an `overflow-auto` child never bounds. Use
+  `.hud-popover` (same chamfered border, `position` left to the caller) for anything floating. Gated
+  now by `hud/floating-panel-position` (`scripts/project/eslint-hud-position.mjs`).
+- **ESLint flat config REPLACES a rule's options, it does not merge them.** Adding an entry to the
+  base config's `no-restricted-syntax` from the project overlay silently switched off its bans on
+  native `<button>`, `<input>` and the `title` tooltip — config loaded, lint passed, gate gone. If you
+  need a check the base config already owns the rule name for, write your own rule in
+  `scripts/project/` instead. **Probe a gate you just added with a file that should fail**; that is
+  the only reason this was caught.
+- **`title` is banned as a JSX ATTRIBUTE, wherever it appears** — including as a prop name on your own
+  component. Name such a prop `heading`.
+- **imara-diff hands back lines WITH their terminator.** Strip it, or every rendered diff line is
+  followed by a blank one.
+- **xterm.js `write()` is asynchronous.** A test that writes and immediately reads the buffer reads an
+  empty one and passes for the wrong reason. Await the callback.
 
 ## Things that are true and will bite you
 
