@@ -150,7 +150,10 @@ fn has_session(tmux: &str, session: &str) -> bool {
 /// The spawn happens on a PTY, so its failure would be a message inside a terminal that then exits —
 /// which the user reads as "the terminal is broken". Knowing beforehand lets the plain shell start.
 fn find_tmux() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
+    // The LOGIN shell's PATH, not this process's: a GUI app is launched by launchd with a minimal
+    // one, so `/opt/homebrew/bin/tmux` is invisible to it and the integration would report "tmux is
+    // not installed" on a machine where it plainly is.
+    let path = super::environment::path()?;
     std::env::split_paths(&path)
         .map(|dir| dir.join("tmux"))
         .find(|candidate| is_executable(candidate))

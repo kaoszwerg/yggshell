@@ -51,7 +51,7 @@ export function TitleBar() {
           src={logoUrl}
           alt=""
           aria-hidden
-          className="pointer-events-none h-6 w-6 shrink-0 select-none"
+          className="pointer-events-none h-7 w-7 shrink-0 select-none"
         />
         <span
           className="hud-label text-glow-cyan"

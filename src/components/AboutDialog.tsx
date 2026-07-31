@@ -29,7 +29,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-md">
         <HudPanel accent="cyan" label="About">
           <div className="flex flex-col items-center gap-4 text-center">
-            <img src={logoUrl} alt="" aria-hidden className="h-20 w-20" />
+            <img src={logoUrl} alt="" aria-hidden className="h-24 w-24" />
 
             <div className="flex flex-col items-center gap-1">
               <h2

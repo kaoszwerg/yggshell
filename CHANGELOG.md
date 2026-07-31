@@ -80,6 +80,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A bundled app could not find anything the user has installed.** macOS launches a GUI app through
+  `launchd`, which hands it `PATH=/usr/bin:/bin:/usr/sbin:/sbin` — so the user's own `.zshrc` failed
+  with `command not found: direnv`, and the tmux integration reported "not installed" for a `tmux`
+  sitting in `/opt/homebrew/bin`. Both were true of the *process* and neither of the machine, and
+  neither shows in `tauri dev`, where the app inherits the terminal that started it. A login shell is
+  now asked once what environment it would set; that answer is the base for every terminal and the
+  search path for anything the backend looks up. Bounded by a timeout, because a profile that blocks
+  must cost a short PATH rather than a window that never opens.
+- **The app icon had a grey border, and filled its whole canvas.** The border was a 22%-opacity cyan
+  hairline of ours, which on a near-black plate reads as dull grey — gone. And macOS expects the
+  artwork inside 824×824 of the 1024 canvas (the Big Sur template); full-bleed made it larger and
+  squarer than every neighbour in the Dock, with corners disagreeing with the system squircle.
 - **Window size and position are written when the window closes**, not only on a clean process exit.
   The window-state plugin keeps everything in memory until `RunEvent::Exit`, so any other ending — a
   signal, a crash, a `tauri dev` restart — lost the geometry silently. The tray's Quit already had to

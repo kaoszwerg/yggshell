@@ -176,6 +176,12 @@ pub fn spawn(request: Spawn<'_>) -> Result<Spawned> {
     for arg in args {
         cmd.arg(arg);
     }
+    // The login shell's environment FIRST, so a bundled app has the PATH the user actually has —
+    // launchd hands a GUI process a minimal one, and their own .zshrc then fails on the first tool it
+    // reaches for. Ours go on top, so nothing below can override what this terminal needs to be.
+    for (key, value) in super::environment::login_env() {
+        cmd.env(key, value);
+    }
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }

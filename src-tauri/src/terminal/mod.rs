@@ -4,6 +4,7 @@
 //! **The backend owns the sessions.** The frontend holds an id and its own view state — tab order,
 //! which tab is in front — and nothing else. A session outlives every render.
 
+pub mod environment;
 pub mod pty;
 pub mod shell_integration;
 pub mod tmux;
