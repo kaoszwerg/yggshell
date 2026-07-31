@@ -186,6 +186,23 @@ function Pane({
     handle.current?.focus();
   }, []);
 
+  // ⌘F / Ctrl+Shift+F on the WINDOW, not on the emulator: xterm's key handler only fires while the
+  // terminal holds focus, so binding it there made the search unreachable the moment the caret was
+  // anywhere else. Only the visible pane listens, so several open terminals do not fight over it.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const modified = isMac()
+        ? e.metaKey && !e.ctrlKey && !e.altKey
+        : e.ctrlKey && e.shiftKey && !e.altKey;
+      if (!modified || e.key.toLowerCase() !== "f") return;
+      e.preventDefault();
+      setSearchOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active]);
+
   // Becoming visible changes the pane's size from 0×0, so it must re-measure — and take the caret,
   // because a terminal you switched to that does not accept typing is broken.
   useEffect(() => {
@@ -253,7 +270,6 @@ function Pane({
             onResize={onResize}
             onLink={onLink}
             onTitle={onTitle}
-            onFind={openSearch}
             onSelectionChange={setHasSelection}
           />
         </div>

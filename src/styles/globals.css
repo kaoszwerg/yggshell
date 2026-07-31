@@ -50,6 +50,9 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    /* WebKitGTK/Gecko ignore the ::-webkit-scrollbar rules below and take these instead. */
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--saga-neon-cyan-rgb) / 0.3) transparent;
   }
   [hidden] {
     display: none !important;
@@ -76,19 +79,31 @@
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
   }
+  /* HUD scrollbars. A native scrollbar is stock OS chrome (ADR-APP-026), and next to terminal
+     output it simply competes with the text. The slider PAINTS 2px — the transparent border is
+     what does that — while the control keeps its 10px width so it is still grabbable. A 2px drag
+     target would look right and be unusable, which is not a trade this design system makes. */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
   }
-  ::-webkit-scrollbar-track {
-    background: var(--saga-bg-deep);
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--saga-bg-elevated);
-    border-radius: 3px;
+    background: rgb(var(--saga-neon-cyan-rgb) / 0.3);
+    border: 4px solid transparent;
+    background-clip: content-box;
+    transition: background-color 0.15s;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--saga-neon-green);
+    background: rgb(var(--saga-neon-cyan-rgb) / 0.6);
+    background-clip: content-box;
+  }
+  /* Stepper arrows are the most obviously native part of a scrollbar. */
+  ::-webkit-scrollbar-button {
+    display: none;
   }
   ::selection {
     background-color: rgb(var(--saga-neon-green-rgb) / 0.2);
@@ -280,38 +295,17 @@
   display: none;
 }
 
-/* ── HUD scrollbars ──
-   A native scrollbar is stock OS chrome and a break in the HUD (ADR-APP-026) — and in a terminal it
-   is also just too heavy: it sits right next to the text and competes with it. Applied globally so
-   every scrolling surface (the terminal viewport, the log view) agrees, rather than each one
-   restyling its own.
-
-   Deliberately quiet: a 6px hairline with no track, no buttons and no border. Visible enough to say
-   where you are, faint enough that reading output is never a fight with it. It brightens on hover,
-   which is when the user is actually reaching for it. */
-* {
-  scrollbar-width: thin; /* Gecko / WebKitGTK */
-  scrollbar-color: rgb(var(--saga-neon-cyan-rgb) / 0.22) transparent;
-}
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-*::-webkit-scrollbar-track,
-*::-webkit-scrollbar-corner {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background: rgb(var(--saga-neon-cyan-rgb) / 0.22);
-  border-radius: 3px;
-  transition: background-color 0.15s;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--saga-neon-cyan-rgb) / 0.45);
-}
-/* No stepper arrows: they are the most obviously "native" part of a scrollbar. */
-*::-webkit-scrollbar-button {
-  display: none;
+/* xterm does NOT use a native scrollbar — it renders its own from DOM elements (derived from VS
+   Code\'s), so none of the rules above reach it. Its width is written as an INLINE style by xterm\'s
+   own JS, which is why `!important` is unavoidable here: there is no option for it and no selector
+   that outranks an inline declaration. The colours come from the theme in TerminalSurface.tsx, not
+   from here. Same deal as above: the slider paints 2px, the track it lives in keeps its width so it
+   can still be grabbed. */
+.xterm .xterm-scrollable-element > .scrollbar > .slider {
+  width: 2px !important;
+  left: auto !important;
+  right: 0 !important;
+  border-radius: 1px;
 }
 
 /* ── HUD-styled range sliders ──

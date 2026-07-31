@@ -44,8 +44,6 @@ export interface TerminalSurfaceProps {
   onLink: (url: string) => void;
   /** The title the shell set (OSC 0/2). Never fires unless the shell actually sets one. */
   onTitle?: (title: string) => void;
-  /** The user asked for search (⌘F / Ctrl+Shift+F). The bar itself belongs to the caller. */
-  onFind?: () => void;
   /** Whether anything is selected right now — so a caller can disable "Copy" honestly. */
   onSelectionChange?: (hasSelection: boolean) => void;
   className?: string;
@@ -70,7 +68,6 @@ export function TerminalSurface({
   onResize,
   onLink,
   onTitle,
-  onFind,
   onSelectionChange,
   className = "",
 }: TerminalSurfaceProps) {
@@ -82,13 +79,13 @@ export function TerminalSurface({
   // The callbacks are read through refs so a parent re-render never tears down the emulator: xterm
   // owns a canvas, a WebGL context and the scrollback, and re-creating it would wipe the session's
   // history on every keystroke that changed a title somewhere.
-  const handlers = useRef({ onData, onResize, onLink, onTitle, onFind, onSelectionChange });
+  const handlers = useRef({ onData, onResize, onLink, onTitle, onSelectionChange });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
   // possibly fire already see the current values.
   useEffect(() => {
-    handlers.current = { onData, onResize, onLink, onTitle, onFind, onSelectionChange };
-  }, [onData, onResize, onLink, onTitle, onFind, onSelectionChange]);
+    handlers.current = { onData, onResize, onLink, onTitle, onSelectionChange };
+  }, [onData, onResize, onLink, onTitle, onSelectionChange]);
 
   useImperativeHandle(
     ref,
@@ -127,6 +124,11 @@ export function TerminalSurface({
         cursor: PALETTE.cyan,
         cursorAccent: PALETTE.deep,
         selectionBackground: `${PALETTE.cyan}40`,
+        // xterm draws its own scrollbar; these are the only way to colour it, and
+        // globals.css only gets to say how wide the slider paints.
+        scrollbarSliderBackground: `${PALETTE.cyan}4d`,
+        scrollbarSliderHoverBackground: `${PALETTE.cyan}99`,
+        scrollbarSliderActiveBackground: PALETTE.cyan,
         black: PALETTE.deep,
         red: PALETTE.danger,
         green: PALETTE.green,
@@ -204,6 +206,9 @@ export function TerminalSurface({
 
     // Copy and paste cannot use the bare Ctrl+C/Ctrl+V a terminal needs for SIGINT and literal input,
     // so they take the platform's terminal convention: ⌘C/⌘V on macOS, Ctrl+Shift+C/V elsewhere.
+    // Search is NOT bound here: this handler only ever runs while the terminal itself holds focus,
+    // and a shortcut that silently does nothing when the caret is elsewhere is a shortcut nobody
+    // finds. It lives on the window instead, in the view that owns the search bar.
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
       const modified = isMac()
@@ -224,11 +229,6 @@ export function TerminalSurface({
           void navigator.clipboard.readText().then((text) => {
             if (text !== "") term.paste(text);
           });
-          return false;
-        }
-        case "f": {
-          if (!handlers.current.onFind) return true;
-          handlers.current.onFind();
           return false;
         }
         default:
