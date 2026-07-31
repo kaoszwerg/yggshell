@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "governanceVersion": "0.10.0",
+  "governanceVersion": "0.10.3",
   "upstream": "kaoszwerg/saga-rust-template",
   "layers": [
     {
@@ -11,11 +11,11 @@
     {
       "id": "app",
       "source": "kaoszwerg/saga-rust-template",
-      "version": "0.10.0"
+      "version": "0.10.3"
     }
   ],
   "optedOut": [],
-  "count": 129,
+  "count": 132,
   "files": [
     {
       "path": ".claude/memory/glossary.md",
@@ -463,6 +463,16 @@
       "layer": "app"
     },
     {
+      "path": "docs/migrations/app-107-crash-report-collision.md",
+      "hash": "02ec407b031d87c7",
+      "layer": "app"
+    },
+    {
+      "path": "docs/migrations/app-108-test-env-web-storage.md",
+      "hash": "a09f549c1e21224a",
+      "layer": "app"
+    },
+    {
       "path": "docs/migrations/core-001-config-layering.md",
       "hash": "7fc90f1a767b33e6",
       "layer": "core"
@@ -639,7 +649,12 @@
     },
     {
       "path": "scripts/sync-identity.mjs",
-      "hash": "ac31082b5d3fbe3d",
+      "hash": "ef9005b6cb612250",
+      "layer": "app"
+    },
+    {
+      "path": "scripts/sync-identity.test.mjs",
+      "hash": "8592cb4f772b90b3",
       "layer": "app"
     },
     {
