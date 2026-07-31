@@ -47,7 +47,12 @@ export function GitDetailPanel() {
       tabIndex={-1}
       role="region"
       aria-label="Git detail"
-      className="hud-panel absolute inset-0 z-30 flex flex-col overflow-hidden outline-none"
+      // `hud-popover`, never `hud-panel`: that class pins `position: relative` (globals.css) so its
+      // ::before can inset by 1px, which SILENTLY BEATS Tailwind's `absolute` — the panel then sits in
+      // the flow underneath the terminal instead of over it, and with no height of its own the
+      // `min-h-0 flex-1 overflow-auto` below never becomes a scroll container either. `hud-popover`
+      // is the same chamfered border with `position` deliberately left to the caller.
+      className="hud-popover hud-accent-cyan absolute inset-0 z-30 flex flex-col overflow-hidden outline-none"
     >
       <Content detail={detail} cwd={cwd} />
     </div>

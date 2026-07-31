@@ -11,7 +11,21 @@
 // report. Catching every rejection at the call site is held by review until the base config grows a
 // typed parser; the reasoning lives here so the next attempt starts from what was already learned.
 
+import { hudPlugin } from "./scripts/project/eslint-hud-position.mjs";
+
 export default [
+  {
+    files: ["src/**/*.tsx"],
+    plugins: { hud: hudPlugin },
+    rules: {
+      // A floating surface must not be built on `.hud-panel` — see the rule's own file for the
+      // defect and, more importantly, for why this is a rule of our own instead of another
+      // `no-restricted-syntax` entry: flat config REPLACES a rule's options rather than merging
+      // them, so adding a selector to the base config's entry here would have silently switched
+      // off its bans on native <button>, <input> and the `title` tooltip. Verified by trying it.
+      "hud/floating-panel-position": "error",
+    },
+  },
   {
     files: ["src/components/ui/Splitter.tsx"],
     rules: {

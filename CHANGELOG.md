@@ -117,6 +117,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The Git detail panel sat *under* the terminal instead of over it, and would not scroll.** One
+  cause for both: `.hud-panel` declares `position: relative` so its `::before` can draw the chamfered
+  border, that declaration is unlayered, and unlayered CSS beats every `@layer` — including the one
+  Tailwind's utilities live in. So `absolute inset-0` did nothing, the panel stayed in the flow, it
+  had no height of its own, and the `overflow-auto` region inside it never became a scroll container.
+  `.hud-popover` is the same border with `position` left to the caller, which is what a floating
+  surface wants.
+  - **Now gated**, because nothing reported any of it — not the type checker, not the linter, not a
+    test: a project ESLint rule (`hud/floating-panel-position`, with its own tests) refuses
+    `hud-panel` together with `absolute`/`fixed`, in a string or a template literal.
+  - Worth recording: the first attempt added the check to the base config's `no-restricted-syntax`
+    entry, which **silently switched off its bans on native `<button>`, `<input>` and the `title`
+    tooltip** — flat config replaces a rule's options rather than merging them. Caught by probing the
+    gate instead of trusting it. Hence a rule of our own.
 - **The Git tool no longer sits blank for a tick after a terminal opens.** Its working-directory poll
   starts when the pane mounts, at which point there is no session yet — so its first ask hit a `null`
   id and did nothing, and inside tmux (where the poll is the only source) the tool waited a full
