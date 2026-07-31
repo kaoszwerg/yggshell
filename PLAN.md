@@ -43,9 +43,12 @@ The substrate. A genuine terminal, not a reduced emulation.
 - [x] Frontend: a terminal view with multiple independent tabs, tabs in the title bar, HUD context
       menu, HUD scrollbars.
 - [x] Tests on both sides (292 frontend + 43 backend).
-- [ ] **Still open in milestone 1:** search UI (and its addon), copy/paste keyboard shortcuts, the
-      shell's own title sequence driving the tab label, and behavioural verification on Windows and
-      Linux — only macOS has been driven for real so far.
+- [x] Search over the scrollback: `@xterm/addon-search` plus a HUD search bar (⌘F / Ctrl+Shift+F).
+- [x] Copy/paste — ⌘C/⌘V on macOS, Ctrl+Shift+C/V elsewhere (never plain Ctrl+C, which is SIGINT),
+      middle-click pastes the primary selection as on X11, and pasting is bracketed.
+- [x] The shell's own title sequence (OSC 0/2) names the tab.
+- [ ] **Deferred by the maintainer:** behavioural verification on Windows and Linux. Only macOS has
+      been driven for real; the ConPTY path compiles but is untested.
 
 ## Phase 3 — First sidebar widget: Git integration
 

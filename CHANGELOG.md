@@ -22,6 +22,18 @@ All notable changes to this project are documented here. The format follows
     cost no extra height, so the tagline yields to them once a terminal is open.
   - Closing a tab takes the foreground process group with it, so a build or an AI harness started
     inside the shell does not survive as an orphan.
+- **Unix middle-click paste.** Selecting text in a terminal fills an app-scoped PRIMARY selection —
+  on Unix, selecting *is* the copy — and a middle-click pastes it. A WebView cannot reach the real
+  X11 PRIMARY (`navigator.clipboard` maps to CLIPBOARD on every platform), so the stand-in works
+  between YggShell terminals but not across applications; that limit is the browser's.
+- **Copy, paste and search shortcuts.** ⌘C/⌘V/⌘F on macOS, Ctrl+Shift+C/V/F elsewhere — never plain
+  Ctrl+C, which a terminal owes to SIGINT. Every paste goes through the emulator so it is bracketed:
+  a multi-line paste must not execute line by line as it arrives.
+- **Search over the scrollback** (`@xterm/addon-search`): a HUD search bar with next/previous, Enter
+  and Shift+Enter, Escape to dismiss, and a visible "not found" rather than a silent no-op. It
+  searches the active terminal's scrollback — not other tabs, not the filesystem.
+- **The shell names its own tab.** A title set by the shell (OSC 0/2) replaces the `Terminal N`
+  fallback, so a tab can read `cargo watch` instead of a number.
 - **HUD scrollbars, applied globally.** 6px, no track, no stepper arrows, cyan at 22% and 45% on
   hover. A native scrollbar is stock OS chrome (ADR-APP-026) and in a terminal it also simply
   competes with the text.

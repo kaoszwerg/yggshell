@@ -13,6 +13,7 @@
   ],
   "primitiveOnly": [
     "@xterm/addon-fit",
+    "@xterm/addon-search",
     "@xterm/addon-unicode11",
     "@xterm/addon-web-links",
     "@xterm/addon-webgl",
@@ -34,6 +35,6 @@
     "@xterm/addon-unicode11": "Correct East-Asian and emoji cell widths. Without it, 'full feature set' would not be true.",
     "@xterm/addon-web-links": "Detects URLs in the output. Opening goes through the existing open_external command, never the webview.",
     "_no_addon_canvas": "@xterm/addon-canvas is deliberately absent: 0.7.0 declares peer @xterm/xterm@^5, so it does not support xterm 6. It was never load-bearing — xterm's built-in DOM renderer is the fallback when WebGL is unavailable, and addon-canvas is a third option, not the safety net (ADR-PROJ-001 §1).",
-    "_no_addon_search": "@xterm/addon-search is not installed yet: it finds and highlights, but the search bar is ours to build, and a dependency with no caller fails the unused-dependency check (rule:dependencies). It arrives with its UI."
+    "@xterm/addon-search": "Finds and highlights in the scrollback. The search bar itself is a HUD panel built from TextField/IconButton — the addon draws no chrome."
   }
 }

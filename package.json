@@ -1,6 +1,6 @@
 {
   "name": "yggshell",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "A Norse-inspired developer terminal: a full replacement for the system terminal with multiple independent tabs, iTerm2-compatible themes and a theme editor — built to enrich AI development harnesses such as Claude Code with tools in the sidebar, starting with a Git integration.",
@@ -89,6 +89,7 @@
     "@tanstack/react-query": "5.101.2",
     "@tauri-apps/api": "2.11.1",
     "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "0.16.0",
     "@xterm/addon-unicode11": "0.9.0",
     "@xterm/addon-web-links": "0.12.0",
     "@xterm/addon-webgl": "0.19.0",

@@ -1,16 +1,31 @@
-import { useCallback, useEffect, useRef } from "react";
-import { TerminalSquare } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, TerminalSquare, X } from "lucide-react";
 import { api } from "../api/commands";
 import { terminalApi, type SessionId } from "../api/terminal";
 import { Button } from "../components/ui/Button";
 import { ContextMenu } from "../components/ui/ContextMenu";
-import { TerminalSurface, type TerminalHandle } from "../components/ui/TerminalSurface";
+import { IconButton } from "../components/ui/IconButton";
+import { TextField } from "../components/ui/TextField";
+import {
+  TerminalSurface,
+  type SearchDirection,
+  type TerminalHandle,
+} from "../components/ui/TerminalSurface";
+import { isMac } from "../lib/platform";
+import { readPrimarySelection } from "../lib/primarySelection";
 import { useTerminalStore } from "../store/terminal";
 
 /** Written into the terminal itself when something goes wrong. A failure the user cannot see is a
  *  silent failure (rule:logging), and this is the one surface they are already looking at. */
 const encoder = new TextEncoder();
 const notice = (text: string) => encoder.encode(`\r\n\x1b[38;2;255;51;102m${text}\x1b[0m\r\n`);
+
+/** Shown in the menu so the shortcut is discoverable rather than folklore. */
+const KEYS = {
+  copy: isMac() ? "⌘C" : "Ctrl+Shift+C",
+  paste: isMac() ? "⌘V" : "Ctrl+Shift+V",
+  find: isMac() ? "⌘F" : "Ctrl+Shift+F",
+};
 
 /**
  * The terminal workspace. Every open pane stays mounted — only the active one is visible — so
@@ -103,6 +118,8 @@ function Pane({
   const handle = useRef<TerminalHandle>(null);
   const sessionId = useRef<SessionId | null>(null);
   const opening = useRef(false);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
   const closePane = useTerminalStore((s) => s.closePane);
 
@@ -150,6 +167,25 @@ function Pane({
     void api.openExternal(url);
   }, []);
 
+  // The shell's own title (OSC 0/2) names the tab once it sets one — `cargo watch` is worth far more
+  // on a tab than `Terminal 2`. Shells that never set a title keep the fallback.
+  const onTitle = useCallback(
+    (title: string) => {
+      setTitle(paneKey, title);
+    },
+    [paneKey, setTitle],
+  );
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    handle.current?.clearSearch();
+    handle.current?.focus();
+  }, []);
+
   // Becoming visible changes the pane's size from 0×0, so it must re-measure — and take the caret,
   // because a terminal you switched to that does not accept typing is broken.
   useEffect(() => {
@@ -179,15 +215,28 @@ function Pane({
         label="Terminal actions"
         items={[
           {
+            id: "copy",
+            label: "Copy",
+            shortcut: KEYS.copy,
+            disabled: !hasSelection,
+            onSelect: () => {
+              void navigator.clipboard.writeText(readPrimarySelection());
+            },
+          },
+          {
             id: "paste",
             label: "Paste",
+            shortcut: KEYS.paste,
             onSelect: () => {
               void navigator.clipboard.readText().then((text) => {
-                const id = sessionId.current;
-                if (id !== null && text) void terminalApi.write(id, text);
+                // Through the emulator, so it is bracketed: a multi-line paste must not run line by
+                // line the moment it arrives.
+                if (text !== "") handle.current?.paste(text);
               });
             },
           },
+          { separator: true },
+          { id: "find", label: "Search…", shortcut: KEYS.find, onSelect: openSearch },
           { separator: true },
           {
             id: "close",
@@ -198,9 +247,88 @@ function Pane({
         ]}
       >
         <div className="h-full w-full">
-          <TerminalSurface ref={handle} onData={onData} onResize={onResize} onLink={onLink} />
+          <TerminalSurface
+            ref={handle}
+            onData={onData}
+            onResize={onResize}
+            onLink={onLink}
+            onTitle={onTitle}
+            onFind={openSearch}
+            onSelectionChange={setHasSelection}
+          />
         </div>
       </ContextMenu>
+
+      {searchOpen ? <SearchBar handle={handle} onClose={closeSearch} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Search over the scrollback. The addon finds and highlights; everything the user touches here is a
+ * HUD primitive (ADR-APP-026) — the bar itself is ours.
+ */
+function SearchBar({
+  handle,
+  onClose,
+}: {
+  handle: React.RefObject<TerminalHandle | null>;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [missed, setMissed] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const step = useCallback(
+    (direction: SearchDirection) => {
+      if (query === "") return;
+      // "Not found" is shown, never swallowed: a search that silently does nothing reads as a broken
+      // search bar rather than as an empty result.
+      setMissed(!(handle.current?.find(query, direction) ?? false));
+    },
+    [handle, query],
+  );
+
+  return (
+    <div
+      role="search"
+      aria-label="Search the terminal"
+      className="hud-popover hud-clip-sm hud-accent-cyan absolute top-4 right-6 z-20 flex items-center gap-1 p-1"
+    >
+      <TextField
+        ref={inputRef}
+        value={query}
+        aria-label="Search the terminal"
+        placeholder="Find…"
+        className={`w-48 font-mono ${missed ? "text-danger" : ""}`.trim()}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setMissed(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            step(e.shiftKey ? "previous" : "next");
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+      />
+      <IconButton label="Previous match" variant="ghost" onClick={() => step("previous")}>
+        <ChevronUp size={14} strokeWidth={2.5} />
+      </IconButton>
+      <IconButton label="Next match" variant="ghost" onClick={() => step("next")}>
+        <ChevronDown size={14} strokeWidth={2.5} />
+      </IconButton>
+      <IconButton label="Close search" variant="ghost" accent="danger" onClick={onClose}>
+        <X size={14} strokeWidth={2.5} />
+      </IconButton>
     </div>
   );
 }

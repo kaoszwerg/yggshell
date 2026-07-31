@@ -2,11 +2,17 @@ import { useEffect, useImperativeHandle, useRef } from "react";
 import type { Ref } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { isMac } from "../../lib/platform";
+import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
 import { PALETTE } from "../../styles/palette";
+
+/** Which way a search step runs. */
+export type SearchDirection = "next" | "previous";
 
 /** The imperative surface of a terminal — the parts a caller must drive rather than describe. */
 export interface TerminalHandle {
@@ -16,6 +22,16 @@ export interface TerminalHandle {
   focus: () => void;
   /** Re-measure and report the new geometry. Call after this surface becomes visible. */
   fit: () => void;
+  /**
+   * Paste text as *input*, through the emulator rather than straight down the wire — that is what
+   * wraps it in bracketed-paste markers, so a shell knows it was pasted and does not execute a
+   * multi-line paste line by line.
+   */
+  paste: (text: string) => void;
+  /** Step to the next/previous match. Returns whether one was found. */
+  find: (query: string, direction: SearchDirection) => boolean;
+  /** Drop the highlights. */
+  clearSearch: () => void;
 }
 
 export interface TerminalSurfaceProps {
@@ -26,6 +42,12 @@ export interface TerminalSurfaceProps {
   onResize: (rows: number, cols: number) => void;
   /** A link the user clicked. Routed by the caller, never opened by the webview itself. */
   onLink: (url: string) => void;
+  /** The title the shell set (OSC 0/2). Never fires unless the shell actually sets one. */
+  onTitle?: (title: string) => void;
+  /** The user asked for search (⌘F / Ctrl+Shift+F). The bar itself belongs to the caller. */
+  onFind?: () => void;
+  /** Whether anything is selected right now — so a caller can disable "Copy" honestly. */
+  onSelectionChange?: (hasSelection: boolean) => void;
   className?: string;
 }
 
@@ -47,22 +69,26 @@ export function TerminalSurface({
   onData,
   onResize,
   onLink,
+  onTitle,
+  onFind,
+  onSelectionChange,
   className = "",
 }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
 
   // The callbacks are read through refs so a parent re-render never tears down the emulator: xterm
   // owns a canvas, a WebGL context and the scrollback, and re-creating it would wipe the session's
   // history on every keystroke that changed a title somewhere.
-  const handlers = useRef({ onData, onResize, onLink });
+  const handlers = useRef({ onData, onResize, onLink, onTitle, onFind, onSelectionChange });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
   // possibly fire already see the current values.
   useEffect(() => {
-    handlers.current = { onData, onResize, onLink };
-  }, [onData, onResize, onLink]);
+    handlers.current = { onData, onResize, onLink, onTitle, onFind, onSelectionChange };
+  }, [onData, onResize, onLink, onTitle, onFind, onSelectionChange]);
 
   useImperativeHandle(
     ref,
@@ -70,6 +96,13 @@ export function TerminalSurface({
       write: (bytes: Uint8Array) => termRef.current?.write(bytes),
       focus: () => termRef.current?.focus(),
       fit: () => fitRef.current?.fit(),
+      paste: (text: string) => termRef.current?.paste(text),
+      find: (query, direction) => {
+        const search = searchRef.current;
+        if (!search || query === "") return false;
+        return direction === "next" ? search.findNext(query) : search.findPrevious(query);
+      },
+      clearSearch: () => searchRef.current?.clearDecorations(),
     }),
     [],
   );
@@ -86,8 +119,8 @@ export function TerminalSurface({
       fontSize: 13,
       lineHeight: 1.25,
       scrollback: 10_000,
-      // The HUD palette (rule:theming). These are the JS mirrors of the `--saga-*` variables; xterm
-      // cannot resolve a CSS `var()`, which is exactly what palette.ts exists for.
+      // Ctrl+C must stay SIGINT, so copy is never bound to it. The selection is still cleared on
+      // input, which is what makes select-then-type behave like every other terminal.
       theme: {
         background: PALETTE.deep,
         foreground: PALETTE.fg,
@@ -118,6 +151,8 @@ export function TerminalSurface({
     const unicode = new Unicode11Addon();
     term.loadAddon(unicode);
     term.unicode.activeVersion = "11";
+    const search = new SearchAddon();
+    term.loadAddon(search);
     term.loadAddon(
       new WebLinksAddon((_event, uri) => {
         handlers.current.onLink(uri);
@@ -145,20 +180,80 @@ export function TerminalSurface({
       handlers.current.onResize(term.rows, term.cols);
     };
 
+    // Selecting IS the copy, as on X11 — this is what a middle-click then pastes.
+    const selectionSub = term.onSelectionChange(() => {
+      setPrimarySelection(term.getSelection());
+      handlers.current.onSelectionChange?.(term.hasSelection());
+    });
+    const titleSub = term.onTitleChange((title) => {
+      if (title.trim() !== "") handlers.current.onTitle?.(title);
+    });
     const dataSub = term.onData((data) => handlers.current.onData(data));
+
+    // Middle-click pastes the primary selection, the way it does in every terminal on X11.
+    // Deliberately unconditional: a program that has taken over the mouse (tmux, vim) would receive
+    // the click instead in some terminals, but the paste people reach for far more often than they
+    // middle-click inside a mouse-reporting app, and losing it there is the more surprising break.
+    const onAuxClick = (event: MouseEvent) => {
+      if (event.button !== 1) return;
+      event.preventDefault();
+      const text = readPrimarySelection();
+      if (text !== "") term.paste(text);
+    };
+    host.addEventListener("auxclick", onAuxClick);
+
+    // Copy and paste cannot use the bare Ctrl+C/Ctrl+V a terminal needs for SIGINT and literal input,
+    // so they take the platform's terminal convention: ⌘C/⌘V on macOS, Ctrl+Shift+C/V elsewhere.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") return true;
+      const modified = isMac()
+        ? event.metaKey && !event.ctrlKey && !event.altKey
+        : event.ctrlKey && event.shiftKey && !event.altKey;
+      if (!modified) return true;
+
+      switch (event.key.toLowerCase()) {
+        case "c": {
+          const selection = term.getSelection();
+          // Nothing selected: let it through, so ⌘C keeps whatever meaning it otherwise has rather
+          // than becoming a key that silently does nothing.
+          if (selection === "") return true;
+          void navigator.clipboard.writeText(selection);
+          return false;
+        }
+        case "v": {
+          void navigator.clipboard.readText().then((text) => {
+            if (text !== "") term.paste(text);
+          });
+          return false;
+        }
+        case "f": {
+          if (!handlers.current.onFind) return true;
+          handlers.current.onFind();
+          return false;
+        }
+        default:
+          return true;
+      }
+    });
+
     const observer = new ResizeObserver(measure);
     observer.observe(host);
     measure();
 
     termRef.current = term;
     fitRef.current = fit;
+    searchRef.current = search;
 
     return () => {
       observer.disconnect();
+      host.removeEventListener("auxclick", onAuxClick);
+      selectionSub.dispose();
+      titleSub.dispose();
       dataSub.dispose();
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
     };
   }, []);
 
