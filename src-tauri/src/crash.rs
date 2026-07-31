@@ -379,6 +379,15 @@ mod tests {
         // this into a logged `None`; it never becomes a second crash.
         let err = write_report_stamped(dir.path(), stamp, "panic", "x").expect_err("must give up");
         assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+
+        // Giving up must never cost a record that already exists — the whole point of the bound is
+        // that the process dies loudly, not that it starts overwriting once the search gets hard.
+        let reports = std::fs::read_dir(dir.path())
+            .expect("read_dir")
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().starts_with("crash-"))
+            .count();
+        assert_eq!(reports, MAX_NAME_ATTEMPTS as usize);
     }
 
     #[test]

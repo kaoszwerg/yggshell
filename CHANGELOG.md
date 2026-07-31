@@ -33,6 +33,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Web Storage in tests now comes from an in-memory `Storage`, per upstream briefing `app-108`.**
+  The previous shim re-pointed the globals at jsdom's Storage through `globalThis.jsdom` — a vitest
+  internal — and probed the existing global first, which throws on Node ≤ 25 (a version `engines`
+  still allows). The replacement installs unconditionally and is guarded only on `typeof document`.
+  `src/test/environment.test.ts` now also pins *ownership* of the globals, not just their behaviour,
+  so the setup block cannot be tidied away without a test failing.
 - `hudButtonClass`'s `ghost` variant now honours the `accent` instead of always brightening to cyan.
   A close `×` on a cyan-filled active tab used to disappear exactly when the pointer reached it. The
   accent-to-class mapping is spelled out rather than interpolated — Tailwind scans for literal class
@@ -47,7 +53,8 @@ All notable changes to this project are documented here. The format follows
   (rule:crash-handling). Reproduced by the existing `two_crashes_never_overwrite_each_other`, which was
   passing only by luck of the clock; pinned deterministically by
   `a_second_crash_in_the_same_millisecond_does_not_erase_the_first` and
-  `the_collision_search_is_bounded`.
+  `the_collision_search_is_bounded` — the latter now also asserting, per upstream briefing `app-107`,
+  that an exhausted search leaves every earlier report intact.
 - Test suite was red on Node >= 26 (11 failures): Node defines its own, unavailable
   `localStorage`/`sessionStorage` as non-enumerable globals, which shadow jsdom's working Storage
   because vitest copies only the enumerable window keys. `src/test/setup.ts` now re-points both

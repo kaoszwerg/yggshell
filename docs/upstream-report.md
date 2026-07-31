@@ -1,5 +1,13 @@
 # Upstream report → `kaoszwerg/saga-rust-template` (app layer)
 
+> **RESOLVED — 2026-07-31.** All three were accepted and shipped in `saga-rust-template` **v0.10.3**.
+> #3 arrived in the pinned `scripts/sync-identity.mjs` itself; #1 and #2 concern project-owned files,
+> so they ship as briefings — `docs/migrations/app-107-crash-report-collision.md` and
+> `app-108-test-env-web-storage.md` — and are ported here. The upstream's Web Storage shim **replaced**
+> the one below: it installs an in-memory `Storage` unconditionally instead of probing the existing
+> global (which throws on Node ≤ 25) and instead of reaching through `globalThis.jsdom`, a vitest
+> internal. The text below is kept as the record of what was reported and why, not as work to do.
+
 Found while bootstrapping `yggshell` from the template at `336dea6` (main). Three defects, all in files
 the template ships to every fork, all fixed **here** and therefore still present **there**. Per
 `rule:upstream-changes` §3 this is a proposal to the maintainer, not a commit made in that repo.

@@ -1,7 +1,7 @@
 ---
 id: mem:open-work-backlog
 title: Open follow-up work on YggShell
-tldr: "Backlog: three fixes owed upstream (crash-report collision, Node>=26 tests, sync-identity misses examples/); no macOS signing secrets; the terminal is unbuilt."
+tldr: "Backlog: the three upstream fixes are done (shipped in v0.10.3) — do not re-report them; no macOS signing secrets; the terminal itself is still unbuilt."
 scope: project
 load: conditional
 triggers:
@@ -32,22 +32,21 @@ type: project
   clones over HTTPS; under any other GitHub account it fails with `Repository not found`. Switch first
   (`gh auth switch --user kaoszwerg`), then update. The one-time `--adopt` has already run.
 
-## Three fixes that belong UPSTREAM in `saga-rust-template`
+## The three upstream fixes are DONE — do not re-report them
 
-Each was found and fixed **here**, so every other fork still carries it. Upstreaming is a proposal to
-the maintainer, never a commit the agent makes in the other repo (rule:upstream-changes §3). The
-briefing to hand over is `docs/upstream-report.md`.
+All three defects in `docs/upstream-report.md` were accepted and shipped in
+`saga-rust-template` v0.10.3, pulled here on 2026-07-31. Nothing is owed upstream any more.
 
-- **`crash.rs` could erase a crash report.** Report names came from a millisecond timestamp alone; two
-  panics in the same millisecond (or two processes at once) collided and the second `fs::write`
-  overwrote the first. Now claimed atomically with `create_new` + a bounded suffix search.
-- **`src/test/setup.ts` — the whole suite is red on Node >= 26.** Node's own, unavailable
-  `localStorage`/`sessionStorage` globals are non-enumerable and therefore survive vitest's jsdom
-  population, shadowing jsdom's working Storage. `engines` allows Node 26, so any fork on a current
-  Node hits it.
-- **`sync-identity.mjs` misses `src-tauri/examples/`.** It rewrites the crate references in
-  `src-tauri/src/main.rs` and `src-tauri/tests/contracts.rs` but not in `examples/crash_probe.rs`, so
-  `cargo clippy --all-targets` breaks after every rename.
+- `sync-identity.mjs` now scans `src-tauri/examples/` and has `scripts/sync-identity.test.mjs`
+  pinning it. Arrived with the update; nothing to do.
+- The crash-report collision and the Node-Web-Storage shim concern **project-owned** files
+  (`src-tauri/src/crash.rs`, `src/test/setup.ts`), so `governance:update` cannot fix them for a fork.
+  They ship as briefings — `docs/migrations/app-107-*`, `app-108-*` — and were ported by hand here.
+- **The upstream's Web Storage shim replaced ours, on purpose.** Ours re-pointed the globals at
+  jsdom's Storage via `globalThis.jsdom` — a vitest internal — and probed the existing value first,
+  which throws on Node ≤ 25. The upstream installs an in-memory `Storage` unconditionally, guarded
+  only on `typeof document`. Do not "simplify" it back: `app-108` says exactly why each part is
+  load-bearing.
 - **No code signing / notarisation** configured. `release.yml` supports macOS signing when the `APPLE_*`
   secrets are set (ADR-APP-023); none are set yet.
 - **The terminal is unbuilt.** See [[project-scope]] for what is agreed and what is not.
