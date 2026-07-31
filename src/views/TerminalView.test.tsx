@@ -2,6 +2,7 @@ import { render, act, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TerminalView } from "./TerminalView";
 import { useTerminalStore } from "../store/terminal";
+import { pane } from "../test/panes";
 
 /**
  * The emulator itself is out of scope here — this file tests the wiring between a measured geometry
@@ -428,5 +429,55 @@ describe("TerminalView", () => {
 
     (surfaceProps.onLink as (url: string) => void)("https://example.com");
     expect(api.openExternal).toHaveBeenCalledWith("https://example.com");
+  });
+
+  // Restoring the workspace is only worth anything if the shells come back where they were. This
+  // shipped broken once: the pane held a slot for the restored directory and nothing ever filled it.
+  describe("a restored tab", () => {
+    it("opens its shell in the directory it was in", async () => {
+      useTerminalStore.setState({
+        panes: [pane({ key: "term-0", cwd: "/Users/steve/git-projects/private/yggshell" })],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(50);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]).toMatchObject({
+        cwd: "/Users/steve/git-projects/private/yggshell",
+      });
+    });
+
+    it("sends no directory for a tab opened in this run", async () => {
+      const opened = deferOpen(51);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]?.cwd).toBeUndefined();
+    });
+
+    it("does not send it AGAIN when the tab starts a second session", async () => {
+      // After a tmux detach the shell decides where it is; jumping back to where the tab started
+      // would undo whatever the user had done since.
+      useTerminalStore.setState({
+        panes: [pane({ key: "term-0", cwd: "/repo" })],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(52);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      vi.mocked(terminalApi.open).mockResolvedValue({ id: 53, tmux_session: null });
+      await act(async () => {
+        useTerminalStore.getState().detachToShell("term-0");
+      });
+
+      expect(vi.mocked(terminalApi.open).mock.calls.at(-1)?.[0]?.cwd).toBeUndefined();
+    });
   });
 });

@@ -154,6 +154,7 @@ export function TerminalView() {
           paneKey={pane.key}
           profileId={pane.profileId}
           themeId={pane.themeId}
+          restoredCwd={pane.cwd}
           plain={pane.plain}
           generation={pane.generation}
           active={pane.key === activeKey}
@@ -169,6 +170,7 @@ function Pane({
   paneKey,
   profileId,
   themeId,
+  restoredCwd,
   plain,
   generation,
   active,
@@ -179,6 +181,13 @@ function Pane({
   profileId: string | null;
   /** This tab's own colour scheme, if the user gave it one. Changeable at any time. */
   themeId: string | null;
+  /**
+   * Where this tab was when the app last closed, or `null` for a tab opened in this run.
+   *
+   * Read once, at mount: the store's `cwd` is overwritten the moment the shell reports where it is,
+   * so anything read later is the CURRENT directory rather than the restored one.
+   */
+  restoredCwd: string | null;
   /** Ignore the tmux setting for this tab — set once the user has detached out of it. */
   plain: boolean;
   /** Bumped to ask for a fresh session in this same tab. */
@@ -201,7 +210,7 @@ function Pane({
    * it is, so by the time a second session opened in this tab it would no longer be the restored
    * value — and a tab that detached out of tmux would jump back to where it started.
    */
-  const restoreCwd = useRef<string | null>(null);
+  const restoreCwd = useRef<string | null>(restoredCwd);
   const settings = useSettings();
   // UI scale and text size are separate questions: how big the chrome is, and how much output fits.
   // The WebView zoom multiplies EVERYTHING, so the emulator is handed a size divided by that zoom —
@@ -293,8 +302,11 @@ function Pane({
   );
 
   // Only the FIRST session of a tab starts in the restored directory; after that the shell decides.
+  //
+  // Guarded on `sessionOpen` being TRUE rather than just running on its change: an effect runs on
+  // mount too, and clearing it there threw the restored directory away before anything could use it.
   useEffect(() => {
-    restoreCwd.current = null;
+    if (sessionOpen) restoreCwd.current = null;
   }, [sessionOpen]);
 
   // A bumped generation means "this tab wants a new session" — today, that the user detached out of
