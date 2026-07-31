@@ -71,12 +71,31 @@ The reason the product exists: enriching an AI development harness.
 - [ ] Still open here: fish and other shells get no hook (fish reports OSC 7 itself; the rest do not).
       Remote-only branches are not drawn — only local ones and HEAD.
 
-## Later — discussed before it is built
+## Phase 4 — Terminal configuration (next up)
 
-- [x] tmux: attach on start, optionally create, optionally a named session — and closing a tab or
-      the app **detaches**, never kills.
-- [ ] iTerm2 theme import, per-tab theme selection.
-- [ ] Theme editor.
-- [ ] Granular per-terminal configuration.
-- [ ] Further sidebar tools for the AI harness.
-- [ ] Release: signing and notarisation (ADR-APP-023) — no `APPLE_*` secrets are set yet.
+Ordered as they should be built; each is discussed before it starts (rule:clarify-and-plan).
+
+- [ ] **Which shell to start.** Today it is `$SHELL` with no way to change it. The first real gap in
+      Settings → Terminal, and the smallest.
+- [ ] **iTerm2 theme import** (`.itermcolors`, a plist of 0–1 float components). Parse in Rust, store
+      per theme, hand the 16+ ANSI colours to `TerminalSurface`'s theme object — which already takes
+      them from `PALETTE`, so the seam exists.
+- [ ] **Theme editor.** Depends on the import: the same colour model, edited.
+- [ ] **Per-terminal configuration** — a tab starting with its own shell, cwd and theme. Needs a
+      configuration id on `terminal_open`, which the command already takes conceptually (it takes a
+      *reference*, never a command line — ADR-PROJ-001 §5).
+- [ ] Split panes, and session persistence across restarts. Both explicitly outside milestone 1.
+
+## Phase 5 — More sidebar tools
+
+The column, the rail and the persistence are built (ADR-PROJ-001); a second tool is now only its own
+content plus one entry in `TOOLS` and `ToolId`.
+
+- [ ] Remote branches in the Git graph (only local ones and HEAD are drawn today).
+- [ ] Whatever the harness workflow actually needs next — decided with the maintainer, not guessed.
+
+## Known gaps carried forward
+
+See `.claude/memory/open-work-backlog.md`, which holds the *diagnosed but unclosed* defects and the
+traps around them (a GUI app's empty PATH, `void` promises, tmux and OSC 7, screenshots). Read it
+before re-investigating anything.
