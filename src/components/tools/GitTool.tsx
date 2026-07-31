@@ -1,7 +1,5 @@
 import { useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { GitBranch, RefreshCw } from "lucide-react";
-import { gitApi } from "../../api/git";
 import { IconButton } from "../ui/IconButton";
 import { Tooltip } from "../ui/Tooltip";
 import { PALETTE } from "../../styles/palette";
@@ -9,15 +7,11 @@ import { layoutHistory, type GraphRow } from "../../lib/gitGraph";
 import { Row } from "../ui/Row";
 import { Splitter } from "../ui/Splitter";
 import { useTerminalStore } from "../../store/terminal";
+import { useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type GitDetail } from "../../store/ui";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
 import type { GitSnapshot } from "../../bindings/GitSnapshot";
-
-/** How often the snapshot is re-read while the tool is open. A harness editing files should show up
- *  without the user asking, but reading a repository is not free — this is the compromise, and the
- *  refresh control is there for the moment it feels too slow. */
-const REFRESH_MS = 4000;
 
 /** Status glyph and colour per change kind. Spelled out rather than looked up: a computed member
  *  access is an object-injection sink and the gate runs at --max-warnings 0. */
@@ -49,14 +43,7 @@ function changeMark(status: string): { mark: string; className: string } {
  * OSC 7 — so it follows a `cd` instead of being pinned to wherever the app happened to start.
  */
 export function GitTool() {
-  const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
-
-  const query = useQuery({
-    queryKey: ["git", cwd],
-    queryFn: () => (cwd === null ? Promise.resolve(null) : gitApi.snapshot(cwd)),
-    enabled: cwd !== null,
-    refetchInterval: REFRESH_MS,
-  });
+  const { cwd, query } = useGitSnapshot();
 
   if (cwd === null) {
     return (

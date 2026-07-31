@@ -1,5 +1,7 @@
 import { useRef } from "react";
 import { Splitter } from "../ui/Splitter";
+import { Tooltip } from "../ui/Tooltip";
+import { repositoryName, useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { GitTool } from "./GitTool";
 import { TOOL_WIDTH_MAX, TOOL_WIDTH_MIN, useUiStore, type ToolId } from "../../store/ui";
 
@@ -11,6 +13,31 @@ function toolLabel(tool: ToolId): string {
     case "git":
       return "Git";
   }
+}
+
+/**
+ * Which repository the Git tool is showing, beside the column's own name.
+ *
+ * The branch alone does not say: `main` is `main` in every checkout, and this app is meant to have
+ * several open at once. Read through the same hook the tool uses, so the header cannot name one
+ * repository while the panel below it shows another.
+ */
+function RepositoryName() {
+  const { query } = useGitSnapshot();
+  const name = repositoryName(query.data?.root);
+  if (name === null) return null;
+  return (
+    <>
+      <span aria-hidden className="text-cyan/30 shrink-0">
+        ·
+      </span>
+      {/* The full path in a tooltip: the column is narrow, and two checkouts of the same project have
+          the same folder name. */}
+      <Tooltip content={query.data?.root ?? name}>
+        <span className="text-fg/80 truncate normal-case">{name}</span>
+      </Tooltip>
+    </>
+  );
 }
 
 /**
@@ -40,8 +67,9 @@ export function ToolPanel() {
         style={{ width }}
         className="hud-strip flex shrink-0 flex-col overflow-hidden"
       >
-        <header className="border-cyan/20 text-cyan flex h-6 shrink-0 items-center border-b px-2 font-mono text-[0.58rem] tracking-[0.18em]">
-          {label.toUpperCase()}
+        <header className="border-cyan/20 text-cyan flex h-6 shrink-0 items-center gap-1.5 border-b px-2 font-mono text-[0.58rem] tracking-[0.18em]">
+          <span className="shrink-0">{label.toUpperCase()}</span>
+          {activeTool === "git" ? <RepositoryName /> : null}
         </header>
         {/* `min-h-0` and no scrolling of its own: a tool owns the scrolling inside it — the Git tool
             has two independently scrollable regions — and a scroll container wrapped around that

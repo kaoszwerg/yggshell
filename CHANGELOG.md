@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The Git tool's header names the repository**, beside the column's own name: `GIT · yggshell`. A
+  branch on its own does not say where you are — `main` is `main` in every checkout, and this app is
+  built to have several open at once. The full path is in a tooltip, because two checkouts of the same
+  project share a folder name. Header and panel read through one hook, so they cannot name different
+  repositories, and sharing the query key means the header costs a cache hit rather than a second walk
+  of the repository.
 - **Fourteen colour schemes ship with the app** — three of ours (Yggdrasil, Bifrost, Fimbulwinter) and
   eleven ported ones whose licences were each checked at their own upstream, not at the collection they
   were downloaded from: Solarized (dark/light), Dracula, Nord, Catppuccin (Mocha/Latte), Tomorrow,

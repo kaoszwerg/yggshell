@@ -1,9 +1,15 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { pane } from "../../test/panes";
+import { gitApi } from "../../api/git";
 import { ToolPanel } from "./ToolPanel";
 import { TOOL_WIDTH_MAX, TOOL_WIDTH_MIN, useUiStore } from "../../store/ui";
 import { useTerminalStore } from "../../store/terminal";
+
+vi.mock("../../api/git", () => ({
+  gitApi: { snapshot: vi.fn() },
+}));
 
 const reset = (over: Partial<ReturnType<typeof useUiStore.getState>> = {}) => {
   useUiStore.setState({ view: "terminal", activeTool: null, toolWidth: 280, ...over });
@@ -77,5 +83,44 @@ describe("ToolPanel", () => {
 
     fireEvent.keyDown(splitter, { key: "End" });
     expect(useUiStore.getState().toolWidth).toBe(TOOL_WIDTH_MAX);
+  });
+
+  describe("the column header", () => {
+    it("names the repository beside the tool, so a branch is not ambiguous", async () => {
+      // `main` is `main` in every checkout, and this app is built to have several open at once.
+      vi.mocked(gitApi.snapshot).mockResolvedValue({
+        root: "/Users/steve/git-projects/private/yggshell",
+        branch: "main",
+        detached: false,
+        head: "abc1234",
+        ahead: 0,
+        behind: 0,
+        changes: [],
+        commits: [],
+      });
+      reset({ activeTool: "git" });
+      useTerminalStore.setState({
+        panes: [pane({ key: "p1", cwd: "/Users/steve/git-projects/private/yggshell" })],
+        activeKey: "p1",
+      });
+      renderPanel();
+
+      expect(await screen.findByText("yggshell")).toBeTruthy();
+      expect(screen.getByText("GIT")).toBeTruthy();
+    });
+
+    it("shows the tool's name alone when there is no repository", async () => {
+      vi.mocked(gitApi.snapshot).mockResolvedValue(null);
+      reset({ activeTool: "git" });
+      useTerminalStore.setState({
+        panes: [pane({ key: "p1", cwd: "/tmp" })],
+        activeKey: "p1",
+      });
+      renderPanel();
+
+      expect(screen.getByText("GIT")).toBeTruthy();
+      await waitFor(() => expect(gitApi.snapshot).toHaveBeenCalled());
+      expect(screen.queryByText("tmp")).toBeNull();
+    });
   });
 });
