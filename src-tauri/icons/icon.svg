@@ -1,10 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- saga-rust-template — isometric wireframe cube: the generative primitive. A hexagonal outline with the
-       three inner edges meeting at the centre vertex reads as a cube from any distance and stays
-       legible at 32px. Same construction language as the HUD panels: hard geometry, neon gradient
-       on a near-black chamfered plate. -->
+  <!-- YggShell — Yggdrasil carved as a rune-stave standing on a shell prompt: one vertical stave, two
+       branch tiers, a root spread, and a command line with a block cursor. Seven strokes plus two
+       solids, so the silhouette survives 32px (verified by rasterising to 32px, not assumed).
+       Same construction language as the HUD panels: hard geometry, neon gradient on a near-black
+       chamfered plate. Colours mirror the palette (rule:theming): #0a0a0f plate, #00e5ff cyan,
+       #00ff88 green. -->
   <defs>
-    <linearGradient id="edge" x1="0" y1="220" x2="0" y2="804" gradientUnits="userSpaceOnUse">
+    <linearGradient id="edge" x1="0" y1="190" x2="0" y2="800" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#00e5ff" />
       <stop offset="1" stop-color="#00ff88" />
     </linearGradient>
@@ -13,15 +15,20 @@
   <rect width="1024" height="1024" rx="208" fill="#0a0a0f" />
   <rect x="42" y="42" width="940" height="940" rx="176" fill="none" stroke="#00e5ff" stroke-width="5" opacity="0.22" />
 
-  <g stroke="url(#edge)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <!-- Outer hexagon: the cube silhouette -->
-    <path d="M512 220 L784 372 L784 668 L512 820 L240 668 L240 372 Z" />
-    <!-- Inner edges meeting at the centre vertex -->
-    <path d="M512 220 L512 520" />
-    <path d="M512 520 L784 372" />
-    <path d="M512 520 L240 372" />
+  <g stroke="url(#edge)" stroke-width="50" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Stave -->
+    <path d="M512 214 L512 764" />
+    <!-- Crown: two branch tiers, rising outward -->
+    <path d="M512 300 L352 196" />
+    <path d="M512 300 L672 196" />
+    <path d="M512 450 L286 316" />
+    <path d="M512 450 L738 316" />
+    <!-- Roots -->
+    <path d="M512 690 L322 786" />
+    <path d="M512 690 L702 786" />
   </g>
 
-  <!-- Centre vertex node -->
-  <circle cx="512" cy="520" r="34" fill="#00ff88" />
+  <!-- The prompt the tree stands on, and its block cursor -->
+  <rect x="228" y="848" width="568" height="30" rx="15" fill="#00e5ff" opacity="0.45" />
+  <rect x="640" y="824" width="86" height="78" rx="10" fill="#00ff88" />
 </svg>

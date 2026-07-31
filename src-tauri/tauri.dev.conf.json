@@ -1,5 +1,5 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "saga-rust-template Dev",
-  "identifier": "com.kaoszwerg.sagarusttemplate.dev"
+  "productName": "YggShell Dev",
+  "identifier": "com.kaoszwerg.yggshell.dev"
 }

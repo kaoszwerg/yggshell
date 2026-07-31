@@ -1,64 +1,69 @@
 ---
 id: mem:project-scope
-title: saga-rust-template scope summary
-tldr: "A governed, reusable Tauri 2 + React HUD desktop shell. It owns the 'app' layer, consumes the agnostic core from althing, and publishes both to its forks."
+title: YggShell scope summary
+tldr: "A developer terminal on the saga-rust-template shell: full terminal tabs + iTerm2 themes, and sidebar tools that enrich AI harnesses (Claude Code)."
 scope: project
 load: core
 type: project
 ---
 
-# saga-rust-template — scope summary
+# YggShell — scope summary
 
-**One-line:** `saga-rust-template` is a reusable, cross-platform (Windows/macOS/Linux) desktop
-application shell — HUD UI, structured logging, settings persistence, single-source app identity, full
-quality gate — with **no product features**. New projects are created from it and renamed.
+**One-line:** `YggShell` is a cross-platform **developer terminal**: a genuine replacement for the
+system terminal — multiple independent tabs, each launchable with its own iTerm2-compatible colour
+theme, plus a theme editor and granular per-terminal configuration — whose **defining purpose** is to
+enrich **AI development harnesses** (in the maintainer's case, Claude Code) with tools in the sidebar.
+
+The terminal is the substrate; the sidebar is the product. A feature earns its place by making working
+in an AI harness better, not by being a terminal feature someone could name.
 
 ## Its place in the governance cascade (ADR-CORE-033)
 
 ```
-althing  (owns 'core' — stack-agnostic)
-   └── saga-rust-template  (consumes 'core', OWNS + publishes 'app')   ← this repo
-          └── ivaldi       (leaf project; owns no layer)
+kaoszwerg/althing              owns 'core' — stack-agnostic
+   └── kaoszwerg/saga-rust-template   owns + publishes 'app' (the Tauri/HUD shell)
+          └── kaoszwerg/yggshell      ← this repo: a LEAF. Owns no layer.
 ```
 
-This repo is a **consumer and a publisher at the same time**:
+This repo **consumes and publishes nothing**: `governance/config.json` says
+`upstream: kaoszwerg/saga-rust-template`, `layer: null`. Every core *and* app file — `CLAUDE.md`, the
+rules, the ADRs, `scripts/`, `eslint.config.mjs` — is **read-only here**. An in-place edit is drift and
+the gate refuses it; improve it upstream and `npm run governance:update`, or diverge one of the four
+legal ways (rule:upstream-changes).
 
-- It **consumes** the agnostic core (`CLAUDE.md`, the portable rules/ADRs, the governance scripts). Those
-  files are **read-only here** — an in-place edit is drift. Improve them in `althing`, then
-  `npm run governance:update`.
-- It **owns** the **`app` layer**: the Tauri/Rust/React/HUD governance (ADR-APP-001, 020, 021, 023, 025, 026,
-  031; `rust-conventions`, `theming`, `ui-design`, `frontend-architecture`, `cross-platform`,
-  `stack-tauri`, `stack-release`), `sync-version.mjs`, `sync-identity.mjs`, `bootstrap.mjs`,
-  `eslint.config.mjs`, `knip.config.js`, `deny.toml`, the CI/release workflows. It pins them with
-  `governance:sync` and publishes them to its forks.
-- **`ivaldi` must never be repointed at `althing`.** Its upstream is this repo — the only publisher of
-  the app layer. Pointing it at the core would strip the entire desktop shell out of it.
+**Never repoint the upstream at `althing`.** `saga-rust-template` is the only publisher of the app
+layer; pointing at the core would strip the entire desktop shell governance out of this repo.
 
-## What exists today
+## What exists today (inherited from the shell, no product code)
 
 - Frameless HUD window (custom title bar, sidebar rail, status bar, About dialog); an **optional**
   system tray + close-to-tray behind the `minimize_to_tray` setting (default off); persisted geometry.
 - Typed IPC surface (`app_version`, `build_info`, `get_recent_logs`, `get_settings`, `update_settings`,
   `open_external`) with `ts-rs`-generated TypeScript bindings.
-- Logging per ADR-APP-025: console + rotating JSON file + in-memory ring buffer streamed live into the Logs
-  view.
+- Logging per ADR-APP-025: console + rotating JSON file + in-memory ring buffer streamed live into the
+  Logs view.
 - Settings persisted as an atomically written JSON document under the OS app-data dir.
-- **Single-source app identity** (`app.identity.json` → `identity:sync`, ADR-APP-031).
+- Single-source app identity (`app.identity.json` → `identity:sync`, ADR-APP-031).
 
-## What it is not (yet)
+## What is NOT built yet
 
-- No domain logic, no network calls, no database. A project's purpose is defined on top of this shell.
+**Everything.** No PTY, no tabs, no theme parsing, no theme editor, no sidebar widgets — the product is
+entirely ahead. The agreed order is:
 
-## Renaming a new project (ADR-APP-031)
+1. **The terminal component with multiple independent tabs**, at the full feature set of a real
+   terminal — explicitly *not* a reduced emulation.
+2. **The first sidebar widget: a Git integration** — the current branch visualised the way VS Code
+   does it, a list of changed files, and below it the branch history showing where each branch stands,
+   with the divergence between branches drawn out.
 
-Edit `app.identity.json`, then run `node scripts/bootstrap.mjs --upstream <owner/repo>` +
-`npm run identity:sync` (the `/bootstrap` agent prompt does this, plus icons). Everything else is
-derived; `identity:check` guards drift.
+Everything else (iTerm2 theme import, the theme editor, granular per-terminal config, further sidebar
+tools) is discussed before it is built.
 
-**Why:** the shell is deliberately domain-free, so a new product is defined on top of a running, governed
+**Why:** the shell is deliberately domain-free, so the product is defined on top of a running, governed
 base — and scope drift into half-features stays visible immediately.
 
-**How to apply:** before adding anything to a fresh copy, check it against this file: if it is not shell
-infrastructure and not part of an agreed feature, it does not belong yet. Governance for **this** project
-goes in the project line (`.claude/rules/project/`, `docs/adr/project/`); governance for **every** project
-belongs in `althing`, never here.
+**How to apply:** before adding anything, check it against this file. If it is not the agreed milestone
+and not shell infrastructure, it is not in scope yet — ask (rule:clarify-and-plan). Governance for
+**this** project goes in the project line (`.claude/rules/project/`, `docs/adr/project/`); governance
+for every project on this stack belongs upstream in `saga-rust-template`, never here.
+See [[open-work-backlog]].

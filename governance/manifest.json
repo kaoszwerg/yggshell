@@ -1,7 +1,7 @@
 {
   "generated": true,
   "governanceVersion": "0.10.0",
-  "upstream": "kaoszwerg/althing",
+  "upstream": "kaoszwerg/saga-rust-template",
   "layers": [
     {
       "id": "core",
@@ -10,7 +10,7 @@
     },
     {
       "id": "app",
-      "source": null,
+      "source": "kaoszwerg/saga-rust-template",
       "version": "0.10.0"
     }
   ],

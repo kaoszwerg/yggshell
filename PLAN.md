@@ -1,6 +1,6 @@
 # Implementation plan
 
-## Phase 0 — Shell (done)
+## Phase 0 — Shell (done, inherited from `saga-rust-template`)
 
 The running, empty, reusable application shell.
 
@@ -16,19 +16,41 @@ The running, empty, reusable application shell.
 - [x] Settings: atomically written JSON under the OS app-data dir; UI scale applied to the WebView.
 - [x] Views: Home, Logs, Settings, About dialog.
 
-## Phase 1 — Product definition (next)
+## Phase 1 — Bootstrap into YggShell (done)
 
-- [ ] Decide the product's purpose and its final name; run the rename checklist in
-      `.claude/memory/project-scope.md`.
-- [ ] Replace the placeholder logo if the new name calls for a different mark.
-- [ ] Write the ADR(s) for the domain architecture before writing domain code.
+- [x] Identity: `app.identity.json` → `YggShell` / `com.kaoszwerg.yggshell`, propagated by
+      `identity:sync`; version reset to `0.1.0`, CHANGELOG reset.
+- [x] Icon: Yggdrasil as a rune-stave on a shell prompt (`src-tauri/icons/icon.svg` → full icon set).
+- [x] Fork marker: `governance/config.json` → consumes `kaoszwerg/saga-rust-template`, owns no layer.
+- [ ] **`node scripts/governance-update.mjs --adopt`** — blocked on a git credential that can read the
+      private upstream (see `.claude/memory/open-work-backlog.md`).
 
-## Phase 2 — First feature
+## Phase 2 — The terminal
 
-- [ ] Backend module + DTOs + commands; regenerate bindings.
-- [ ] Frontend view + hooks + sidebar entry.
-- [ ] Tests on both sides; extend CSP and capabilities only as the feature actually requires.
+The substrate. A genuine terminal, not a reduced emulation.
 
-## Later
+- [ ] ADR for the terminal architecture **before** any code: PTY ownership (Rust side), the byte
+      channel to the WebView, the emulator on the frontend, and the threat model of running arbitrary
+      shells (rule:security).
+- [ ] Backend: PTY spawn/resize/kill per tab, streamed output, process lifecycle, structured logging
+      of every session's start/exit (rule:logging).
+- [ ] Frontend: a terminal view with multiple independent tabs — full keyboard handling, scrollback,
+      selection/copy-paste, resize, links. Every control the user touches is a HUD primitive
+      (rule:ui-design).
+- [ ] Tests on both sides; the IPC contract pinned by tests on the producing side (rule:testing).
 
-- [ ] Release CI: cross-platform build, signing and notarisation (ADR-APP-023).
+## Phase 3 — First sidebar widget: Git integration
+
+The reason the product exists: enriching an AI development harness.
+
+- [ ] Current branch, visualised the way VS Code shows it.
+- [ ] List of changed files in the working tree.
+- [ ] Branch history below it: where each branch stands, and the divergence between branches drawn out.
+
+## Later — discussed before it is built
+
+- [ ] iTerm2 theme import, per-tab theme selection.
+- [ ] Theme editor.
+- [ ] Granular per-terminal configuration.
+- [ ] Further sidebar tools for the AI harness.
+- [ ] Release: signing and notarisation (ADR-APP-023) — no `APPLE_*` secrets are set yet.

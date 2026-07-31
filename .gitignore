@@ -47,3 +47,6 @@ Thumbs.db
 .claude/scheduled_tasks.json
 
 # NOTE: Cargo.lock and package-lock.json ARE committed (application, reproducible builds).
+
+# Personal direnv environment (sets CLAUDE_CONFIG_DIR); .envrc.local holds the secrets.
+.envrc

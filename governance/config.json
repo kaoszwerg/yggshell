@@ -1,15 +1,5 @@
 {
-  "upstream": "kaoszwerg/althing",
-  "layer": "app",
-  "owns": {
-    "memory": ["glossary.md", "logging-contract.md"],
-    "config": [
-      "eslint.config.mjs",
-      "knip.config.js",
-      ".lintstagedrc.json",
-      ".prettierrc.json",
-      "src-tauri/deny.toml"
-    ]
-  },
+  "upstream": "kaoszwerg/saga-rust-template",
+  "layer": null,
   "exclude": []
 }

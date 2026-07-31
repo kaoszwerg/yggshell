@@ -1,20 +1,27 @@
-# saga-rust-template
+# YggShell
 
-**The shell, ready for a product.**
+**Developer terminal for AI harnesses.**
 
-A cross-platform desktop application shell (Windows / macOS / Linux): frameless HUD window,
-structured logging, persisted settings, tray integration, typed IPC — and no domain logic. It runs,
-it looks finished, and it does nothing yet, which is exactly the point: the product is built on top
-of it.
+A cross-platform (Windows / macOS / Linux) developer terminal: a genuine replacement for the system
+terminal — multiple independent tabs, each launchable with its own iTerm2-compatible colour theme,
+plus a theme editor and granular per-terminal configuration — whose defining purpose is to **enrich AI
+development harnesses** (Claude Code) with tools in the sidebar.
 
-> `saga-rust-template` is a working title. The final name and the app's purpose are decided in a later step; the
-> rename checklist is in [`.claude/memory/project-scope.md`](.claude/memory/project-scope.md).
+The terminal is the substrate; the sidebar is the product.
 
 ## Status
 
-The shell is complete: window chrome, navigation rail, Home / Logs / Settings views, About dialog,
-tray icon with close-to-tray, live log streaming, JSON-persisted settings, and the full governance +
-quality pipeline. No product features exist.
+**The application shell is complete; nothing of the product is built yet.** What runs today is the
+frameless HUD window, navigation rail, Home / Logs / Settings views, About dialog, tray icon with
+close-to-tray, live log streaming, JSON-persisted settings, and the full governance + quality pipeline.
+
+Agreed order of work:
+
+1. **The terminal component with multiple independent tabs** — the full feature set of a real terminal,
+   not a reduced emulation.
+2. **The first sidebar widget: a Git integration** — the current branch visualised the way VS Code does
+   it, the list of changed files, and below it the branch history with each branch's position and the
+   divergence between branches drawn out.
 
 ## Tech stack
 
@@ -31,18 +38,16 @@ quality pipeline. No product features exist.
 
 ### Prerequisites
 
-- **Node.js ≥ 22** and npm
+- **Node.js ≥ 20.19** and npm (the version `package.json#engines` requires)
 - **Rust** (stable) with the [Tauri 2 prerequisites](https://tauri.app/start/prerequisites/) for your
   platform
 
 ### Run
 
 ```bash
-npm install
+npm ci
 npm run app:dev     # dev build — own identifier, DEV badge in the title bar
 ```
-
-The first run compiles the Rust backend and writes `src-tauri/Cargo.lock`; commit that file.
 
 ### Build
 
@@ -83,12 +88,12 @@ scripts/             governance and version tooling
 3. Frontend: a view under `src/views/`, one entry in the sidebar nav, one branch in `App.tsx`.
 4. Tests, an ADR if the decision is structural, then `npm run check:all`.
 
-## Create a project from this template
+## Governance
 
-Starting a new product from this shell? Run the **`/bootstrap`** agent command in Claude Code, or
-follow [`docs/howto/new-project-from-template.md`](docs/howto/new-project-from-template.md). Bootstrap
-removes this section and that howto (they are template-creation artifacts), so a bootstrapped fork
-carries neither.
+YggShell consumes its governance from `kaoszwerg/saga-rust-template` (which in turn consumes the
+stack-agnostic core from `kaoszwerg/althing`) — see [`CLAUDE.md`](CLAUDE.md) and ADR-CORE-033. Pull
+updates with `npm run governance:update`; governance that is true only for YggShell goes in the
+project line (`.claude/rules/project/`, `docs/adr/project/`).
 
 ## Licence
 

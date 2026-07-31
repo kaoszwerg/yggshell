@@ -2,8 +2,8 @@
 //! and error strings the frontend matches on, so a rename on the Rust side cannot silently break the
 //! TypeScript boundary — the test fails first.
 
-use saga_rust_template_lib::dto::SettingsDto;
-use saga_rust_template_lib::error::AppError;
+use yggshell_lib::dto::SettingsDto;
+use yggshell_lib::error::AppError;
 
 #[test]
 fn settings_dto_json_keys_are_stable() {
