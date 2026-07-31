@@ -37,13 +37,15 @@ The substrate. A genuine terminal, not a reduced emulation.
         title bar (ADR-PROJ-001), so it scrolls rather than wraps.
   - [x] `ContextMenu` — WAI-ARIA menu on right-click: portal, viewport clamp, arrow keys over
         enabled rows only, Escape returns focus to the trigger.
-  - [ ] `TerminalSurface` — the `@xterm/xterm` wrapper; the only file allowed to name xterm.
-- [ ] Backend: PTY spawn/resize/kill per tab, streamed output, process lifecycle, structured logging
+  - [x] `TerminalSurface` — the `@xterm/xterm` wrapper; the only file allowed to name xterm.
+- [x] Backend: PTY spawn/resize/kill per tab, streamed output, process lifecycle, structured logging
       of every session's start/exit (rule:logging).
-- [ ] Frontend: a terminal view with multiple independent tabs — full keyboard handling, scrollback,
-      selection/copy-paste, resize, links. Every control the user touches is a HUD primitive
-      (rule:ui-design).
-- [ ] Tests on both sides; the IPC contract pinned by tests on the producing side (rule:testing).
+- [x] Frontend: a terminal view with multiple independent tabs, tabs in the title bar, HUD context
+      menu, HUD scrollbars.
+- [x] Tests on both sides (292 frontend + 43 backend).
+- [ ] **Still open in milestone 1:** search UI (and its addon), copy/paste keyboard shortcuts, the
+      shell's own title sequence driving the tab label, and behavioural verification on Windows and
+      Linux — only macOS has been driven for real so far.
 
 ## Phase 3 — First sidebar widget: Git integration
 

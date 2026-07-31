@@ -280,6 +280,40 @@
   display: none;
 }
 
+/* ── HUD scrollbars ──
+   A native scrollbar is stock OS chrome and a break in the HUD (ADR-APP-026) — and in a terminal it
+   is also just too heavy: it sits right next to the text and competes with it. Applied globally so
+   every scrolling surface (the terminal viewport, the log view) agrees, rather than each one
+   restyling its own.
+
+   Deliberately quiet: a 6px hairline with no track, no buttons and no border. Visible enough to say
+   where you are, faint enough that reading output is never a fight with it. It brightens on hover,
+   which is when the user is actually reaching for it. */
+* {
+  scrollbar-width: thin; /* Gecko / WebKitGTK */
+  scrollbar-color: rgb(var(--saga-neon-cyan-rgb) / 0.22) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--saga-neon-cyan-rgb) / 0.22);
+  border-radius: 3px;
+  transition: background-color 0.15s;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--saga-neon-cyan-rgb) / 0.45);
+}
+/* No stepper arrows: they are the most obviously "native" part of a scrollbar. */
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
 /* ── HUD-styled range sliders ──
    Native browser thumbs (Windows blue, macOS pill) and tracks clash with the HUD palette.
    We rebuild both via the WebKit + Gecko pseudo-elements so styling sticks in WebView2 on

@@ -1,6 +1,5 @@
 {
   "$comment": "The UI boundary (ADR-APP-026). Project-owned: every project has different dependencies, so this file is never pinned and never delivered by governance:update. EVERY runtime dependency must appear in exactly one list, or `npm run lint` fails — that is what makes the rule a gate instead of a reminder.",
-
   "viewSafe": [
     "@fontsource/inter",
     "@fontsource/jetbrains-mono",
@@ -12,9 +11,13 @@
     "react-dom",
     "zustand"
   ],
-
-  "primitiveOnly": [],
-
+  "primitiveOnly": [
+    "@xterm/addon-fit",
+    "@xterm/addon-unicode11",
+    "@xterm/addon-web-links",
+    "@xterm/addon-webgl",
+    "@xterm/xterm"
+  ],
   "notes": {
     "@fontsource/inter": "A font: CSS + woff2. Puts no control on screen.",
     "@fontsource/jetbrains-mono": "A font.",
@@ -25,6 +28,12 @@
     "react": "The renderer itself.",
     "react-dom": "The renderer itself.",
     "zustand": "Client state. Renders nothing.",
-    "_primitiveOnly_is_empty": "This shell installs no UI library — every control is drawn from scratch in src/components/ui/. The day one is added it belongs here, and ESLint will then refuse to let a view import it."
+    "@xterm/xterm": "The terminal emulator (ADR-PROJ-001 §1). It draws a character grid whose entire appearance — palette, font, cursor, selection — comes from our theme, so it is a MECHANISM, not a control wearing its own look (ADR-APP-026). What must stay HUD is the chrome around it: the tab strip, the context menu, the scrollbar, the search UI. src/components/ui/TerminalSurface.tsx is the only file allowed to import it.",
+    "@xterm/addon-fit": "Measures cell-accurate rows/cols on resize — the input to terminal_resize. Renders nothing of its own.",
+    "@xterm/addon-webgl": "The renderer that keeps a flood of output at frame rate. Falls back to xterm's built-in DOM renderer when WebGL is unavailable.",
+    "@xterm/addon-unicode11": "Correct East-Asian and emoji cell widths. Without it, 'full feature set' would not be true.",
+    "@xterm/addon-web-links": "Detects URLs in the output. Opening goes through the existing open_external command, never the webview.",
+    "_no_addon_canvas": "@xterm/addon-canvas is deliberately absent: 0.7.0 declares peer @xterm/xterm@^5, so it does not support xterm 6. It was never load-bearing — xterm's built-in DOM renderer is the fallback when WebGL is unavailable, and addon-canvas is a third option, not the safety net (ADR-PROJ-001 §1).",
+    "_no_addon_search": "@xterm/addon-search is not installed yet: it finds and highlights, but the search bar is ours to build, and a dependency with no caller fails the unused-dependency check (rule:dependencies). It arrives with its UI."
   }
 }

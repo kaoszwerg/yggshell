@@ -3,9 +3,9 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 /** Top-level views (sidebar navigation). Product views are added here as they land. */
-export type ViewId = "home" | "logs" | "settings";
+export type ViewId = "terminal" | "home" | "logs" | "settings";
 
-const VIEWS: ViewId[] = ["home", "logs", "settings"];
+const VIEWS: ViewId[] = ["terminal", "home", "logs", "settings"];
 
 export interface UiState {
   view: ViewId;
@@ -20,7 +20,9 @@ export interface UiState {
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      view: "home",
+      // The terminal is the product, so it is what a fresh install opens on
+      // (mem:project-scope). A persisted choice still wins — this is only the default.
+      view: "terminal",
       aboutOpen: false,
 
       setView: (view) => set({ view }),

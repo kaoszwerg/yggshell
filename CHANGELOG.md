@@ -8,6 +8,23 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The terminal — YggShell's first running feature** (ADR-PROJ-001). A real PTY per tab, multiple
+  independent tabs, and the emulator behind the primitive layer:
+  - Backend: `src-tauri/src/terminal/` — a session registry the backend owns, `portable-pty` behind
+    the single module allowed to name it, and two threads per session whose deaths are both declared
+    in `crash-boundaries.json`. Output is coalesced before it reaches the IPC (~8 ms or 64 KiB),
+    because the PTY delivers roughly a kilobyte per read.
+  - Security: `terminal_open` takes geometry and an optional working directory, never a command
+    line. The shell is resolved in the backend and logged; the directory is canonicalised and must
+    exist. No terminal content is ever logged, in either direction.
+  - Frontend: `TerminalSurface` (the only file that may import `@xterm/*`), a `TerminalView` whose
+    panes all stay mounted so scrollback survives tab switches, and tabs in the **title bar** — which
+    cost no extra height, so the tagline yields to them once a terminal is open.
+  - Closing a tab takes the foreground process group with it, so a build or an AI harness started
+    inside the shell does not survive as an orphan.
+- **HUD scrollbars, applied globally.** 6px, no track, no stepper arrows, cyan at 22% and 45% on
+  hover. A native scrollbar is stock OS chrome (ADR-APP-026) and in a terminal it also simply
+  competes with the text.
 - **`ContextMenu` HUD primitive** (`src/components/ui/ContextMenu.tsx`) — the right-click menu the
   terminal and the tab strip need. Portal-rendered so a parent's `clip-path` cannot crop it, measured
   and clamped into the viewport so a menu opened near an edge stays on screen, and suppressing the
@@ -46,6 +63,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `useTerminalStore.closePane` left `activeKey` pointing at the pane it had just removed when that
+  pane was the only one open: `Array.at(index - 1)` wraps to the END of the list at index 0. Found by
+  the test written for it, not in the app.
 - **A crash report could erase the one before it.** `crash.rs` named reports from a millisecond
   timestamp alone, so two panics inside the same millisecond — or two processes crashing at once —
   produced the same path and the second `fs::write` overwrote the first. Report names are now claimed

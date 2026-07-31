@@ -77,6 +77,38 @@ function createMemoryStorage(): Storage {
   };
 }
 
+// jsdom doesn't implement `matchMedia` either, and xterm asks for it on construction to track the
+// device pixel ratio. Installed on `document.defaultView` as well as on the global: Vitest aliases
+// `window` to `globalThis`, but `document.defaultView` is still jsdom's own window object, and that
+// is the one xterm reaches through. `matches: false` is the honest answer — jsdom has no display to
+// match a query against.
+if (typeof document !== "undefined") {
+  const stub = (query: string): MediaQueryList =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList;
+
+  const targets: object[] = [globalThis];
+  const view = document.defaultView;
+  if (view !== null && (view as object) !== (globalThis as object)) targets.push(view);
+
+  for (const target of targets) {
+    if (typeof (target as { matchMedia?: unknown }).matchMedia === "function") continue;
+    Object.defineProperty(target, "matchMedia", {
+      value: stub,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
 // jsdom doesn't ship ResizeObserver. Any component that observes element size would crash without
 // a stub. The bodies stay empty — jsdom has no real layout to observe and no test asserts on
 // resize semantics.

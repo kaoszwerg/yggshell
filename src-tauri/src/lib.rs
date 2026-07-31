@@ -11,6 +11,7 @@ pub mod error;
 pub mod logging;
 pub mod settings;
 pub mod state;
+pub mod terminal;
 pub mod tray;
 
 use crate::state::AppState;
@@ -56,6 +57,10 @@ pub fn run() {
             commands::report_crash,
             commands::pending_crash,
             commands::exit_after_crash,
+            commands::terminal::terminal_open,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_close,
         ])
         .run(tauri::generate_context!());
 
@@ -116,6 +121,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     app.manage(AppState::new(&data_dir));
+    app.manage(crate::terminal::TerminalRegistry::default());
     // Close handler is always registered; it consults the live `minimize_to_tray` setting. The tray
     // icon itself is installed only when the setting is on (default off).
     tray::install_close_handler(app.handle());

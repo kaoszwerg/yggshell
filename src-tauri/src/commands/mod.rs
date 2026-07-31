@@ -1,6 +1,8 @@
 //! Tauri command surface (typed via ts-rs DTOs). Thin layer: validate, do the work, map errors
 //! (ADR-APP-001, rule:rust-conventions). Every command logs its action and its result (rule:logging).
 
+pub mod terminal;
+
 use crate::dto::{BuildInfo, CrashReport, SettingsDto};
 use crate::error::{AppError, Result};
 use crate::state::AppState;

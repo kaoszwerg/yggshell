@@ -71,13 +71,15 @@ the measurements are quoted in *Alternatives* and *Consequences* rather than ass
 | --- | --- |
 | `addon-fit` 0.11.0 | Cell-accurate sizing on resize — the input to `terminal_resize`. |
 | `addon-webgl` 0.19.0 | The renderer that keeps a flood of output at frame rate. |
-| `addon-canvas` 0.7.0 | Fallback where WebGL is unavailable or unstable — Linux/WebKitGTK is our weakest target ([rule:cross-platform](../../../.claude/rules/cross-platform.md)). |
+| ~~`addon-canvas`~~ | **Not taken.** 0.7.0 declares peer `@xterm/xterm@^5` and has no xterm-6 release, so npm refuses it. It was never the safety net anyway: the fallback where WebGL is unavailable — Linux/WebKitGTK is our weakest target ([rule:cross-platform](../../../.claude/rules/cross-platform.md)) — is xterm's **built-in DOM renderer**, which needs no addon. `addon-canvas` is a third rendering option, not the guarantee. |
 | `addon-unicode11` 0.9.0 | Correct East-Asian and emoji cell widths. Without it "full feature set" is untrue. |
-| `addon-search` 0.16.0 | Search in the scrollback; part of milestone 1. |
 | `addon-web-links` 0.12.0 | URL detection; opening goes through the existing `open_external` command, never the webview. |
 
-`addon-serialize` is **not** taken: nothing in milestone 1 needs to snapshot a buffer, and an unused
-dependency is a dependency ([ADR-CORE-009](../core-009-dependency-policy.md)).
+`addon-search` 0.16.0 is part of milestone 1 but is **installed with its UI, not before it**: the addon
+finds and highlights, the search bar is ours to build, and a dependency with no caller fails the
+unused-dependency check. `addon-serialize` is not taken at all — nothing here needs to snapshot a
+buffer, and an unused dependency is still a dependency
+([ADR-CORE-009](../core-009-dependency-policy.md)).
 
 **Under [ADR-APP-026](../app-026-no-native-ui-primitives.md) the emulator is a *mechanism*, not a
 control.** It draws a character grid whose entire appearance — palette, font, cursor shape, selection

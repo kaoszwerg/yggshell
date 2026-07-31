@@ -2,8 +2,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TitleBar } from "./TitleBar";
-import { APP_NAME } from "../../lib/app";
+import { APP_NAME, APP_TAGLINE } from "../../lib/app";
 import type { BuildInfo } from "../../bindings/BuildInfo";
+import { useTerminalStore } from "../../store/terminal";
+import { useUiStore } from "../../store/ui";
 
 // TitleBar imports this SVG for the app icon; the build pipeline normally provides it, jsdom needs a stub.
 vi.mock("../../../src-tauri/icons/icon.svg", () => ({ default: "icon.svg" }));
@@ -73,5 +75,77 @@ describe("TitleBar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  describe("terminal tabs", () => {
+    beforeEach(() => {
+      useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: false });
+      useUiStore.setState({ view: "home" });
+    });
+
+    it("shows the tagline while no terminal is open", () => {
+      renderTitleBar(devBuild);
+
+      expect(screen.queryByRole("tablist")).toBeNull();
+      expect(screen.getByText(APP_TAGLINE)).toBeInTheDocument();
+    });
+
+    it("gives the tabs the tagline's space once a terminal exists", () => {
+      // Screen space in a terminal belongs to the terminal (ADR-PROJ-001): the tabs cost no extra
+      // height precisely because they take the room the tagline was using.
+      useTerminalStore.setState({
+        panes: [{ key: "term-0", title: "zsh" }],
+        activeKey: "term-0",
+      });
+      renderTitleBar(devBuild);
+
+      expect(screen.getByRole("tablist", { name: "Terminals" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "zsh" })).toBeInTheDocument();
+      expect(screen.queryByText(APP_TAGLINE)).toBeNull();
+    });
+
+    it("switches to the terminal view when a tab is clicked from elsewhere", () => {
+      useTerminalStore.setState({
+        panes: [
+          { key: "term-0", title: "zsh" },
+          { key: "term-1", title: "cargo" },
+        ],
+        activeKey: "term-0",
+      });
+      renderTitleBar(devBuild);
+
+      fireEvent.click(screen.getByRole("tab", { name: "cargo" }));
+
+      // Reaching for a tab is asking to SEE that terminal — selecting it while the user is looking
+      // at Settings would do nothing visible at all.
+      expect(useTerminalStore.getState().activeKey).toBe("term-1");
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
+
+    it("opens a terminal from the add control and shows it", () => {
+      useTerminalStore.setState({ panes: [{ key: "term-0", title: "zsh" }], activeKey: "term-0" });
+      renderTitleBar(devBuild);
+
+      fireEvent.click(screen.getByRole("button", { name: "New terminal" }));
+
+      expect(useTerminalStore.getState().panes).toHaveLength(2);
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
+
+    it("closes a terminal from its tab without switching to it", () => {
+      useTerminalStore.setState({
+        panes: [
+          { key: "term-0", title: "zsh" },
+          { key: "term-1", title: "cargo" },
+        ],
+        activeKey: "term-0",
+      });
+      renderTitleBar(devBuild);
+
+      fireEvent.click(screen.getByRole("button", { name: "Close cargo" }));
+
+      expect(useTerminalStore.getState().panes.map((p) => p.key)).toEqual(["term-0"]);
+      expect(useUiStore.getState().view).toBe("home");
+    });
   });
 });

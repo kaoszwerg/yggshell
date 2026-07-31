@@ -1,11 +1,14 @@
-import { Home, ScrollText, Settings } from "lucide-react";
+import { Home, ScrollText, Settings, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import { useUiStore, type ViewId } from "../../store/ui";
 
 type NavItem = { id: ViewId; Icon: LucideIcon; label: string };
 
-const MAIN_NAV: NavItem[] = [{ id: "home", Icon: Home, label: "Home" }];
+const MAIN_NAV: NavItem[] = [
+  { id: "terminal", Icon: TerminalSquare, label: "Terminal" },
+  { id: "home", Icon: Home, label: "Home" },
+];
 
 const BOTTOM_NAV: NavItem[] = [
   { id: "logs", Icon: ScrollText, label: "Logs" },

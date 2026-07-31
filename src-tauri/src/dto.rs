@@ -112,3 +112,15 @@ mod tests {
         );
     }
 }
+
+/// A terminal session ended by itself — the user typed `exit`, or the shell died (ADR-PROJ-001).
+///
+/// Closing a tab is the other direction and needs no event: the frontend already knows.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TerminalExit {
+    /// The session that ended.
+    pub id: u32,
+    /// Its exit code, or `null` when the status could not be read at all.
+    pub code: Option<u32>,
+}

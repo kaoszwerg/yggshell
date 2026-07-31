@@ -5,6 +5,7 @@ import { Sidebar } from "./components/sidebar/Sidebar";
 import { AboutDialog } from "./components/AboutDialog";
 import { CrashNotice } from "./components/CrashNotice";
 import { HomeView } from "./views/HomeView";
+import { TerminalView } from "./views/TerminalView";
 import { LogsView } from "./views/LogsView";
 import { SettingsView } from "./views/SettingsView";
 import { useScrollTop } from "./hooks/useScrollTop";
@@ -33,6 +34,7 @@ export default function App() {
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main ref={mainRef} className="flex-1 overflow-hidden">
+            {view === "terminal" ? <TerminalView /> : null}
             {view === "home" ? <HomeView /> : null}
             {view === "logs" ? <LogsView /> : null}
             {view === "settings" ? <SettingsView /> : null}

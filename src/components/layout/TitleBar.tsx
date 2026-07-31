@@ -2,14 +2,34 @@ import type { ReactNode } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconButton } from "../ui/IconButton";
+import { Tabs } from "../ui/Tabs";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
+import { useTerminalStore } from "../../store/terminal";
+import { useUiStore } from "../../store/ui";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
 import logoUrl from "../../../src-tauri/icons/icon.svg";
 
 /** Frameless custom HUD title bar (ADR-APP-021). The bar is the drag region; the window controls sit in
- * a non-drag section. A DEV badge marks a development build (ADR-CORE-024). */
+ * a non-drag section. A DEV badge marks a development build (ADR-CORE-024).
+ *
+ * It also carries the **terminal tabs** (ADR-PROJ-001): the bar is 40px tall and its middle was empty,
+ * so the tabs cost no extra height at all — and because this app draws its own window controls on
+ * every OS, there is no platform chrome to build around. The tagline gives way once a tab exists;
+ * screen space in a terminal belongs to the terminal. */
 export function TitleBar() {
   const { data: build } = useBuildInfo();
+  const panes = useTerminalStore((s) => s.panes);
+  const activeKey = useTerminalStore((s) => s.activeKey);
+  const setActive = useTerminalStore((s) => s.setActive);
+  const openPane = useTerminalStore((s) => s.openPane);
+  const closePane = useTerminalStore((s) => s.closePane);
+  const setView = useUiStore((s) => s.setView);
+
+  // Reaching for a tab is asking to see that terminal, wherever the user currently is.
+  const show = (key: string) => {
+    setActive(key);
+    setView("terminal");
+  };
 
   return (
     <header
@@ -35,12 +55,26 @@ export function TitleBar() {
           {APP_NAME}
         </span>
         <span aria-hidden className="bg-dim/40 mx-0.5 h-3.5 w-px shrink-0" />
-        <span
-          data-tauri-drag-region
-          className="text-green font-mono text-[11px] tracking-wide whitespace-nowrap"
-        >
-          {APP_TAGLINE}
-        </span>
+        {panes.length === 0 ? (
+          <span
+            data-tauri-drag-region
+            className="text-green font-mono text-[11px] tracking-wide whitespace-nowrap"
+          >
+            {APP_TAGLINE}
+          </span>
+        ) : (
+          <Tabs
+            label="Terminals"
+            items={panes.map((p) => ({ id: p.key, label: p.title }))}
+            activeId={activeKey ?? ""}
+            onSelect={show}
+            onClose={closePane}
+            onAdd={() => show(openPane())}
+            addLabel="New terminal"
+            getPanelId={(key) => `terminal-panel-${key}`}
+            className="max-w-[52vw]"
+          />
+        )}
         {build?.channel === "dev" ? (
           <span className="hud-clip-sm hud-accent-gold neon-glow-gold bg-elevated px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-[var(--saga-gold)] uppercase">
             Dev

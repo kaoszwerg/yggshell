@@ -18,6 +18,10 @@
     "src-tauri/src/lib.rs": {
       "spawns": 1,
       "why": "The log bridge (setup): forwards tracing records to the UI log view. On RecvError::Lagged it warns and KEEPS BRIDGING — the receiver is still valid, so the old `while let Ok(..)` loop, which ended the task and silently froze the log view for the rest of the session, is exactly what this entry exists to prevent. On RecvError::Closed the sender is gone (logging is shutting down): it logs that and ends, which is the only way this task is allowed to stop."
+    },
+    "src-tauri/src/terminal/mod.rs": {
+      "spawns": 2,
+      "why": "Two threads per terminal session, and each one has exactly one way to end. (1) The READER blocks on the PTY and ends on EOF — the child exited, which is the normal end — or on a read error, which it logs at debug because on close the fd is torn out from under it deliberately. Before returning it waits for the child and forwards the exit code, so the pump always learns the session is over; if the pump is already gone it logs that and returns, since there is nothing left to read for. (2) The PUMP batches output and is the LAST thread of a session to die, which is why it is the one that announces the exit: it flushes the final bytes, logs the session's exit code and byte count, emits terminal://exit and drops the session from the registry. It ends when the reader reports the end, or when the mpsc disconnects. Neither thread can end silently: every exit path above logs, and the user-visible one (the exit event) is emitted after the last flush, never before it."
     }
   }
 }
