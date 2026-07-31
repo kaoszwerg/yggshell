@@ -38,6 +38,17 @@ describe("IconButton", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Scroll to top");
   });
 
+  it("hovers a ghost control in its own accent, not always cyan", () => {
+    // A close × sitting on a cyan-filled active tab would disappear on hover if `ghost` were
+    // hard-wired to cyan (hudButton.ts). Danger keeps it visible and says what the control does.
+    render(
+      <IconButton label="Close zsh" variant="ghost" accent="danger" tooltip={null}>
+        <svg />
+      </IconButton>,
+    );
+    expect(screen.getByRole("button", { name: "Close zsh" })).toHaveClass("hover:text-danger");
+  });
+
   it("renders no tooltip when tooltip is null (aria-label still applies)", () => {
     render(
       <IconButton label="Close" tooltip={null}>

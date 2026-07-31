@@ -32,8 +32,11 @@ The substrate. A genuine terminal, not a reduced emulation.
 - [x] **[ADR-PROJ-001](docs/adr/project/proj-001-terminal-architecture.md)** — emulator (`@xterm/xterm`),
       PTY (`portable-pty`, behind one module, with three named tripwires), transport (Tauri Channel with
       mandatory coalescing), session model, threat model, and what is explicitly outside milestone 1.
-- [ ] The three new HUD primitives the milestone needs, with tests: `Tabs`, `ContextMenu`,
-      `TerminalSurface` (`src/components/ui/`).
+- The three new HUD primitives the milestone needs, with tests (`src/components/ui/`):
+  - [x] `Tabs` — WAI-ARIA tab strip, roving tabindex, close/add, middle-click close. Lives in the
+        title bar (ADR-PROJ-001), so it scrolls rather than wraps.
+  - [ ] `ContextMenu` — right-click menu for the terminal and the tab strip.
+  - [ ] `TerminalSurface` — the `@xterm/xterm` wrapper; the only file allowed to name xterm.
 - [ ] Backend: PTY spawn/resize/kill per tab, streamed output, process lifecycle, structured logging
       of every session's start/exit (rule:logging).
 - [ ] Frontend: a terminal view with multiple independent tabs — full keyboard handling, scrollback,

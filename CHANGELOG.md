@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`Tabs` HUD primitive** (`src/components/ui/Tabs.tsx`) — the tab strip behind the terminal's tabs,
+  which live in the title bar (ADR-PROJ-001) and therefore scroll rather than wrap. WAI-ARIA tabs
+  pattern with automatic activation: arrow keys move selection and focus, Home/End jump, Delete and
+  middle-click close, and a roving tabindex keeps the whole strip to a single Tab stop. Closing a
+  background tab does not select it.
 - **ADR-PROJ-001 — terminal architecture.** Emulator, PTY crate, transport, session model and threat
   model decided before any code, each against a measurement: `@xterm/xterm` behind the primitive layer,
   `portable-pty` behind a single module with three named re-evaluation tripwires, and a Tauri Channel
@@ -19,6 +24,13 @@ All notable changes to this project are documented here. The format follows
   rasterized into the desktop icon set.
 - `src/test/environment.test.ts` — pins that the test environment exposes working `localStorage` and
   `sessionStorage`.
+
+### Changed
+
+- `hudButtonClass`'s `ghost` variant now honours the `accent` instead of always brightening to cyan.
+  A close `×` on a cyan-filled active tab used to disappear exactly when the pointer reached it. The
+  accent-to-class mapping is spelled out rather than interpolated — Tailwind scans for literal class
+  names, so a built-up `text-${accent}` would ship as no colour at all.
 
 ### Fixed
 
