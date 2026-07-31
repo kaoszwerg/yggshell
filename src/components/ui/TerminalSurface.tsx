@@ -7,7 +7,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
-import { fontStack } from "../../lib/fonts";
+import { fontStack, waitForFont } from "../../lib/fonts";
 import { parseOsc7 } from "../../lib/osc7";
 import { parseOsc133, type Activity } from "../../lib/osc133";
 import { isLinux, isMac } from "../../lib/platform";
@@ -117,6 +117,8 @@ export function TerminalSurface({
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  /** The font stack last loaded and handed to the emulator. `null` until the first one lands. */
+  const appliedFont = useRef<string | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
 
   // The callbacks are read through refs so a parent re-render never tears down the emulator: xterm
@@ -191,16 +193,44 @@ export function TerminalSurface({
     term.options.theme = resolveTheme(theme);
   }, [theme]);
 
-  // A font change reaches the LIVE terminal, and then the geometry has to be re-measured: a different
-  // typeface means different cell widths, so the same box holds a different number of columns.
+  // A font change reaches the LIVE terminal — after the font is actually loaded, and with the glyph
+  // cache thrown away.
+  //
+  // Both halves are load-bearing, and skipping either produces the same symptom: a Powerline prompt
+  // rendered as empty boxes that only comes right if you switch the font away and back.
+  //
+  //  - `@font-face` fonts load lazily. The terminal measures and paints immediately, so without the
+  //    wait it measures the FALLBACK and draws in it.
+  //  - xterm's WebGL renderer caches rendered glyphs in a texture atlas. Once the fallback's boxes
+  //    are in there, the real font arriving changes nothing until the atlas is cleared — which is
+  //    precisely what switching the font away and back was doing by accident.
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
     const stack = fontStack(fontFamily ?? "");
-    if (term.options.fontFamily === stack) return;
-    term.options.fontFamily = stack;
-    fitRef.current?.fit();
-    handlers.current.onResize(term.rows, term.cols);
+    // Compared against what was last *loaded and applied*, not against the terminal's current option:
+    // the emulator is constructed with the stack already set, so comparing there would skip the very
+    // first run — which is exactly the case that matters, a freshly started app whose bundled font has
+    // not been fetched yet.
+    if (appliedFont.current === stack) return;
+    appliedFont.current = stack;
+
+    let cancelled = false;
+    void waitForFont(fontFamily ?? "").then((ready) => {
+      // The pane may have been closed, or the font changed again, while we waited.
+      if (cancelled || termRef.current !== term) return;
+      if (!ready) {
+        console.warn(`terminal: ${fontFamily} is not available — falling back`);
+      }
+      term.options.fontFamily = stack;
+      term.clearTextureAtlas();
+      fitRef.current?.fit();
+      handlers.current.onResize(term.rows, term.cols);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fontFamily]);
 
   // Size changes reach the LIVE terminal. The mount effect below deliberately does not depend on

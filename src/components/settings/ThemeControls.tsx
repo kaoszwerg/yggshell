@@ -143,7 +143,7 @@ export function ThemeControls() {
             active={chosen === ""}
             onClick={() => update.mutate({ terminalTheme: "" })}
           >
-            HUD
+            Yggdrasil
           </Button>
           {(themes.data ?? []).map((theme) => (
             <Button

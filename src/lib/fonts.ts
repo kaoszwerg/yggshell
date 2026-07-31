@@ -106,3 +106,38 @@ export function fontStack(family: string): string {
   const base = '"JetBrains Mono", ui-monospace, monospace';
   return chosen === "" ? base : `${JSON.stringify(chosen)}, ${base}`;
 }
+
+/**
+ * Wait for a font to be usable, then say whether it is.
+ *
+ * **This is not optional, and the failure it prevents is subtle.** `@font-face` fonts are loaded
+ * lazily: the browser fetches one the first time something needs it, and until then it draws the
+ * fallback. A terminal measures its cell size and paints its first frame immediately — so it measures
+ * and paints in the *fallback*, and with a Powerline prompt that means a row of empty boxes.
+ *
+ * Worse, it does not fix itself. xterm's WebGL renderer caches rendered glyphs in a texture atlas,
+ * so the fallback's glyphs stay on screen even after the real font has arrived. That is exactly why
+ * switching the font away and back appeared to "fix" it: the switch is what threw the atlas away.
+ *
+ * Resolves `false` when the font never becomes available, which the caller can treat as "carry on
+ * with what we have" rather than as a reason to wait forever.
+ */
+export async function waitForFont(family: string, size = 16): Promise<boolean> {
+  const chosen = family.trim();
+  if (chosen === "") return true;
+  // No Font Loading API: an old WebView. Nothing to wait for, and nothing gained by refusing.
+  if (typeof document === "undefined" || !("fonts" in document)) return true;
+
+  try {
+    // Both weights, because a bold prompt segment is drawn from a different file and would otherwise
+    // arrive a frame late and land in the atlas as a fallback of its own.
+    await Promise.all([
+      document.fonts.load(`${size}px ${JSON.stringify(chosen)}`),
+      document.fonts.load(`bold ${size}px ${JSON.stringify(chosen)}`),
+    ]);
+    return document.fonts.check(`${size}px ${JSON.stringify(chosen)}`);
+  } catch {
+    // A name the Font Loading API cannot parse. The CSS stack still falls back sensibly.
+    return false;
+  }
+}

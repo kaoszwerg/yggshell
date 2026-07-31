@@ -6,7 +6,12 @@ what is inside, which is why iTerm2 (and anything else that reads `.itermcolors`
 
 ## Ours
 
-`Yggdrasil`, `Bifrost` and `Fimbulwinter` were made for this app. Yggdrasil is the HUD's own palette.
+`Bifrost` and `Fimbulwinter` were made for this app.
+
+**Yggdrasil is not here on purpose.** It is the app's *default* scheme and is built in rather than
+shipped as a file — a `.yggtheme` copy of it would be a second source for the same colours, and the
+two would drift the first time one was adjusted. Choosing it in Settings means no stored scheme at
+all.
 
 ## Ported from elsewhere, with thanks
 

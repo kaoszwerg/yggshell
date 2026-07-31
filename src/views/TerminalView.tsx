@@ -17,7 +17,7 @@ import { isMac } from "../lib/platform";
 import { readPrimarySelection } from "../lib/primarySelection";
 import { registerPasteTarget } from "../lib/terminalHandles";
 import { useSettings, useTerminalProfiles, useTerminalThemes } from "../hooks/useSettings";
-import { resolveTheme, themeById } from "../lib/terminalTheme";
+import { BUILTIN_THEME_ID, resolveTheme, themeById } from "../lib/terminalTheme";
 import type { Activity, ActivityState } from "../lib/osc133";
 import { useTerminalStore } from "../store/terminal";
 
@@ -622,6 +622,16 @@ function SchemePicker({
       >
         Follow the settings
       </Button>
+      {/* The built-in scheme, choosable in its own right. Not the same as the entry above: this tab
+          then stays on Yggdrasil whatever the setting is later changed to. */}
+      <Button
+        aria-pressed={current === BUILTIN_THEME_ID}
+        active={current === BUILTIN_THEME_ID}
+        className="justify-start"
+        onClick={() => choose(BUILTIN_THEME_ID)}
+      >
+        Yggdrasil
+      </Button>
       {(themes.data ?? []).map((theme) => (
         <Button
           key={theme.id}
@@ -633,11 +643,6 @@ function SchemePicker({
           {theme.name}
         </Button>
       ))}
-      {(themes.data ?? []).length === 0 ? (
-        <span className="text-dim/70 px-1 font-mono text-xs">
-          No schemes imported yet — Settings → Terminal.
-        </span>
-      ) : null}
     </div>
   );
 }

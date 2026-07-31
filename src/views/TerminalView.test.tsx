@@ -326,6 +326,15 @@ describe("TerminalView", () => {
       expect(pane?.themeId).toBe("ayu");
     });
 
+    it("offers the built-in scheme as a choice of its own", async () => {
+      // Not the same as "follow the settings": a tab set to Yggdrasil stays on it whatever the
+      // setting is later changed to, and there would be no way to say that without a named id.
+      await openPicker();
+      fireEvent.click(screen.getByRole("button", { name: "Yggdrasil" }));
+
+      expect(useTerminalStore.getState().panes[0]?.themeId).toBe("yggdrasil");
+    });
+
     it("can be handed back to the settings", async () => {
       await openPicker();
       fireEvent.click(screen.getByRole("button", { name: "Ayu" }));

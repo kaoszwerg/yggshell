@@ -1,4 +1,4 @@
-import { PALETTE } from "../styles/palette";
+import { PALETTE, TERMINAL_ANSI } from "../styles/palette";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
 
 /**
@@ -37,10 +37,14 @@ export interface XtermTheme {
 }
 
 /**
- * The HUD's own terminal colours — the default, and the base every imported scheme is laid over.
+ * **Yggdrasil** — the app's own scheme, the default, and the base every imported one is laid over.
  *
- * This is the one place the mapping from the HUD palette to a terminal's sixteen slots is decided, so
- * an imported scheme that defines only half of them still looks deliberate rather than half-applied.
+ * It is built in rather than shipped as a file: a `.yggtheme` copy of it would be a second source for
+ * the same colours, and the two would drift the first time one was adjusted. Choosing "Yggdrasil" in
+ * Settings means *no* stored scheme, which is why the setting is empty for it.
+ *
+ * This is the one place the mapping to a terminal's sixteen slots is decided, so an imported scheme
+ * that defines only half of them still looks deliberate rather than half-applied.
  */
 export const HUD_TERMINAL_THEME: XtermTheme = {
   background: PALETTE.deep,
@@ -53,22 +57,10 @@ export const HUD_TERMINAL_THEME: XtermTheme = {
   scrollbarSliderBackground: `${PALETTE.cyan}4d`,
   scrollbarSliderHoverBackground: `${PALETTE.cyan}99`,
   scrollbarSliderActiveBackground: PALETTE.cyan,
-  black: PALETTE.deep,
-  red: PALETTE.danger,
-  green: PALETTE.green,
-  yellow: PALETTE.gold,
-  blue: PALETTE.cyan,
-  magenta: PALETTE.purple,
-  cyan: PALETTE.cyan,
-  white: PALETTE.fg,
-  brightBlack: PALETTE.dim,
-  brightRed: PALETTE.danger,
-  brightGreen: PALETTE.green,
-  brightYellow: PALETTE.gold,
-  brightBlue: PALETTE.cyan,
-  brightMagenta: PALETTE.purple,
-  brightCyan: PALETTE.cyan,
-  brightWhite: "#ffffff",
+  // The sixteen slots come from TERMINAL_ANSI rather than from the HUD accents. See the comment
+  // there: the accents are made to be read ON a dark surface, and a terminal uses these slots AS
+  // surfaces — a prompt segment filled with `blue` and written on in white.
+  ...TERMINAL_ANSI,
 };
 
 /** The sixteen ANSI slots in the order a scheme lists them. */
@@ -136,12 +128,24 @@ export function resolveTheme(theme: TerminalTheme | null | undefined): XtermThem
   return { ...HUD_TERMINAL_THEME, ...Object.fromEntries(overrides) };
 }
 
-/** The scheme a settings id names, or `null` for the built-in HUD palette. */
+/**
+ * The id that names the built-in scheme.
+ *
+ * It has one so it can be *chosen* like any other, and the distinction matters where both options
+ * exist: a tab set to `""` follows whatever Settings says, while a tab set to this one stays on
+ * Yggdrasil no matter what Settings changes to. Without an id there would be no way to say the second
+ * thing.
+ */
+export const BUILTIN_THEME_ID = "yggdrasil";
+
+/** The scheme a settings id names, or `null` for the built-in one. */
 export function themeById(
   themes: readonly TerminalTheme[] | undefined,
   id: string,
 ): TerminalTheme | null {
-  if (id === "") return null;
+  // Both mean the built-in scheme, and both resolve to `null` because that is what "no stored
+  // document" is — see BUILTIN_THEME_ID for why the named form exists at all.
+  if (id === "" || id === BUILTIN_THEME_ID) return null;
   // An id naming a theme that has since been deleted falls back to the HUD palette rather than
   // leaving the terminal unstyled — the setting is a file a user can edit, and themes can be removed.
   return themes?.find((theme) => theme.id === id) ?? null;

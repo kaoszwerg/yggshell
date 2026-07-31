@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { languageFor, tokenize } from "./highlight";
-import { PALETTE } from "../styles/palette";
+import { PALETTE, TERMINAL_ANSI } from "../styles/palette";
 
 describe("languageFor", () => {
   it("recognises the languages this project is actually written in", () => {
@@ -41,10 +41,14 @@ describe("tokenize", () => {
     const flat = lines.flat();
     const colours = flat.map((t) => t.color?.toLowerCase()).filter(Boolean);
 
-    expect(colours).toContain(PALETTE.purple.toLowerCase());
-    expect(colours).toContain(PALETTE.green.toLowerCase());
     // Everything it emits must be a colour we chose — a stray hex would mean a stock theme leaked in.
-    const ours = Object.values(PALETTE).map((c) => c.toLowerCase());
+    // Both sources count: the syntax theme is built from the terminal palette, which is TERMINAL_ANSI
+    // rather than the HUD accents (see the comment there — the accents are read ON a surface, these
+    // ARE surfaces).
+    const ours = [...Object.values(PALETTE), ...Object.values(TERMINAL_ANSI)].map((c) =>
+      c.toLowerCase(),
+    );
+    expect(colours.length).toBeGreaterThan(0);
     for (const colour of colours) expect(ours).toContain(colour);
   });
 

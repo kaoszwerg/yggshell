@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { availableFonts, fontStack, hasFont, FONT_CANDIDATES } from "./fonts";
+import { availableFonts, fontStack, hasFont, waitForFont, FONT_CANDIDATES } from "./fonts";
 
 /**
  * jsdom measures nothing, so the canvas is stubbed with metrics we control. What is under test is the
@@ -80,5 +80,49 @@ describe("fontStack", () => {
 
   it("quotes a name with spaces so it cannot break the stack", () => {
     expect(fontStack("Courier New")).toContain('"Courier New"');
+  });
+});
+
+describe("waitForFont", () => {
+  /** Stand in for the Font Loading API, which jsdom does not implement. */
+  function stubFontsApi(
+    over: Partial<{ load: () => Promise<unknown>; check: () => boolean }> = {},
+  ) {
+    const api = {
+      // The argument is not used by the stub — it is what the test inspects afterwards, through
+      // `mock.calls`.
+      load: vi.fn(over.load ?? (() => Promise.resolve([{}]))),
+      check: vi.fn(over.check ?? (() => true)),
+    };
+    Object.defineProperty(document, "fonts", { value: api, configurable: true });
+    return api;
+  }
+
+  it("waits for both the regular and the bold weight", async () => {
+    // A bold prompt segment comes from a different file; without this it arrives a frame late and
+    // lands in the renderer's glyph cache as a fallback of its own.
+    const api = stubFontsApi();
+    await expect(waitForFont("MesloLGS NF")).resolves.toBe(true);
+
+    const requested = api.load.mock.calls.map((call) => String((call as unknown[]).at(0)));
+    expect(requested.some((r) => r.startsWith("16px"))).toBe(true);
+    expect(requested.some((r) => r.startsWith("bold"))).toBe(true);
+    expect(requested.every((r) => r.includes('"MesloLGS NF"'))).toBe(true);
+  });
+
+  it("reports a font that never becomes available", async () => {
+    stubFontsApi({ check: () => false });
+    await expect(waitForFont("Not Installed")).resolves.toBe(false);
+  });
+
+  it("has nothing to wait for when no font is chosen", async () => {
+    const api = stubFontsApi();
+    await expect(waitForFont("")).resolves.toBe(true);
+    expect(api.load).not.toHaveBeenCalled();
+  });
+
+  it("does not hang on a name the API refuses to parse", async () => {
+    stubFontsApi({ load: () => Promise.reject(new Error("bad font name")) });
+    await expect(waitForFont("}{ nonsense")).resolves.toBe(false);
   });
 });

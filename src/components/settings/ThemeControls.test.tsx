@@ -92,18 +92,18 @@ describe("ThemeControls", () => {
     setup();
   });
 
-  it("offers the HUD palette alongside every stored scheme", async () => {
+  it("offers Yggdrasil alongside every stored scheme", async () => {
     render(<ThemeControls />);
-    expect(terminalGroup().getByRole("button", { name: "HUD" })).toBeTruthy();
+    expect(terminalGroup().getByRole("button", { name: "Yggdrasil" })).toBeTruthy();
     expect(terminalGroup().getByRole("button", { name: "Nord" })).toBeTruthy();
     await waitFor(() => expect(onDrop).toBeDefined());
   });
 
-  it("marks the chosen one, and HUD when nothing is chosen", () => {
+  it("marks the chosen one, and Yggdrasil when nothing is chosen", () => {
     render(<ThemeControls />);
-    expect(terminalGroup().getByRole("button", { name: "HUD" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(
+      terminalGroup().getByRole("button", { name: "Yggdrasil" }).getAttribute("aria-pressed"),
+    ).toBe("true");
 
     cleanup();
     setup({ chosen: "nord" });

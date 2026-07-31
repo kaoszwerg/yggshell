@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **The default scheme is called Yggdrasil**, and there is no separate "HUD" entry — they were the
+  same colours under two names. It is built in rather than shipped as a `.yggtheme` file: a copy would
+  be a second source for the same palette and the two would drift. It can still be *chosen* by name in
+  a tab's right-click menu, which is not the same as "follow the settings" — a tab set to Yggdrasil
+  stays there whatever the setting later becomes.
 - **The app name is drawn in small caps** — `Y` `GG` `S` `HELL`, following the name's own capitals.
   Built by splitting the string rather than with `font-variant-caps`: that property needs the font to
   carry small-cap glyphs or the engine to synthesise them, and the label style uppercases the text
