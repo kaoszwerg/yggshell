@@ -1,4 +1,4 @@
-import { render, act } from "@testing-library/react";
+import { render, act, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TerminalView } from "./TerminalView";
 import { useTerminalStore } from "../store/terminal";
@@ -17,9 +17,14 @@ vi.mock("../components/ui/TerminalSurface", () => ({
   },
 }));
 
+const THEMES = [
+  { id: "nord", name: "Nord", ansi: [], background: null },
+  { id: "ayu", name: "Ayu", ansi: [], background: null },
+];
+
 vi.mock("../hooks/useSettings", () => ({
   useSettings: () => ({ data: { ui_scale: 1, terminal_font_size: 13, terminal_theme: "" } }),
-  useTerminalThemes: () => ({ data: [] }),
+  useTerminalThemes: () => ({ data: THEMES }),
   useTerminalProfiles: () => ({ data: [] }),
 }));
 
@@ -162,15 +167,16 @@ describe("TerminalView", () => {
 
     it("does not let a rejected close escape when the tab goes away", async () => {
       const opened = deferOpen(4);
-      const view = render(<TerminalView />);
+      render(<TerminalView />);
       act(() => measure?.(30, 100));
       await opened();
 
       vi.mocked(terminalApi.close).mockRejectedValueOnce(new Error("no terminal session 4"));
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
+      const key = useTerminalStore.getState().panes[0]?.key ?? "";
       await act(async () => {
-        view.unmount();
+        useTerminalStore.getState().closePane(key);
       });
 
       expect(terminalApi.close).toHaveBeenCalledWith(4);
@@ -221,5 +227,109 @@ describe("TerminalView", () => {
     await opened();
 
     expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]).toMatchObject({ profile: null });
+  });
+
+  // The session belongs to the TAB, not to the React component. Anything else means a shell dies for
+  // a reason the user never asked for.
+  describe("what ends a session, and what must not", () => {
+    it("closes the session when the tab is removed", async () => {
+      const opened = deferOpen(11);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      const key = useTerminalStore.getState().panes[0]?.key ?? "";
+      await act(async () => {
+        useTerminalStore.getState().closePane(key);
+      });
+
+      expect(terminalApi.close).toHaveBeenCalledWith(11);
+    });
+
+    it("does NOT close it when the view merely unmounts", async () => {
+      // Navigating to Settings or Logs unmounts this view, and StrictMode unmounts it in
+      // development for its own reasons. Either one used to take every running shell down with it —
+      // a build, an agent, an ssh session, gone because somebody looked at a preferences page.
+      const opened = deferOpen(12);
+      const view = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      await act(async () => {
+        view.unmount();
+      });
+
+      expect(terminalApi.close).not.toHaveBeenCalled();
+      expect(useTerminalStore.getState().panes).toHaveLength(1);
+    });
+
+    it("survives a mount, unmount and mount without losing its tabs", async () => {
+      // Exactly what StrictMode does to every component in development.
+      const opened = deferOpen(13);
+      const first = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      const before = useTerminalStore.getState().panes.map((p) => p.key);
+
+      await act(async () => {
+        first.unmount();
+      });
+      render(<TerminalView />);
+
+      expect(terminalApi.close).not.toHaveBeenCalled();
+      expect(useTerminalStore.getState().panes.map((p) => p.key)).toEqual(before);
+    });
+  });
+
+  // A shell is decided once, when the process starts. A colour scheme is decided every frame — the
+  // emulator is repainted live. Treating them the same made "give this tab another scheme" mean
+  // "open another tab", which is a different request.
+  describe("the colour scheme of one tab", () => {
+    /** Open the picker on an already-rendered pane. */
+    async function reopenPicker() {
+      fireEvent.contextMenu(screen.getByTestId("surface"));
+      fireEvent.click(await screen.findByRole("menuitem", { name: /Colour scheme/ }));
+      return screen.findByRole("group", { name: "Colour scheme for this terminal" });
+    }
+
+    async function openPicker() {
+      const opened = deferOpen(20);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      return reopenPicker();
+    }
+
+    it("is reachable from the terminal's own context menu", async () => {
+      const picker = await openPicker();
+      expect(picker).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Nord" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Ayu" })).toBeTruthy();
+    });
+
+    it("stores the choice on that tab alone", async () => {
+      await openPicker();
+      fireEvent.click(screen.getByRole("button", { name: "Ayu" }));
+
+      const pane = useTerminalStore.getState().panes[0];
+      expect(pane?.themeId).toBe("ayu");
+    });
+
+    it("can be handed back to the settings", async () => {
+      await openPicker();
+      fireEvent.click(screen.getByRole("button", { name: "Ayu" }));
+      await reopenPicker();
+      fireEvent.click(screen.getByRole("button", { name: "Follow the settings" }));
+
+      expect(useTerminalStore.getState().panes[0]?.themeId).toBeNull();
+    });
+
+    it("closes on Escape without changing anything", async () => {
+      await openPicker();
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      expect(screen.queryByRole("group", { name: "Colour scheme for this terminal" })).toBeNull();
+      expect(useTerminalStore.getState().panes[0]?.themeId).toBeNull();
+    });
   });
 });

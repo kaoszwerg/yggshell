@@ -91,18 +91,23 @@ export function TitleBar() {
               })),
             ]}
           >
-            <Tabs
-              label="Terminals"
-              items={panes.map((p) => ({ id: p.key, label: p.title }))}
-              activeId={activeKey ?? ""}
-              onSelect={show}
-              onClose={closePane}
-              onMiddleClick={pasteIntoTab}
-              onAdd={() => show(openPane())}
-              addLabel="New terminal"
-              getPanelId={(key) => `terminal-panel-${key}`}
-              className="max-w-[52vw]"
-            />
+            {/* A DOM element, not `<Tabs>` directly: ContextMenu attaches its handler to whatever it
+                is given, and a component that does not forward unknown props to a DOM node drops it
+                without a word. That is exactly how this menu shipped doing nothing. */}
+            <div className="contents">
+              <Tabs
+                label="Terminals"
+                items={panes.map((p) => ({ id: p.key, label: p.title }))}
+                activeId={activeKey ?? ""}
+                onSelect={show}
+                onClose={closePane}
+                onMiddleClick={pasteIntoTab}
+                onAdd={() => show(openPane())}
+                addLabel="New terminal"
+                getPanelId={(key) => `terminal-panel-${key}`}
+                className="max-w-[52vw]"
+              />
+            </div>
           </ContextMenu>
         )}
         {build?.channel === "dev" ? (

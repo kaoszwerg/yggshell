@@ -17,10 +17,19 @@ export interface TerminalPane {
   /**
    * The profile this tab was opened with, or `null` for the Settings defaults.
    *
-   * Fixed for the tab's life: it decided which shell is running, and a tab whose profile changed
-   * under it would claim a shell it does not have. Choosing another profile opens another tab.
+   * Fixed for the tab's life, and only because of what a profile decides at START time: which shell
+   * runs, and where. A tab whose profile changed under it would be claiming a shell it does not have.
    */
   profileId: string | null;
+  /**
+   * A colour scheme chosen for this tab alone, overriding both the profile's and the Settings one.
+   *
+   * Changeable at any time, unlike the profile — and the distinction is the point. A shell is decided
+   * when the process starts; a colour scheme is decided every frame, and the emulator is repainted
+   * live for exactly that reason. Treating the two the same was a mistake: it made "give this tab a
+   * different scheme" mean "open a different tab".
+   */
+  themeId: string | null;
 }
 
 export interface TerminalState {
@@ -47,6 +56,8 @@ export interface TerminalState {
   setTitle: (key: string, title: string) => void;
   /** Record where a pane's shell moved to. */
   setCwd: (key: string, cwd: string) => void;
+  /** Give one tab its own colour scheme; `null` returns it to the profile's or the Settings one. */
+  setPaneTheme: (key: string, themeId: string | null) => void;
 }
 
 /** Monotonic, process-local. Never shown to the user; the title is. */
@@ -80,7 +91,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   openPane: (profileId = null) => {
     const key = `term-${nextKey++}`;
     set((s) => ({
-      panes: [...s.panes, { key, title: "Terminal", cwd: null, profileId }],
+      panes: [...s.panes, { key, title: "Terminal", cwd: null, profileId, themeId: null }],
       activeKey: key,
     }));
     return key;
@@ -102,5 +113,10 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   setCwd: (key, cwd) =>
     set((s) => ({
       panes: s.panes.map((p) => (p.key === key && p.cwd !== cwd ? { ...p, cwd } : p)),
+    })),
+
+  setPaneTheme: (key, themeId) =>
+    set((s) => ({
+      panes: s.panes.map((p) => (p.key === key && p.themeId !== themeId ? { ...p, themeId } : p)),
     })),
 }));

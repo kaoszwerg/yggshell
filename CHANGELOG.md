@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A colour scheme per tab.** Right-click a terminal → *Colour scheme…* A tab without a choice of its
+  own follows its profile, and failing that the setting — so changing the default in Settings repaints
+  every tab that has not opted out, immediately.
+  - This corrects a wrong call in the profile work: shell, directory and scheme were treated as one
+    thing. They are not. A shell is decided once, when the process starts, and a tab cannot change its
+    mind about it afterwards; a scheme is decided every frame, which is why the emulator is repainted
+    live. Freezing it into the profile made “give this tab another scheme” mean “open another tab”.
 - **Terminal profiles** (Settings → Terminal): a named set of overrides for what a new tab starts as —
   its shell, its starting directory, its colour scheme. Right-click the tab strip to open one; the `+`
   stays a one-click terminal with the defaults.
@@ -151,6 +158,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Looking at Settings or Logs killed every running terminal.** Navigating away unmounted the
+  terminal view, and each pane closed its session on unmount — so a glance at a preferences page took
+  down whatever was running in every tab, and coming back left an empty workspace. Two things were
+  wrong and both are fixed:
+  - **A session now ends when its TAB goes away, never when its component unmounts.** The session
+    belongs to the tab, so the tab list is what decides. React unmounts components for reasons that
+    have nothing to do with the user closing anything — navigation, StrictMode's double-mount in
+    development, a hot reload — and none of them may take a build, an agent or an ssh session with
+    them.
+  - **The terminal view is hidden when you navigate away, not unmounted.** Even with the first fix,
+    unmounting destroys every emulator and resets each pane's session id, so returning would open a
+    *second* PTY per tab and leave the first running with nobody reading it — one orphan per
+    navigation, and the scrollback gone each time.
+  - Both are pinned by tests that were run against the broken code first, to confirm they fail on it.
+- **Right-clicking the tab strip did nothing.** `ContextMenu` attaches its handler to the element it
+  is given, and it was given `<Tabs>` — a component, which does not forward unknown props to a DOM
+  node and therefore dropped it in silence. It now wraps a real element, and the primitive warns in
+  development when it is handed a component, because the failure has no other symptom.
 - **The Git detail panel sat *under* the terminal instead of over it, and would not scroll.** One
   cause for both: `.hud-panel` declares `position: relative` so its `::before` can draw the chamfered
   border, that declaration is unlayered, and unlayered CSS beats every `@layer` — including the one

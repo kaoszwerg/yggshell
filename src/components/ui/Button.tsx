@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { hudButtonClass, type HudAccent } from "./hudButton";
 import { Tooltip } from "./Tooltip";
 
@@ -11,6 +11,8 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   variant?: "solid" | "ghost";
   /** Custom HUD tooltip (ADR-APP-026 — never the native `title`). Omit for none. */
   tooltip?: ReactNode;
+  /** The underlying button, for the callers that must move focus to it (a picker opening, say). */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /** What every HUD button needs and no caller should have to remember.
@@ -37,11 +39,13 @@ export function Button({
   tooltip,
   className = "",
   type,
+  ref,
   children,
   ...rest
 }: ButtonProps) {
   const btn = (
     <button
+      ref={ref}
       type={type ?? "button"}
       className={`${hudButtonClass({ accent, active, variant })} ${BASE} ${className}`.trim()}
       {...rest}

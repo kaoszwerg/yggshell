@@ -126,6 +126,19 @@ export function ContextMenu({ label, items, children }: ContextMenuProps) {
 
   if (!isValidElement(children)) return children;
 
+  // The trigger must be a HOST element (`div`, `button`, …), not a component.
+  //
+  // `cloneElement` will happily attach `onContextMenu` to a React component, and a component that
+  // does not forward unknown props to a DOM node simply drops it: no error, no warning, a menu that
+  // never opens. That shipped once — a `<Tabs>` used directly as the trigger. Loud in development,
+  // where it can still be fixed.
+  if (import.meta.env.DEV && typeof children.type !== "string") {
+    console.warn(
+      "ContextMenu: the trigger must be a DOM element, not a component — a component that does not " +
+        "forward onContextMenu to a DOM node silently swallows it. Wrap it in a <div>.",
+    );
+  }
+
   const childProps = (children.props ?? {}) as TriggerProps;
   const trigger = cloneElement(children as ReactElement<TriggerProps>, {
     onContextMenu: (e: MouseEvent<Element>) => {

@@ -18,6 +18,12 @@ vi.mock("../../api/commands", () => ({
   },
 }));
 
+vi.mock("../../hooks/useSettings", () => ({
+  useTerminalProfiles: () => ({
+    data: [{ id: "work", name: "Work", shell: null, cwd: null, theme: null }],
+  }),
+}));
+
 const minimize = vi.fn();
 const toggleMaximize = vi.fn();
 const close = vi.fn();
@@ -98,7 +104,7 @@ describe("TitleBar", () => {
       // Screen space in a terminal belongs to the terminal (ADR-PROJ-001): the tabs cost no extra
       // height precisely because they take the room the tagline was using.
       useTerminalStore.setState({
-        panes: [{ key: "term-0", title: "zsh", cwd: null, profileId: null }],
+        panes: [{ key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null }],
         activeKey: "term-0",
       });
       renderTitleBar(devBuild);
@@ -111,8 +117,8 @@ describe("TitleBar", () => {
     it("switches to the terminal view when a tab is clicked from elsewhere", () => {
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null },
+          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
+          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
         ],
         activeKey: "term-0",
       });
@@ -128,7 +134,7 @@ describe("TitleBar", () => {
 
     it("opens a terminal from the add control and shows it", () => {
       useTerminalStore.setState({
-        panes: [{ key: "term-0", title: "zsh", cwd: null, profileId: null }],
+        panes: [{ key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null }],
         activeKey: "term-0",
       });
       renderTitleBar(devBuild);
@@ -142,8 +148,8 @@ describe("TitleBar", () => {
     it("closes a terminal from its tab without switching to it", () => {
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null },
+          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
+          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
         ],
         activeKey: "term-0",
       });
@@ -163,8 +169,8 @@ describe("TitleBar", () => {
       setPrimarySelection("cargo test --locked");
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null },
+          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
+          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
         ],
         activeKey: "term-0",
       });
@@ -187,8 +193,8 @@ describe("TitleBar", () => {
       registerPasteTarget("term-1", { paste });
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null },
+          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
+          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
         ],
         activeKey: "term-0",
       });
@@ -201,6 +207,53 @@ describe("TitleBar", () => {
 
       expect(paste).not.toHaveBeenCalled();
       expect(useTerminalStore.getState().activeKey).toBe("term-1");
+    });
+  });
+
+  // This menu shipped doing nothing: ContextMenu attaches its handler to whatever element it is
+  // given, and `<Tabs>` — a component that does not forward unknown props to a DOM node — swallowed
+  // it without a word. No error, no warning, a right-click that simply did not respond.
+  describe("right-clicking the tab strip", () => {
+    it("offers a new terminal and every saved profile", async () => {
+      useTerminalStore.setState({
+        panes: [{ key: "a", title: "Terminal 1", cwd: null, profileId: null, themeId: null }],
+        activeKey: "a",
+      });
+      renderTitleBar({
+        version: "0.1.0",
+        channel: "dev",
+        debug: true,
+        git_sha: "abc1234",
+        git_dirty: false,
+        commit_date: "2026-07-31T00:00:00Z",
+      });
+
+      fireEvent.contextMenu(screen.getByRole("tablist", { name: "Terminals" }));
+
+      expect(await screen.findByRole("menuitem", { name: "New terminal" })).toBeTruthy();
+      expect(screen.getByRole("menuitem", { name: "Work" })).toBeTruthy();
+    });
+
+    it("opens a tab carrying the profile that was chosen", async () => {
+      useTerminalStore.setState({
+        panes: [{ key: "a", title: "Terminal 1", cwd: null, profileId: null, themeId: null }],
+        activeKey: "a",
+      });
+      renderTitleBar({
+        version: "0.1.0",
+        channel: "dev",
+        debug: true,
+        git_sha: "abc1234",
+        git_dirty: false,
+        commit_date: "2026-07-31T00:00:00Z",
+      });
+
+      fireEvent.contextMenu(screen.getByRole("tablist", { name: "Terminals" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Work" }));
+
+      const panes = useTerminalStore.getState().panes;
+      expect(panes).toHaveLength(2);
+      expect(panes.at(-1)?.profileId).toBe("work");
     });
   });
 });

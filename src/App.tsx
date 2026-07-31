@@ -38,7 +38,17 @@ export default function App() {
               here, and the view keeps whatever width is left rather than being covered. */}
           <ToolPanel />
           <main ref={mainRef} className="relative flex-1 overflow-hidden">
-            {view === "terminal" ? <TerminalView /> : null}
+            {/* The terminal is HIDDEN when you navigate away, never unmounted.
+                Unmounting it runs every pane's cleanup, and that cleanup ends the PTY — so a glance
+                at Settings or Logs used to kill every running shell, and coming back left an empty
+                workspace. The terminals are the product; a view is a place you look, not a reason to
+                take a build or an agent down. This is the same trade the panes already make with each
+                other: all mounted, one visible.
+                It measures 0×0 while hidden, which `TerminalSurface` ignores on purpose, and its
+                ResizeObserver fires again the moment it comes back. */}
+            <div className={view === "terminal" ? "h-full w-full" : "hidden"}>
+              <TerminalView />
+            </div>
             {view === "logs" ? <LogsView /> : null}
             {view === "settings" ? <SettingsView /> : null}
             {/* Over the view rather than beside it: a diff needs the widest surface in the window,

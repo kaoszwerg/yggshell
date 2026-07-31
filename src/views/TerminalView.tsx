@@ -78,6 +78,25 @@ export function TerminalView() {
     bootstrap();
   }, [bootstrap]);
 
+  // A session ends when its TAB goes away — never when its component unmounts.
+  //
+  // This used to hang off the pane's unmount cleanup, which sounds equivalent and is not: a component
+  // unmounts for reasons that have nothing to do with the user closing anything. Navigating to
+  // Settings unmounted this whole view and took every running shell with it — a build, an agent, an
+  // ssh session, gone because somebody looked at a preferences page. React's StrictMode double-mount
+  // is the same shape of hazard, waiting for the session to exist a moment earlier.
+  //
+  // The session belongs to the tab, so the tab list is what decides. Every route out — the ×, the
+  // context menu, a shell that exited — removes the pane, and that is what closes the PTY.
+  useEffect(() => {
+    const alive = new Set(panes.map((pane) => pane.key));
+    for (const [key, id] of sessions.current) {
+      if (alive.has(key)) continue;
+      sessions.current.delete(key);
+      terminalApi.close(id).catch(survivable("close"));
+    }
+  }, [panes]);
+
   // One listener for the whole view rather than one per pane: a session that ends by itself closes
   // its tab, so `exit` behaves like clicking the ×.
   useEffect(() => {
@@ -124,6 +143,7 @@ export function TerminalView() {
           key={pane.key}
           paneKey={pane.key}
           profileId={pane.profileId}
+          themeId={pane.themeId}
           active={pane.key === activeKey}
           onSession={registerSession}
         />
@@ -136,12 +156,15 @@ export function TerminalView() {
 function Pane({
   paneKey,
   profileId,
+  themeId,
   active,
   onSession,
 }: {
   paneKey: string;
   /** Fixed for this pane's life — it decided which shell is running (see the store). */
   profileId: string | null;
+  /** This tab's own colour scheme, if the user gave it one. Changeable at any time. */
+  themeId: string | null;
   active: boolean;
   onSession: (key: string, id: SessionId) => void;
 }) {
@@ -160,16 +183,19 @@ function Pane({
   // palette — a deleted theme must not leave a terminal unstyled.
   const themes = useTerminalThemes();
   const profiles = useTerminalProfiles();
-  // The profile's scheme if it names one, the Settings default otherwise — the same precedence the
-  // backend applies to the shell, so the two halves of a profile cannot disagree.
+  // Most specific wins: this tab's own choice, then its profile's, then the Settings default.
   const profile = profiles.data?.find((p) => p.id === profileId);
-  const theme = themeById(themes.data, profile?.theme ?? settings.data?.terminal_theme ?? "");
+  const theme = themeById(
+    themes.data,
+    themeId ?? profile?.theme ?? settings.data?.terminal_theme ?? "",
+  );
   const [hasSelection, setHasSelection] = useState(false);
   // Flipped once the PTY exists. The working-directory poll below waits for it: mounting starts that
   // effect immediately, when `sessionId` is still null, so without this its first ask does nothing and
   // the Git tool sits blank for a whole tick before the first real answer.
   const [sessionOpen, setSessionOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [schemeOpen, setSchemeOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
   const setCwd = useTerminalStore((s) => s.setCwd);
   const closePane = useTerminalStore((s) => s.closePane);
@@ -324,16 +350,6 @@ function Pane({
     handle.current?.focus();
   }, [active]);
 
-  // Closing the tab ends the session. Without this the shell would keep running with nobody reading
-  // it — and on the next launch the user would find a process they cannot see.
-  useEffect(
-    () => () => {
-      const id = sessionId.current;
-      if (id !== null) terminalApi.close(id).catch(survivable("close"));
-    },
-    [],
-  );
-
   return (
     <div
       className={active ? "absolute inset-0 p-2" : "hidden"}
@@ -371,6 +387,13 @@ function Pane({
           },
           { separator: true },
           { id: "find", label: "Search…", shortcut: KEYS.find, onSelect: openSearch },
+          {
+            id: "scheme",
+            label: "Colour scheme…",
+            // A picker rather than a submenu of every scheme: the list grows with each import, and a
+            // context menu forty entries long is a list you scroll past, not a menu.
+            onSelect: () => setSchemeOpen(true),
+          },
           { separator: true },
           {
             id: "close",
@@ -396,6 +419,89 @@ function Pane({
       </ContextMenu>
 
       {searchOpen ? <SearchBar handle={handle} onClose={closeSearch} /> : null}
+      {schemeOpen ? (
+        <SchemePicker
+          paneKey={paneKey}
+          current={themeId}
+          onClose={() => {
+            setSchemeOpen(false);
+            handle.current?.focus();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Choosing a colour scheme for one tab.
+ *
+ * This exists because a scheme is not like a shell. A shell is decided once, when the process starts,
+ * and a tab cannot change its mind about it afterwards. A scheme is decided every frame — the
+ * emulator is repainted live — so freezing it into the tab's profile made "give this tab a different
+ * scheme" mean "open a different tab", which is not the same request.
+ */
+function SchemePicker({
+  paneKey,
+  current,
+  onClose,
+}: {
+  paneKey: string;
+  current: string | null;
+  onClose: () => void;
+}) {
+  const themes = useTerminalThemes();
+  const setPaneTheme = useTerminalStore((s) => s.setPaneTheme);
+  const first = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    first.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const choose = (id: string | null) => {
+    setPaneTheme(paneKey, id);
+    onClose();
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label="Colour scheme for this terminal"
+      className="hud-popover hud-clip-sm hud-accent-cyan absolute top-4 right-6 z-20 flex max-h-[70%] flex-col gap-1 overflow-y-auto p-2"
+    >
+      <span className="text-dim px-1 font-mono text-[0.6rem] tracking-[0.12em]">THIS TERMINAL</span>
+      <Button
+        ref={first}
+        aria-pressed={current === null}
+        active={current === null}
+        className="justify-start"
+        onClick={() => choose(null)}
+      >
+        Follow the settings
+      </Button>
+      {(themes.data ?? []).map((theme) => (
+        <Button
+          key={theme.id}
+          aria-pressed={current === theme.id}
+          active={current === theme.id}
+          className="justify-start"
+          onClick={() => choose(theme.id)}
+        >
+          {theme.name}
+        </Button>
+      ))}
+      {(themes.data ?? []).length === 0 ? (
+        <span className="text-dim/70 px-1 font-mono text-xs">
+          No schemes imported yet — Settings → Terminal.
+        </span>
+      ) : null}
     </div>
   );
 }
