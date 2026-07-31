@@ -16,6 +16,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A crash report could erase the one before it.** `crash.rs` named reports from a millisecond
+  timestamp alone, so two panics inside the same millisecond — or two processes crashing at once —
+  produced the same path and the second `fs::write` overwrote the first. Report names are now claimed
+  atomically with `create_new` and a bounded suffix search, so no crash record is lost
+  (rule:crash-handling). Reproduced by the existing `two_crashes_never_overwrite_each_other`, which was
+  passing only by luck of the clock; pinned deterministically by
+  `a_second_crash_in_the_same_millisecond_does_not_erase_the_first` and
+  `the_collision_search_is_bounded`.
 - `src-tauri/examples/crash_probe.rs` still referenced the old crate as `saga_rust_template_lib`:
   `sync-identity.mjs` does not cover `src-tauri/examples/`, so `cargo clippy --all-targets` broke
   after the rename. (The script fix belongs upstream — see `.claude/memory/open-work-backlog.md`.)

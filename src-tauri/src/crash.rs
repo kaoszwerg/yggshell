@@ -83,13 +83,59 @@ fn compose(kind: &str, details: &str) -> String {
 /// on `Drop` — and a deliberate `process::exit` runs no destructors. The record that matters most is
 /// therefore the one most likely to be lost. This one cannot be.
 fn write_report_in(dir: &Path, kind: &str, details: &str) -> std::io::Result<PathBuf> {
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f").to_string();
+    write_report_stamped(dir, &stamp, kind, details)
+}
+
+/// How many name collisions are resolved before giving up. The crash path must always terminate: an
+/// unbounded search here would hang the process at the exact moment it is already failing.
+const MAX_NAME_ATTEMPTS: u32 = 64;
+
+/// The body of [`write_report_in`], with the timestamp injected so the collision behaviour is testable
+/// without racing a clock.
+///
+/// The timestamp alone does **not** make the name unique: two panics inside the same millisecond — or
+/// two processes crashing at once — derive the same base name, and a plain write would let the second
+/// erase the first. That is a lost crash record, which is the one thing this module exists to prevent
+/// (rule:crash-handling). `create_new` claims the name atomically, so a collision is resolved by
+/// suffixing rather than by overwriting.
+fn write_report_stamped(
+    dir: &Path,
+    stamp: &str,
+    kind: &str,
+    details: &str,
+) -> std::io::Result<PathBuf> {
+    use std::io::Write as _;
+
     std::fs::create_dir_all(dir)?;
-    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%.3f");
-    let path = dir.join(format!("crash-{stamp}-{kind}.log"));
-    std::fs::write(&path, compose(kind, details))?;
-    // Best-effort: a missing marker costs the next launch its notice, not the report itself.
-    let _ = std::fs::write(dir.join(PENDING), path.to_string_lossy().as_bytes());
-    Ok(path)
+    let body = compose(kind, details);
+
+    for attempt in 0..MAX_NAME_ATTEMPTS {
+        let path = dir.join(match attempt {
+            0 => format!("crash-{stamp}-{kind}.log"),
+            n => format!("crash-{stamp}-{kind}-{n}.log"),
+        });
+
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                file.write_all(body.as_bytes())?;
+                // Best-effort: a missing marker costs the next launch its notice, not the report itself.
+                let _ = std::fs::write(dir.join(PENDING), path.to_string_lossy().as_bytes());
+                return Ok(path);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        format!("{MAX_NAME_ATTEMPTS} crash reports already carry the stamp {stamp}"),
+    ))
 }
 
 /// Write a crash report. Never panics and never propagates: this runs on a path that is already fatal,
@@ -296,6 +342,43 @@ mod tests {
 
         assert_ne!(first, second, "each crash keeps its own report");
         assert!(first.is_file() && second.is_file());
+    }
+
+    #[test]
+    fn a_second_crash_in_the_same_millisecond_does_not_erase_the_first() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // The same stamp on purpose — two panics inside one millisecond, or two processes crashing at
+        // once, derive the same base name. Neither report may be lost. Injecting the stamp is what
+        // makes this deterministic; relying on the wall clock made the test above pass by luck.
+        let stamp = "20260731-070125.028";
+        let first = write_report_stamped(dir.path(), stamp, "panic", "one").expect("write");
+        let second = write_report_stamped(dir.path(), stamp, "panic", "two").expect("write");
+
+        assert_ne!(first, second, "the second report must claim its own name");
+        assert!(std::fs::read_to_string(&first)
+            .expect("read first")
+            .contains("one"));
+        assert!(std::fs::read_to_string(&second)
+            .expect("read second")
+            .contains("two"));
+
+        // The marker points at the most recent report — the one the next launch announces.
+        let marker = std::fs::read_to_string(dir.path().join(PENDING)).expect("marker");
+        assert_eq!(marker.trim(), second.to_string_lossy());
+    }
+
+    #[test]
+    fn the_collision_search_is_bounded() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let stamp = "20260731-070125.028";
+        for _ in 0..MAX_NAME_ATTEMPTS {
+            write_report_stamped(dir.path(), stamp, "panic", "x").expect("write");
+        }
+
+        // A crash path must terminate rather than search forever. The caller (`write_report`) turns
+        // this into a logged `None`; it never becomes a second crash.
+        let err = write_report_stamped(dir.path(), stamp, "panic", "x").expect_err("must give up");
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
     }
 
     #[test]
