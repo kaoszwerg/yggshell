@@ -142,6 +142,29 @@ pub struct GitCommitDetail {
     pub files: Vec<GitFileStat>,
 }
 
+/// A named set of overrides for what a terminal tab starts as.
+///
+/// **Every field is an override, and Settings holds the defaults.** A profile that sets only a theme
+/// takes its shell and its tmux behaviour from Settings, and changing Settings changes it — there is
+/// no separate "default profile" document to keep in step (ADR-CORE-005).
+///
+/// A profile is what `terminal_open` names, and it is a *reference*: the backend turns it into a
+/// program. The webview never names one (ADR-PROJ-001 §5).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TerminalProfile {
+    /// Filesystem-safe id, derived from the name by the backend. Never chosen by a caller.
+    pub id: String,
+    pub name: String,
+    /// Absolute path to a shell, checked against the list this machine offers — a profile must not be
+    /// a way around the check Settings makes.
+    pub shell: Option<String>,
+    /// Where a terminal opened with this profile starts.
+    pub cwd: Option<String>,
+    /// A colour scheme id, as `TerminalTheme::id`.
+    pub theme: Option<String>,
+}
+
 /// A terminal colour scheme — imported from iTerm2, or edited here.
 ///
 /// **Every colour is optional, on purpose.** Colour has one home in this project and it is the

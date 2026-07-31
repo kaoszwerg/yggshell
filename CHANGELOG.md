@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Terminal profiles** (Settings → Terminal): a named set of overrides for what a new tab starts as —
+  its shell, its starting directory, its colour scheme. Right-click the tab strip to open one; the `+`
+  stays a one-click terminal with the defaults.
+  - **`terminal_open` takes a profile id — a reference, never a command line** (ADR-PROJ-001 §5). The
+    backend turns the id into a program. A profile's shell is checked against the same list Settings
+    is checked against, so a profile cannot be a way around that check.
+  - **Everything is an override and Settings holds the defaults**, so there is no "default profile"
+    document to keep in step: a profile that sets only a theme follows Settings for the rest, and
+    changing Settings changes it.
+  - A tab keeps the profile it was opened with. It decided which shell is running, and a tab whose
+    profile changed underneath it would be claiming something about a process that is not true.
+  - Two things that have gone stale are handled rather than fatal, because neither is a reason to
+    leave someone without a shell: a profile that was deleted falls back to the defaults, and a
+    starting directory that no longer exists means the shell starts where it otherwise would.
 - **iTerm2 colour schemes, and an editor for them** (Settings → Terminal).
   - **Import is a file drop**: drop an `.itermcolors` file anywhere on the window. A drop hands the
     webview a *path*, never contents, so the backend is what opens the file — extension-checked, size-

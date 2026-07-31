@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
+import { ProfileControls } from "../components/settings/ProfileControls";
 import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
 import { HudPanel } from "../components/ui/HudPanel";
@@ -134,6 +135,10 @@ function TerminalSection() {
       <div className="bg-cyan/15 my-4 h-px" aria-hidden />
 
       <ThemeControls />
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
+      <ProfileControls />
 
       <div className="bg-cyan/15 my-4 h-px" aria-hidden />
 

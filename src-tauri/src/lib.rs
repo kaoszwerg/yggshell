@@ -10,6 +10,7 @@ pub mod dto;
 pub mod error;
 pub mod git;
 pub mod logging;
+pub mod profile;
 pub mod settings;
 pub mod state;
 pub mod terminal;
@@ -60,6 +61,9 @@ pub fn run() {
             commands::import_terminal_theme,
             commands::save_terminal_theme,
             commands::delete_terminal_theme,
+            commands::list_terminal_profiles,
+            commands::save_terminal_profile,
+            commands::delete_terminal_profile,
             commands::open_external,
             commands::report_crash,
             commands::pending_crash,

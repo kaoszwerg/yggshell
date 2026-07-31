@@ -20,6 +20,7 @@ vi.mock("../components/ui/TerminalSurface", () => ({
 vi.mock("../hooks/useSettings", () => ({
   useSettings: () => ({ data: { ui_scale: 1, terminal_font_size: 13, terminal_theme: "" } }),
   useTerminalThemes: () => ({ data: [] }),
+  useTerminalProfiles: () => ({ data: [] }),
 }));
 
 vi.mock("../api/terminal", () => ({
@@ -197,5 +198,28 @@ describe("TerminalView", () => {
       expect(warn).toHaveBeenCalled();
       warn.mockRestore();
     });
+  });
+
+  it("opens with the profile its tab was created for — a reference, never a command line", async () => {
+    // ADR-PROJ-001 §5: the webview may say WHICH profile, never what to run. The backend turns the
+    // id into a program, which is the whole difference between choosing and executing.
+    useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: true });
+    useTerminalStore.getState().openPane("work");
+
+    const opened = deferOpen(9);
+    render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]).toMatchObject({ profile: "work" });
+  });
+
+  it("opens with no profile when the tab was not given one", async () => {
+    const opened = deferOpen(10);
+    render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]).toMatchObject({ profile: null });
   });
 });

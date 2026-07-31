@@ -116,15 +116,43 @@ impl TerminalRegistry {
         cwd: Option<PathBuf>,
         size: Size,
         settings: &crate::dto::SettingsDto,
+        profile: Option<&crate::dto::TerminalProfile>,
     ) -> Result<SessionId> {
-        let cwd = validate_cwd(cwd)?;
+        // Two different kinds of directory, and they fail differently on purpose.
+        //
+        // The one on the CALL is a request: if it is not a directory, that is an error, because the
+        // caller asked for something specific and got it wrong. The one in a PROFILE is a stored
+        // preference, and a preference that has gone stale — the directory was moved, the project was
+        // deleted — must not be the reason a user cannot open a terminal. It is logged and dropped,
+        // and the shell starts where it otherwise would have. Same reasoning as a profile that no
+        // longer exists at all.
+        let cwd = match profile.and_then(|p| p.cwd.as_deref()) {
+            Some(preferred) => match validate_cwd(Some(PathBuf::from(preferred))) {
+                Ok(valid) => valid,
+                Err(error) => {
+                    tracing::warn!(
+                        %preferred,
+                        %error,
+                        "the profile's starting directory is not usable — starting where the shell would"
+                    );
+                    validate_cwd(cwd)?
+                }
+            },
+            None => validate_cwd(cwd)?,
+        };
         // What actually runs: the shell, or tmux wrapping it. Decided here rather than in `pty`, so
         // that module stays about pseudo-terminals and nothing else.
         //
         // The preference is re-checked here and not merely when it was stored: a shell can be
         // uninstalled between the two, and settings.json is an ordinary file (rule:security — the
         // boundary validates, it does not trust that someone upstream did).
-        let shell = shells::resolve(&settings.terminal_shell);
+        // The profile's shell if it names one, the Settings default otherwise — and `resolve` checks
+        // whichever it gets against what this machine actually offers.
+        let shell = shells::resolve(
+            profile
+                .and_then(|p| p.shell.as_deref())
+                .unwrap_or(&settings.terminal_shell),
+        );
         let launch = tmux::launch(settings.tmux_mode, &settings.tmux_session, &shell);
         let kind = launch.kind;
         let spawned = pty::spawn(pty::Spawn {

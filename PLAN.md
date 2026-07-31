@@ -82,7 +82,7 @@ The reason the product exists: enriching an AI development harness.
       Remote-only branches are not drawn — only local ones and HEAD. A diff is highlighted per hunk, so
       a hunk starting inside a block comment can be mis-coloured.
 
-## Phase 4 — Terminal configuration (in progress)
+## Phase 4 — Terminal configuration (done, bar split panes)
 
 Ordered as they should be built; each is discussed before it starts (rule:clarify-and-plan).
 
@@ -90,13 +90,17 @@ Ordered as they should be built; each is discussed before it starts (rule:clarif
       `terminal_open` takes no command line on purpose (ADR-PROJ-001 §5), and a free-text shell path
       would have handed that back. `/etc/shells` + `$SHELL` on Unix, the known interpreters on Windows;
       checked when stored and again before a spawn.
-- [ ] **iTerm2 theme import** (`.itermcolors`, a plist of 0–1 float components). Parse in Rust, store
-      per theme, hand the 16+ ANSI colours to `TerminalSurface`'s theme object — which already takes
-      them from `PALETTE`, so the seam exists.
-- [ ] **Theme editor.** Depends on the import: the same colour model, edited.
-- [ ] **Per-terminal configuration** — a tab starting with its own shell, cwd and theme. Needs a
-      configuration id on `terminal_open`, which the command already takes conceptually (it takes a
-      *reference*, never a command line — ADR-PROJ-001 §5).
+- [x] **iTerm2 theme import** — drop an `.itermcolors` file on the window. A drop hands over a *path*;
+      the backend opens it, bounded and extension-checked, with a reader written for this format that
+      resolves no entities and follows no DTD (a scheme is a file downloaded from the internet).
+      A scheme stores only what it defines; the frontend lays it over the HUD palette, so colour keeps
+      one home.
+- [x] **Theme editor** — all twenty-two colours, live preview, `ColorField` primitive (native picker
+      as the mechanism, never its look; hex field beside it because schemes are shared as hex).
+- [x] **Per-terminal configuration** — named profiles overriding shell, starting directory and colour
+      scheme; Settings holds the defaults, so there is no second copy to keep in step. `terminal_open`
+      takes a profile **id** — a reference, never a command line (ADR-PROJ-001 §5) — and a profile's
+      shell is checked against the same list Settings is. Right-click the tab strip to start one.
 - [ ] Split panes, and session persistence across restarts. Both explicitly outside milestone 1.
 
 ## Phase 5 — More sidebar tools

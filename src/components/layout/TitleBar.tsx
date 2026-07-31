@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 import { Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconButton } from "../ui/IconButton";
+import { ContextMenu } from "../ui/ContextMenu";
 import { Tabs } from "../ui/Tabs";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
 import { readPrimarySelection } from "../../lib/primarySelection";
 import { pasteInto } from "../../lib/terminalHandles";
+import { useTerminalProfiles } from "../../hooks/useSettings";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
@@ -24,6 +26,7 @@ export function TitleBar() {
   const activeKey = useTerminalStore((s) => s.activeKey);
   const setActive = useTerminalStore((s) => s.setActive);
   const openPane = useTerminalStore((s) => s.openPane);
+  const profiles = useTerminalProfiles();
   const closePane = useTerminalStore((s) => s.closePane);
   const setView = useUiStore((s) => s.setView);
 
@@ -73,18 +76,34 @@ export function TitleBar() {
             {APP_TAGLINE}
           </span>
         ) : (
-          <Tabs
-            label="Terminals"
-            items={panes.map((p) => ({ id: p.key, label: p.title }))}
-            activeId={activeKey ?? ""}
-            onSelect={show}
-            onClose={closePane}
-            onMiddleClick={pasteIntoTab}
-            onAdd={() => show(openPane())}
-            addLabel="New terminal"
-            getPanelId={(key) => `terminal-panel-${key}`}
-            className="max-w-[52vw]"
-          />
+          // Right-click the strip to start a terminal from a profile. The `+` stays a one-click
+          // "new terminal" with the Settings defaults, because that is what it is for and what it
+          // does today; the menu is the way to reach a profile without turning the common case into
+          // two clicks. Profiles are also listed in Settings, which is where they are discovered.
+          <ContextMenu
+            label="New terminal"
+            items={[
+              { id: "default", label: "New terminal", onSelect: () => show(openPane()) },
+              ...(profiles.data ?? []).map((profile) => ({
+                id: profile.id,
+                label: profile.name,
+                onSelect: () => show(openPane(profile.id)),
+              })),
+            ]}
+          >
+            <Tabs
+              label="Terminals"
+              items={panes.map((p) => ({ id: p.key, label: p.title }))}
+              activeId={activeKey ?? ""}
+              onSelect={show}
+              onClose={closePane}
+              onMiddleClick={pasteIntoTab}
+              onAdd={() => show(openPane())}
+              addLabel="New terminal"
+              getPanelId={(key) => `terminal-panel-${key}`}
+              className="max-w-[52vw]"
+            />
+          </ContextMenu>
         )}
         {build?.channel === "dev" ? (
           <span className="hud-clip-sm hud-accent-gold neon-glow-gold bg-elevated px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-[var(--saga-gold)] uppercase">

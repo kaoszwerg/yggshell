@@ -16,6 +16,11 @@ vi.mock("../components/settings/ThemeControls", () => ({
   ThemeControls: () => <div data-testid="theme-controls" />,
 }));
 
+// Same: profiles have their own suite.
+vi.mock("../components/settings/ProfileControls", () => ({
+  ProfileControls: () => <div data-testid="profile-controls" />,
+}));
+
 // The About section shows the build identity, which goes through react-query. This view is not the
 // place to test that plumbing — BuildIdentity owns it.
 vi.mock("../hooks/useBuildInfo", () => ({

@@ -18,13 +18,16 @@ export const terminalApi = {
    * text, so the emulator does its own UTF-8 decoding and a character split across two reads still
    * renders.
    *
-   * There is deliberately no way to say *what* to run. The backend resolves the shell; a webview that
-   * could name the program could run anything the user's account can (ADR-PROJ-001 §5).
+   * There is deliberately no way to say *what* to run. `profile` names a stored profile and the
+   * backend resolves it into a program; a webview that could name the program itself could run
+   * anything the user's account can, and those are not the same thing (ADR-PROJ-001 §5).
    */
   open: (opts: {
     rows: number;
     cols: number;
     cwd?: string;
+    /** A stored profile's id — a REFERENCE, never a command line (ADR-PROJ-001 §5). */
+    profile?: string | null;
     onOutput: (bytes: Uint8Array) => void;
   }): Promise<SessionId> => {
     const channel = new Channel<ArrayBuffer>();
@@ -34,6 +37,7 @@ export const terminalApi = {
       rows: opts.rows,
       cols: opts.cols,
       cwd: opts.cwd ?? null,
+      profile: opts.profile ?? null,
     });
   },
 

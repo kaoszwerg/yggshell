@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/commands";
+import type { TerminalProfile } from "../bindings/TerminalProfile";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
@@ -81,5 +82,31 @@ export function useDeleteTerminalTheme() {
   return useMutation({
     mutationFn: (id: string) => api.deleteTerminalTheme(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-themes"] }),
+  });
+}
+
+/** Every terminal profile the user has saved. */
+export function useTerminalProfiles() {
+  return useQuery({
+    queryKey: ["terminal-profiles"],
+    queryFn: api.listTerminalProfiles,
+  });
+}
+
+/** Save a profile, and refresh the list. */
+export function useSaveTerminalProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (profile: TerminalProfile) => api.saveTerminalProfile(profile),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-profiles"] }),
+  });
+}
+
+/** Delete a profile, and refresh the list. */
+export function useDeleteTerminalProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteTerminalProfile(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-profiles"] }),
   });
 }

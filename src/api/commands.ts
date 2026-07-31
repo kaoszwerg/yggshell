@@ -6,6 +6,7 @@ import type { CrashReport } from "../bindings/CrashReport";
 import type { LogRecord } from "../bindings/LogRecord";
 import type { SettingsDto } from "../bindings/SettingsDto";
 import type { ShellInfo } from "../bindings/ShellInfo";
+import type { TerminalProfile } from "../bindings/TerminalProfile";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
@@ -56,6 +57,16 @@ export const api = {
 
   /** Delete a stored theme. Deleting one that is not there is not a failure. */
   deleteTerminalTheme: (id: string) => invoke<void>("delete_terminal_theme", { id }),
+
+  /** Every terminal profile the user has saved. */
+  listTerminalProfiles: () => invoke<TerminalProfile[]>("list_terminal_profiles"),
+
+  /** Store a profile. Its id and the shell it names are both validated by the backend. */
+  saveTerminalProfile: (profile: TerminalProfile) =>
+    invoke<TerminalProfile>("save_terminal_profile", { profile }),
+
+  /** Delete a profile. Deleting one that is not there is not a failure. */
+  deleteTerminalProfile: (id: string) => invoke<void>("delete_terminal_profile", { id }),
   /**
    * Partial update — omitted fields keep their current value. Toggling `minimizeToTray` installs or
    * removes the system-tray icon immediately (no restart).

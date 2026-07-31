@@ -4,7 +4,9 @@
 pub mod git;
 pub mod terminal;
 
-use crate::dto::{BuildInfo, CrashReport, SettingsDto, ShellInfo, TerminalTheme, TmuxMode};
+use crate::dto::{
+    BuildInfo, CrashReport, SettingsDto, ShellInfo, TerminalProfile, TerminalTheme, TmuxMode,
+};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use tauri::State;
@@ -213,6 +215,32 @@ pub fn save_terminal_theme(
 pub fn delete_terminal_theme(state: State<'_, AppState>, id: String) -> Result<()> {
     tracing::info!(%id, "delete_terminal_theme");
     crate::theme::remove(&state.data_dir, &id)
+}
+
+/// Every terminal profile the user has saved.
+#[tauri::command]
+pub fn list_terminal_profiles(state: State<'_, AppState>) -> Vec<TerminalProfile> {
+    let profiles = crate::profile::list(&state.data_dir);
+    tracing::debug!(count = profiles.len(), "list_terminal_profiles");
+    profiles
+}
+
+/// Store a profile. Its id is derived from its name here, and the shell it names is checked against
+/// the list this machine offers — a profile must not be a way around that check (ADR-PROJ-001 §5).
+#[tauri::command]
+pub fn save_terminal_profile(
+    state: State<'_, AppState>,
+    profile: TerminalProfile,
+) -> Result<TerminalProfile> {
+    tracing::info!(name = %profile.name, "save_terminal_profile");
+    crate::profile::save(&state.data_dir, &profile)
+}
+
+/// Delete a profile. Deleting one that is not there is not a failure.
+#[tauri::command]
+pub fn delete_terminal_profile(state: State<'_, AppState>, id: String) -> Result<()> {
+    tracing::info!(%id, "delete_terminal_profile");
+    crate::profile::remove(&state.data_dir, &id)
 }
 
 /// Open an external URL in the user's default browser. Routed through the backend so any failure

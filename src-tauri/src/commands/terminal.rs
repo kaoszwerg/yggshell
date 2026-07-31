@@ -18,9 +18,17 @@ use tauri::State;
 /// decoding and a multi-byte character split across two reads still renders. Batching happens in the
 /// backend (ADR-PROJ-001 §3).
 ///
+/// `profile` names a stored [`crate::dto::TerminalProfile`] — a *reference*, never a command line
+/// (ADR-PROJ-001 §5). What it overrides (shell, directory, colour scheme) is resolved in the backend;
+/// what it does not override comes from Settings.
+///
 /// Fails if the PTY cannot be opened, the shell cannot be started, or `cwd` is not an existing
 /// directory.
 #[tauri::command]
+// The IPC shape: Tauri injects three of these and the webview names four. Folding them into a struct
+// would change the wire format for the sake of a lint about ergonomics that do not exist here — this
+// signature is never called by hand.
+#[allow(clippy::too_many_arguments)]
 pub fn terminal_open(
     app: tauri::AppHandle,
     registry: State<'_, TerminalRegistry>,
@@ -29,18 +37,26 @@ pub fn terminal_open(
     rows: u16,
     cols: u16,
     cwd: Option<String>,
+    profile: Option<String>,
 ) -> Result<SessionId> {
-    tracing::info!(rows, cols, ?cwd, "terminal_open");
+    tracing::info!(rows, cols, ?cwd, ?profile, "terminal_open");
     // tmux and the shell are persisted PREFERENCES, not something the webview may choose per call.
     // Even the shell setting is only ever a pick from a list the backend produced, and the registry
     // checks it again before it spawns anything (ADR-PROJ-001 §5, `terminal::shells`).
     let settings = state.settings.get();
+    // A profile is a REFERENCE — the backend resolves it into a program. A profile that has since
+    // been deleted reads as absent, and the terminal opens from the Settings defaults rather than
+    // refusing: a stale tab is not a reason to leave the user without a shell.
+    let profile = profile
+        .as_deref()
+        .and_then(|id| crate::profile::get(&state.data_dir, id));
     let id = registry.open(
         app,
         on_output,
         cwd.map(Into::into),
         Size { rows, cols },
         &settings,
+        profile.as_ref(),
     )?;
     tracing::debug!(session = id, "terminal_open ok");
     Ok(id)

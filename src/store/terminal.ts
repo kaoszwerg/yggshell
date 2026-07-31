@@ -14,6 +14,13 @@ export interface TerminalPane {
   /** Where the shell currently is, as it reported it (OSC 7). `null` until it says so — a shell
    *  without the hook never does, and guessing would point the Git tool at the wrong repository. */
   cwd: string | null;
+  /**
+   * The profile this tab was opened with, or `null` for the Settings defaults.
+   *
+   * Fixed for the tab's life: it decided which shell is running, and a tab whose profile changed
+   * under it would claim a shell it does not have. Choosing another profile opens another tab.
+   */
+  profileId: string | null;
 }
 
 export interface TerminalState {
@@ -31,8 +38,8 @@ export interface TerminalState {
    * zero instead of instantly reopening one.
    */
   bootstrap: () => void;
-  /** Open a tab and focus it. Returns its key. */
-  openPane: () => string;
+  /** Open a tab and focus it, optionally with a profile. Returns its key. */
+  openPane: (profileId?: string | null) => string;
   /** Remove a tab and choose a sensible neighbour to focus. */
   closePane: (key: string) => void;
   setActive: (key: string) => void;
@@ -70,10 +77,10 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
     get().openPane();
   },
 
-  openPane: () => {
+  openPane: (profileId = null) => {
     const key = `term-${nextKey++}`;
     set((s) => ({
-      panes: [...s.panes, { key, title: "Terminal", cwd: null }],
+      panes: [...s.panes, { key, title: "Terminal", cwd: null, profileId }],
       activeKey: key,
     }));
     return key;

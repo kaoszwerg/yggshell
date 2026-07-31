@@ -14,7 +14,7 @@ import {
 import { isMac } from "../lib/platform";
 import { readPrimarySelection } from "../lib/primarySelection";
 import { registerPasteTarget } from "../lib/terminalHandles";
-import { useSettings, useTerminalThemes } from "../hooks/useSettings";
+import { useSettings, useTerminalProfiles, useTerminalThemes } from "../hooks/useSettings";
 import { themeById } from "../lib/terminalTheme";
 import { useTerminalStore } from "../store/terminal";
 
@@ -123,6 +123,7 @@ export function TerminalView() {
         <Pane
           key={pane.key}
           paneKey={pane.key}
+          profileId={pane.profileId}
           active={pane.key === activeKey}
           onSession={registerSession}
         />
@@ -134,10 +135,13 @@ export function TerminalView() {
 /** One terminal: its emulator, its backend session, and the wiring between them. */
 function Pane({
   paneKey,
+  profileId,
   active,
   onSession,
 }: {
   paneKey: string;
+  /** Fixed for this pane's life — it decided which shell is running (see the store). */
+  profileId: string | null;
   active: boolean;
   onSession: (key: string, id: SessionId) => void;
 }) {
@@ -155,7 +159,11 @@ function Pane({
   // A scheme the settings name but that no longer exists resolves to `null`, which is the HUD
   // palette — a deleted theme must not leave a terminal unstyled.
   const themes = useTerminalThemes();
-  const theme = themeById(themes.data, settings.data?.terminal_theme ?? "");
+  const profiles = useTerminalProfiles();
+  // The profile's scheme if it names one, the Settings default otherwise — the same precedence the
+  // backend applies to the shell, so the two halves of a profile cannot disagree.
+  const profile = profiles.data?.find((p) => p.id === profileId);
+  const theme = themeById(themes.data, profile?.theme ?? settings.data?.terminal_theme ?? "");
   const [hasSelection, setHasSelection] = useState(false);
   // Flipped once the PTY exists. The working-directory poll below waits for it: mounting starts that
   // effect immediately, when `sessionId` is still null, so without this its first ask does nothing and
@@ -193,6 +201,7 @@ function Pane({
         .open({
           rows,
           cols,
+          profile: profileId,
           onOutput: (bytes) => handle.current?.write(bytes),
         })
         .then((id) => {
@@ -215,7 +224,7 @@ function Pane({
           handle.current?.write(notice(`could not start a terminal: ${String(error)}`));
         });
     },
-    [onSession, paneKey, setTitle],
+    [onSession, paneKey, profileId, setTitle],
   );
 
   const onData = useCallback((data: string) => {
