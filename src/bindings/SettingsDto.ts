@@ -35,6 +35,15 @@ diff_theme: string,
  */
 commit_theme: string, 
 /**
+ * The font family a terminal renders in. Empty means the app's own default stack.
+ *
+ * Stored as a NAME rather than a validated choice: a WebView cannot enumerate system fonts, so
+ * there is no authoritative list to check against — the frontend offers what it could detect and
+ * accepts anything typed. A name that is not installed falls back to the default stack, which is
+ * what the CSS font stack does anyway.
+ */
+terminal_font: string, 
+/**
  * Copy to the clipboard as soon as something is selected, the way many terminals do.
  *
  * Off by default, and deliberately so: it silently replaces whatever the user had copied, which

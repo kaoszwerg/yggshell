@@ -1,5 +1,40 @@
 @import "tailwindcss";
 
+/* MesloLGS NF — bundled, because it is the font powerlevel10k recommends and a Powerline prompt in a
+   font without the glyphs is a row of empty boxes the user cannot diagnose from inside the terminal
+   showing it. Apache-2.0; the licence and the reasoning live in src/assets/fonts/.
+
+   Declared here rather than loaded on demand: it is four files in the bundle either way, and a
+   terminal whose font arrives a frame late reflows every line it had already drawn. */
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("../assets/fonts/MesloLGS NF Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("../assets/fonts/MesloLGS NF Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("../assets/fonts/MesloLGS NF Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "MesloLGS NF";
+  src: url("../assets/fonts/MesloLGS NF Bold Italic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+
 /* ============================================================
    HUD design system (ADR-020). Palette tokens live in :root, are exposed as
    Tailwind colour tokens via @theme, and are mirrored once in palette.ts for

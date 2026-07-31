@@ -78,6 +78,8 @@ export const api = {
     terminalTheme?: string;
     diffTheme?: string;
     commitTheme?: string;
+    terminalFont?: string;
+    copyOnSelect?: boolean;
     tmuxMode?: TmuxMode;
     tmuxSession?: string;
     minimizeToTray?: boolean;
@@ -89,6 +91,8 @@ export const api = {
       terminalTheme: opts.terminalTheme ?? null,
       diffTheme: opts.diffTheme ?? null,
       commitTheme: opts.commitTheme ?? null,
+      terminalFont: opts.terminalFont ?? null,
+      copyOnSelect: opts.copyOnSelect ?? null,
       tmuxMode: opts.tmuxMode ?? null,
       tmuxSession: opts.tmuxSession ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,

@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
 import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
+import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
 import { Tabs } from "../components/ui/Tabs";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
+import { availableFonts } from "../lib/fonts";
 import { labelShells } from "../lib/shellLabels";
 import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
 import type { TmuxMode } from "../bindings/TmuxMode";
@@ -118,6 +120,7 @@ function TerminalSection() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const size = settings.data?.terminal_font_size ?? 13;
+  const copyOnSelect = settings.data?.copy_on_select ?? false;
 
   return (
     <HudPanel
@@ -131,6 +134,36 @@ function TerminalSection() {
       }
     >
       <ShellControls />
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
+      <FontChoice />
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-dim text-xs">Selecting text</span>
+        <div className="flex flex-wrap gap-1">
+          <Button
+            aria-pressed={!copyOnSelect}
+            active={!copyOnSelect}
+            onClick={() => update.mutate({ copyOnSelect: false })}
+          >
+            Select only
+          </Button>
+          <Button
+            aria-pressed={copyOnSelect}
+            active={copyOnSelect}
+            onClick={() => update.mutate({ copyOnSelect: true })}
+          >
+            Copy to clipboard
+          </Button>
+        </div>
+        <span className="text-dim text-xs">
+          Off by default because it replaces whatever you had copied, without saying so. A
+          middle-click always pastes the last selection either way, as on X11.
+        </span>
+      </div>
 
       <div className="bg-cyan/15 my-4 h-px" aria-hidden />
 
@@ -165,6 +198,70 @@ function TerminalSection() {
 
       <TmuxControls />
     </HudPanel>
+  );
+}
+
+/**
+ * Which font the terminal renders in.
+ *
+ * The list is what this machine turned out to have, measured rather than enumerated — a WebView cannot
+ * ask for a font list, so each candidate is probed by rendering it and comparing widths against the
+ * fallbacks (`lib/fonts`). Anything not detected can still be typed: the list is a convenience, not a
+ * gate.
+ *
+ * Every row previews itself in its own font, which is the whole point. Choosing a typeface from names
+ * set in a different typeface is choosing blind — and the specific thing people are looking for here
+ * is whether the Powerline glyphs are there at all.
+ */
+function FontChoice() {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const chosen = settings.data?.terminal_font ?? "";
+  // Probed once: fonts are not installed while a settings page is open, and each probe measures text
+  // on a canvas.
+  const options = useMemo(
+    () =>
+      availableFonts().map((family) => ({
+        value: family,
+        label: family,
+        preview: { fontFamily: `"${family}", monospace` },
+      })),
+    [],
+  );
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-dim text-xs">Font</span>
+      <div className="flex flex-wrap items-start gap-2">
+        <SearchableSelect
+          label="Terminal font"
+          value={chosen}
+          options={options}
+          placeholder="MesloLGS NF"
+          emptyHint="Not found on this machine — it will be used anyway if you have it."
+          className="max-w-xs flex-1"
+          onChange={(family) => update.mutate({ terminalFont: family })}
+        />
+        {chosen === "" ? null : (
+          <Button onClick={() => update.mutate({ terminalFont: "" })}>Default</Button>
+        )}
+      </div>
+      {/* The sample is the answer to the question people actually have: are the Powerline glyphs
+          there? A name in a list cannot tell you that. */}
+      <div
+        className="hud-clip-sm bg-elevated text-fg overflow-x-auto px-2 py-1 text-xs whitespace-pre"
+        style={{ fontFamily: chosen === "" ? undefined : `"${chosen}", monospace` }}
+        aria-label="Font preview"
+      >
+        {"\ue0b0 \ue0b2 \uf07b \uf126  ~/git-projects  0O1lI| {} => != ->"}
+      </div>
+      <span className="text-dim text-xs">
+        <strong className="text-fg">MesloLGS NF</strong> ships with the app — it is the font
+        powerlevel10k recommends, so a Powerline prompt works without installing anything. A font
+        this list does not show can still be typed in: a WebView cannot enumerate what is installed,
+        so the list is what could be detected rather than everything you have.
+      </span>
+    </div>
   );
 }
 

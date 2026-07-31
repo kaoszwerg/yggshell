@@ -28,6 +28,7 @@ function settings(ui_scale: number): SettingsDto {
     diff_theme: "",
     commit_theme: "",
     copy_on_select: false,
+    terminal_font: "",
     tmux_mode: "off",
     tmux_session: "",
     minimize_to_tray: false,

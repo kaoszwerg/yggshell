@@ -21,6 +21,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The terminal font is configurable** (Settings → Terminal), through a list you can type into where
+  **every row is set in its own font** — choosing a typeface from names printed in a different
+  typeface is choosing blind, and the specific question people have here is whether the Powerline
+  glyphs are present at all. A live sample below the field answers exactly that.
+  - **The list is measured, not enumerated.** A WebView cannot ask for the installed fonts —
+    `queryLocalFonts` is Chromium-only and absent from WKWebView — so each candidate is probed by
+    rendering it and comparing widths against three fallbacks: identical every time means the browser
+    substituted. A curated candidate list turns out to suit this better anyway; every font on the
+    machine would bury the handful that can draw a prompt.
+  - **A name the list does not show can still be typed.** The list is what could be detected, never a
+    gate, and the CSS stack keeps a generic monospace behind whatever is chosen — a font that has since
+    been uninstalled costs you the typeface, not a readable terminal.
+  - **MesloLGS NF ships with the app** (Apache-2.0, © André Berg; licence and reasoning in
+    `src/assets/fonts/`). It is the font powerlevel10k itself recommends, so a Powerline prompt works
+    with nothing installed and nothing explained. Only one font is bundled on purpose: four weights are
+    ~10 MB, and a second family would double that for a difference in taste rather than capability.
+  - Changing it repaints the live terminal and re-measures the grid — a different typeface means
+    different cell widths, so the same box holds a different number of columns.
 - **An activity line along the top edge of each terminal** — iTerm2's idea, in the window frame's own
   travelling gradient so the two read as one system. At rest a quiet cyan hairline; while a command
   runs, the gradient sweeps; when it ends, green or red for a moment and then back to rest. That last

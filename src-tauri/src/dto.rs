@@ -51,6 +51,14 @@ pub struct SettingsDto {
     /// The scheme a COMMIT is drawn in. Empty means "the same as a diff".
     #[serde(default)]
     pub commit_theme: String,
+    /// The font family a terminal renders in. Empty means the app's own default stack.
+    ///
+    /// Stored as a NAME rather than a validated choice: a WebView cannot enumerate system fonts, so
+    /// there is no authoritative list to check against — the frontend offers what it could detect and
+    /// accepts anything typed. A name that is not installed falls back to the default stack, which is
+    /// what the CSS font stack does anyway.
+    #[serde(default)]
+    pub terminal_font: String,
     /// Copy to the clipboard as soon as something is selected, the way many terminals do.
     ///
     /// Off by default, and deliberately so: it silently replaces whatever the user had copied, which
@@ -275,6 +283,7 @@ impl Default for SettingsDto {
             terminal_theme: String::new(),
             diff_theme: String::new(),
             commit_theme: String::new(),
+            terminal_font: String::new(),
             copy_on_select: false,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
@@ -302,6 +311,7 @@ mod tests {
             terminal_theme: String::new(),
             diff_theme: String::new(),
             commit_theme: String::new(),
+            terminal_font: "MesloLGS NF".into(),
             copy_on_select: true,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),

@@ -51,12 +51,25 @@ function mockShells(state: { data?: typeof OFFERED; isPending?: boolean; isError
   } as unknown as ReturnType<typeof useShells>);
 }
 
+// The font list is measured against a canvas, which jsdom does not have. What this suite is about is
+// the wiring, not the detection — that has its own tests in lib/fonts.
+vi.mock("../lib/fonts", () => ({
+  availableFonts: () => ["MesloLGS NF", "Menlo"],
+}));
+
 function mockSettings(
   overrides: { ui_scale?: number; minimize_to_tray?: boolean; terminal_shell?: string } = {},
 ) {
   mockShells();
   vi.mocked(useSettings).mockReturnValue({
-    data: { ui_scale: 1, minimize_to_tray: false, terminal_shell: "", ...overrides },
+    data: {
+      ui_scale: 1,
+      minimize_to_tray: false,
+      terminal_shell: "",
+      terminal_font: "",
+      copy_on_select: false,
+      ...overrides,
+    },
   } as unknown as ReturnType<typeof useSettings>);
   vi.mocked(useUpdateSettings).mockReturnValue({
     mutate,
@@ -249,6 +262,53 @@ describe("SettingsView", () => {
       openTerminalSection();
 
       expect(screen.getByText(/Could not read the available shells/)).toBeTruthy();
+    });
+  });
+
+  // Both of these existed in the backend before they existed in the interface — the setting was
+  // stored, and nothing could set it. A test that only checks the store would not have noticed.
+  describe("things that must actually be reachable", () => {
+    it("lets a font be chosen from the list", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      const box = screen.getByRole("combobox", { name: "Terminal font" });
+      fireEvent.focus(box);
+      fireEvent.click(screen.getByRole("option", { name: /MesloLGS NF/ }));
+
+      expect(mutate).toHaveBeenCalledWith({ terminalFont: "MesloLGS NF" });
+    });
+
+    it("lets a font be typed that the list does not have", () => {
+      // A WebView cannot enumerate fonts, so the list is what could be detected — never a gate.
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      fireEvent.change(screen.getByRole("combobox", { name: "Terminal font" }), {
+        target: { value: "Some Private Font" },
+      });
+      expect(mutate).toHaveBeenCalledWith({ terminalFont: "Some Private Font" });
+    });
+
+    it("lets copy-on-select be switched on and off", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+      expect(mutate).toHaveBeenCalledWith({ copyOnSelect: true });
+
+      cleanup();
+      mockSettings({ copy_on_select: true } as never);
+      render(<SettingsView />);
+      openTerminalSection();
+      expect(
+        screen.getByRole("button", { name: "Copy to clipboard" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+      fireEvent.click(screen.getByRole("button", { name: "Select only" }));
+      expect(mutate).toHaveBeenCalledWith({ copyOnSelect: false });
     });
   });
 });

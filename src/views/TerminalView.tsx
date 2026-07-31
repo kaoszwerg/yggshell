@@ -534,6 +534,7 @@ function Pane({
             fontSize={fontSize}
             theme={theme}
             copyOnSelect={settings.data?.copy_on_select ?? false}
+            fontFamily={settings.data?.terminal_font ?? ""}
           />
         </div>
       </ContextMenu>

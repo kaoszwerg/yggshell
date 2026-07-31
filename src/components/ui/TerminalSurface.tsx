@@ -7,6 +7,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { fontStack } from "../../lib/fonts";
 import { parseOsc7 } from "../../lib/osc7";
 import { parseOsc133, type Activity } from "../../lib/osc133";
 import { isLinux, isMac } from "../../lib/platform";
@@ -70,6 +71,13 @@ export interface TerminalSurfaceProps {
    * welcome when it was expected.
    */
   copyOnSelect?: boolean;
+  /**
+   * The font family the emulator renders in, or empty for the app's default stack.
+   *
+   * Applied to the live terminal like the size and the theme: rebuilding the emulator to change a
+   * typeface would take the scrollback and the running process with it.
+   */
+  fontFamily?: string;
   /** The shell's current working directory, as it reports it (OSC 7). Never fires for a shell that
    *  does not emit the sequence — see the backend's shell integration. */
   onCwd?: (path: string) => void;
@@ -103,6 +111,7 @@ export function TerminalSurface({
   fontSize,
   theme,
   copyOnSelect,
+  fontFamily,
   className = "",
 }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -124,6 +133,7 @@ export function TerminalSurface({
     fontSize,
     theme,
     copyOnSelect,
+    fontFamily,
   });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
@@ -140,6 +150,7 @@ export function TerminalSurface({
       fontSize,
       theme,
       copyOnSelect,
+      fontFamily,
     };
   }, [
     onData,
@@ -152,6 +163,7 @@ export function TerminalSurface({
     fontSize,
     theme,
     copyOnSelect,
+    fontFamily,
   ]);
 
   useImperativeHandle(
@@ -179,6 +191,18 @@ export function TerminalSurface({
     term.options.theme = resolveTheme(theme);
   }, [theme]);
 
+  // A font change reaches the LIVE terminal, and then the geometry has to be re-measured: a different
+  // typeface means different cell widths, so the same box holds a different number of columns.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const stack = fontStack(fontFamily ?? "");
+    if (term.options.fontFamily === stack) return;
+    term.options.fontFamily = stack;
+    fitRef.current?.fit();
+    handlers.current.onResize(term.rows, term.cols);
+  }, [fontFamily]);
+
   // Size changes reach the LIVE terminal. The mount effect below deliberately does not depend on
   // `fontSize`, or every step would dispose the emulator and take the scrollback with it.
   useEffect(() => {
@@ -198,7 +222,8 @@ export function TerminalSurface({
       allowProposedApi: true, // required by the unicode11 addon
       cursorBlink: true,
       cursorStyle: "bar",
-      fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+      // Read through the ref like `fontSize`, so a change repaints rather than rebuilds.
+      fontFamily: fontStack(handlers.current.fontFamily ?? ""),
       // Read through the ref so the mount effect below does not depend on the prop: depending on it
       // would rebuild the emulator on every size step and take the scrollback with it.
       fontSize: handlers.current.fontSize,
