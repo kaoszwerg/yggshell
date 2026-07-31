@@ -13,6 +13,7 @@ import {
 } from "../components/ui/TerminalSurface";
 import { isMac } from "../lib/platform";
 import { readPrimarySelection } from "../lib/primarySelection";
+import { registerPasteTarget } from "../lib/terminalHandles";
 import { useTerminalStore } from "../store/terminal";
 
 /** Written into the terminal itself when something goes wrong. A failure the user cannot see is a
@@ -202,6 +203,16 @@ function Pane({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active]);
+
+  // The title bar pastes into a terminal it does not render — a middle-click on a tab lands here.
+  // Registered as a paste TARGET rather than exposing the whole handle: nobody outside needs the
+  // rest of it.
+  useEffect(() => {
+    registerPasteTarget(paneKey, {
+      paste: (text: string) => handle.current?.paste(text),
+    });
+    return () => registerPasteTarget(paneKey, undefined);
+  }, [paneKey]);
 
   // Becoming visible changes the pane's size from 0×0, so it must re-measure — and take the caret,
   // because a terminal you switched to that does not accept typing is broken.

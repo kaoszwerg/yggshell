@@ -4,6 +4,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconButton } from "../ui/IconButton";
 import { Tabs } from "../ui/Tabs";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
+import { readPrimarySelection } from "../../lib/primarySelection";
+import { pasteInto } from "../../lib/terminalHandles";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
@@ -29,6 +31,14 @@ export function TitleBar() {
   const show = (key: string) => {
     setActive(key);
     setView("terminal");
+  };
+
+  // Middle-click means paste, in a terminal and on its tab alike — never close. The tab is brought
+  // to the front first: text arriving in a terminal the user cannot see is alarming, and a paste
+  // they did not witness is a paste they will not trust.
+  const pasteIntoTab = (key: string) => {
+    show(key);
+    pasteInto(key, readPrimarySelection());
   };
 
   return (
@@ -69,6 +79,7 @@ export function TitleBar() {
             activeId={activeKey ?? ""}
             onSelect={show}
             onClose={closePane}
+            onMiddleClick={pasteIntoTab}
             onAdd={() => show(openPane())}
             addLabel="New terminal"
             getPanelId={(key) => `terminal-panel-${key}`}

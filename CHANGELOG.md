@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
     cost no extra height, so the tagline yields to them once a terminal is open.
   - Closing a tab takes the foreground process group with it, so a build or an AI harness started
     inside the shell does not survive as an orphan.
+- **Unix middle-click paste, on the tab too.** A middle-click on a tab pastes into *that* terminal
+  and brings it to the front first — text arriving in a terminal the user cannot see is alarming.
+  It routes through the emulator, so it is bracketed like every other paste.
 - **Unix middle-click paste.** Selecting text in a terminal fills an app-scoped PRIMARY selection —
   on Unix, selecting *is* the copy — and a middle-click pastes it. A WebView cannot reach the real
   X11 PRIMARY (`navigator.clipboard` maps to CLIPBOARD on every platform), so the stand-in works
@@ -45,9 +48,11 @@ All notable changes to this project are documented here. The format follows
   jump, Enter/Space activate, Escape closes and returns focus to the trigger.
 - **`Tabs` HUD primitive** (`src/components/ui/Tabs.tsx`) — the tab strip behind the terminal's tabs,
   which live in the title bar (ADR-PROJ-001) and therefore scroll rather than wrap. WAI-ARIA tabs
-  pattern with automatic activation: arrow keys move selection and focus, Home/End jump, Delete and
-  middle-click close, and a roving tabindex keeps the whole strip to a single Tab stop. Closing a
-  background tab does not select it.
+  pattern with automatic activation: arrow keys move selection and focus, Home/End jump, Delete
+  closes, and a roving tabindex keeps the whole strip to a single Tab stop. Closing a background tab
+  does not select it. Middle-click is handed to the caller rather than bound to close: in a browser
+  that is the convention, but in a terminal middle-click means paste, and one gesture meaning two
+  opposite things inside the same window is how a user loses a running process.
 - **ADR-PROJ-001 — terminal architecture.** Emulator, PTY crate, transport, session model and threat
   model decided before any code, each against a measurement: `@xterm/xterm` behind the primitive layer,
   `portable-pty` behind a single module with three named re-evaluation tripwires, and a Tauri Channel

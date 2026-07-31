@@ -88,26 +88,53 @@ describe("Tabs", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("closes a tab on middle-click, the way every tab strip does", () => {
+  it("hands a middle-click to the caller instead of closing", () => {
+    // A browser closes on middle-click; a terminal pastes. One gesture must not mean two opposite
+    // things inside the same window, so the primitive decides nothing.
     const onSelect = vi.fn();
     const onClose = vi.fn();
+    const onMiddleClick = vi.fn();
     render(
-      <Tabs label="Terminals" items={items} activeId="a" onSelect={onSelect} onClose={onClose} />,
+      <Tabs
+        label="Terminals"
+        items={items}
+        activeId="a"
+        onSelect={onSelect}
+        onClose={onClose}
+        onMiddleClick={onMiddleClick}
+      />,
     );
 
     fireEvent(screen.getByRole("tab", { name: "cargo watch" }), aux(1));
-    expect(onClose).toHaveBeenCalledExactlyOnceWith("b");
+    expect(onMiddleClick).toHaveBeenCalledExactlyOnceWith("b");
+    expect(onClose).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("ignores a right-click so the context menu still reaches the tab", () => {
+  it("does nothing on middle-click when the caller gave it no meaning", () => {
     const onClose = vi.fn();
     render(
       <Tabs label="Terminals" items={items} activeId="a" onSelect={vi.fn()} onClose={onClose} />,
     );
 
-    fireEvent(screen.getByRole("tab", { name: "cargo watch" }), aux(2));
+    fireEvent(screen.getByRole("tab", { name: "cargo watch" }), aux(1));
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("ignores a right-click so the context menu still reaches the tab", () => {
+    const onMiddleClick = vi.fn();
+    render(
+      <Tabs
+        label="Terminals"
+        items={items}
+        activeId="a"
+        onSelect={vi.fn()}
+        onMiddleClick={onMiddleClick}
+      />,
+    );
+
+    fireEvent(screen.getByRole("tab", { name: "cargo watch" }), aux(2));
+    expect(onMiddleClick).not.toHaveBeenCalled();
   });
 
   it("closes the active tab on Delete", () => {

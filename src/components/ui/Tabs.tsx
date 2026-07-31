@@ -24,6 +24,11 @@ export interface TabsProps {
   onClose?: (id: string) => void;
   /** Omit to render no add control at all. */
   onAdd?: () => void;
+  /**
+   * Middle-click on a tab. Left to the caller because there is no one right answer: a browser closes,
+   * a terminal pastes. Nothing happens when it is omitted.
+   */
+  onMiddleClick?: (id: string) => void;
   /** Accessible name of the add control. */
   addLabel?: string;
   /** Ties each tab to the panel it controls, when the caller renders panels with known ids. */
@@ -42,6 +47,10 @@ const STEP = { ArrowRight: 1, ArrowLeft: -1 } as const;
  * focus with it), Home/End jump to the ends, Delete closes. Only the selected tab is tabbable, so the
  * strip costs one Tab stop no matter how many terminals are open.
  *
+ * Middle-click is deliberately NOT bound to close here. In a browser that is the convention; in a
+ * terminal, middle-click means paste, everywhere, and one gesture meaning two opposite things inside
+ * the same window is how a user loses work. The caller says what it does.
+ *
  * The close control is a sibling of the tab, never nested inside it — a button inside a button is
  * invalid, and it would swallow the tab's own click. Closing a background tab therefore closes it
  * *without* selecting it, which is what every tab strip does and what a user expects when they aim
@@ -54,6 +63,7 @@ export function Tabs({
   onSelect,
   onClose,
   onAdd,
+  onMiddleClick,
   addLabel = "New tab",
   getPanelId,
   className = "",
@@ -104,12 +114,12 @@ export function Tabs({
     }
   };
 
-  /** Middle-click closes, as it does in every tab strip. Right-click is left alone so a context
-   *  menu wrapped around the strip still gets its event. */
+  /** Middle-click is the caller's to define; right-click is left alone so a context menu wrapped
+   *  around the strip still receives it. */
   const onAuxClick = (e: MouseEvent<HTMLButtonElement>, id: string) => {
-    if (e.button !== 1 || !onClose) return;
+    if (e.button !== 1 || !onMiddleClick) return;
     e.preventDefault();
-    onClose(id);
+    onMiddleClick(id);
   };
 
   return (

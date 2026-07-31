@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TitleBar } from "./TitleBar";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
 import type { BuildInfo } from "../../bindings/BuildInfo";
+import { clearPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
+import { clearPasteTargets, registerPasteTarget } from "../../lib/terminalHandles";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 
@@ -81,6 +83,8 @@ describe("TitleBar", () => {
     beforeEach(() => {
       useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: false });
       useUiStore.setState({ view: "home" });
+      clearPrimarySelection();
+      clearPasteTargets();
     });
 
     it("shows the tagline while no terminal is open", () => {
@@ -146,6 +150,54 @@ describe("TitleBar", () => {
 
       expect(useTerminalStore.getState().panes.map((p) => p.key)).toEqual(["term-0"]);
       expect(useUiStore.getState().view).toBe("home");
+    });
+
+    it("pastes into a terminal on middle-click, and never closes it", () => {
+      // Middle-click means paste everywhere in this app — on the tab exactly as inside the terminal.
+      // One gesture that closes here and pastes there is how a user loses a running process.
+      const paste = vi.fn();
+      registerPasteTarget("term-1", { paste });
+      setPrimarySelection("cargo test --locked");
+      useTerminalStore.setState({
+        panes: [
+          { key: "term-0", title: "zsh" },
+          { key: "term-1", title: "cargo" },
+        ],
+        activeKey: "term-0",
+      });
+      renderTitleBar(devBuild);
+
+      fireEvent(
+        screen.getByRole("tab", { name: "cargo" }),
+        new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }),
+      );
+
+      expect(paste).toHaveBeenCalledExactlyOnceWith("cargo test --locked");
+      expect(useTerminalStore.getState().panes).toHaveLength(2);
+      // Brought to the front first: text landing in a terminal the user cannot see is alarming.
+      expect(useTerminalStore.getState().activeKey).toBe("term-1");
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
+
+    it("still shows the tab on middle-click when nothing is selected", () => {
+      const paste = vi.fn();
+      registerPasteTarget("term-1", { paste });
+      useTerminalStore.setState({
+        panes: [
+          { key: "term-0", title: "zsh" },
+          { key: "term-1", title: "cargo" },
+        ],
+        activeKey: "term-0",
+      });
+      renderTitleBar(devBuild);
+
+      fireEvent(
+        screen.getByRole("tab", { name: "cargo" }),
+        new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }),
+      );
+
+      expect(paste).not.toHaveBeenCalled();
+      expect(useTerminalStore.getState().activeKey).toBe("term-1");
     });
   });
 });
