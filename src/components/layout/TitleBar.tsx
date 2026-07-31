@@ -8,6 +8,7 @@ import { useBuildInfo } from "../../hooks/useBuildInfo";
 import { readPrimarySelection } from "../../lib/primarySelection";
 import { pasteInto } from "../../lib/terminalHandles";
 import { useTerminalProfiles } from "../../hooks/useSettings";
+import { useT } from "../../hooks/useT";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
@@ -30,6 +31,7 @@ export function TitleBar() {
   const profiles = useTerminalProfiles();
   const closePane = useTerminalStore((s) => s.closePane);
   const setView = useUiStore((s) => s.setView);
+  const t = useT();
 
   // Reaching for a tab is asking to see that terminal, wherever the user currently is.
   const show = (key: string) => {
@@ -91,9 +93,9 @@ export function TitleBar() {
           // does today; the menu is the way to reach a profile without turning the common case into
           // two clicks. Profiles are also listed in Settings, which is where they are discovered.
           <ContextMenu
-            label="New terminal"
+            label={t("titlebar.newTerminal")}
             items={[
-              { id: "default", label: "New terminal", onSelect: () => show(openPane()) },
+              { id: "default", label: t("titlebar.newTerminal"), onSelect: () => show(openPane()) },
               ...(profiles.data ?? []).map((profile) => ({
                 id: profile.id,
                 label: profile.name,
@@ -106,14 +108,14 @@ export function TitleBar() {
                 without a word. That is exactly how this menu shipped doing nothing. */}
             <div className="contents">
               <Tabs
-                label="Terminals"
+                label={t("titlebar.terminals")}
                 items={panes.map((p) => ({ id: p.key, label: p.title }))}
                 activeId={activeKey ?? ""}
                 onSelect={show}
                 onClose={closePane}
                 onMiddleClick={pasteIntoTab}
                 onAdd={() => show(openPane())}
-                addLabel="New terminal"
+                addLabel={t("titlebar.newTerminal")}
                 getPanelId={(key) => `terminal-panel-${key}`}
                 className="max-w-[52vw]"
               />
@@ -128,13 +130,23 @@ export function TitleBar() {
       </div>
 
       <div className="flex items-center gap-1.5">
-        <WinButton label="Minimize" onClick={() => void getCurrentWindow().minimize()}>
+        <WinButton
+          label={t("titlebar.minimize")}
+          onClick={() => void getCurrentWindow().minimize()}
+        >
           <Minus size={15} strokeWidth={2.5} />
         </WinButton>
-        <WinButton label="Maximize" onClick={() => void getCurrentWindow().toggleMaximize()}>
+        <WinButton
+          label={t("titlebar.maximize")}
+          onClick={() => void getCurrentWindow().toggleMaximize()}
+        >
           <Square size={13} strokeWidth={2.5} />
         </WinButton>
-        <WinButton label="Close" danger onClick={() => void getCurrentWindow().close()}>
+        <WinButton
+          label={t("titlebar.close")}
+          danger
+          onClick={() => void getCurrentWindow().close()}
+        >
           <X size={16} strokeWidth={2.5} />
         </WinButton>
       </div>

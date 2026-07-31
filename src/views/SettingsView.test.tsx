@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SettingsView } from "./SettingsView";
+import { useUiStore } from "../store/ui";
 
 const mutate = vi.fn();
 
@@ -73,6 +74,7 @@ function mockSettings(
       terminal_font: "",
       copy_on_select: false,
       git_auto_fetch: true,
+      language: "",
       ...overrides,
     },
   } as unknown as ReturnType<typeof useSettings>);
@@ -416,6 +418,65 @@ describe("SettingsView", () => {
       const box = screen.getByRole("combobox", { name: "Terminal font" });
       expect(box).toHaveValue("");
       expect(box.getAttribute("placeholder")).toBe("MesloLGS NF");
+    });
+  });
+
+  // The whole feature, from the outside: does the interface actually change language, and does the
+  // choice reach the place it survives a restart?
+  describe("two languages", () => {
+    it("offers each language named in itself", () => {
+      // "Deutsch", not "German": somebody who has landed in a language they cannot read needs a way
+      // out, and a list written in that language is no help.
+      mockSettings();
+      render(<SettingsView />);
+
+      expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Deutsch" })).toBeInTheDocument();
+    });
+
+    it("starts in English", () => {
+      useUiStore.setState({ locale: "en" });
+      mockSettings();
+      render(<SettingsView />);
+
+      expect(screen.getByRole("button", { name: "English" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+      expect(screen.getByRole("tab", { name: "Appearance" })).toBeInTheDocument();
+    });
+
+    it("redraws the interface in German when German is chosen", () => {
+      useUiStore.setState({ locale: "en" });
+      mockSettings();
+      render(<SettingsView />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Deutsch" }));
+
+      // Under the click, not after a round trip: the same tab list, in German.
+      expect(screen.getByRole("tab", { name: "Darstellung" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Werkzeuge" })).toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: "Appearance" })).toBeNull();
+    });
+
+    it("stores the choice, so it is still that language tomorrow", () => {
+      // The mirror in the store is for the first frame; settings.json is what survives a restart.
+      useUiStore.setState({ locale: "en" });
+      mockSettings();
+      render(<SettingsView />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Deutsch" }));
+      expect(mutate).toHaveBeenCalledWith({ language: "de" });
+    });
+
+    it("translates deep into a page, not just the tab strip", () => {
+      useUiStore.setState({ locale: "de" });
+      mockSettings();
+      render(<SettingsView />);
+      fireEvent.click(screen.getByRole("tab", { name: "Terminal" }));
+
+      expect(screen.getByRole("group", { name: "Schriftart" })).toBeInTheDocument();
+      expect(screen.getByRole("group", { name: "Auswahl" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "In die Zwischenablage" })).toBeInTheDocument();
     });
   });
 });

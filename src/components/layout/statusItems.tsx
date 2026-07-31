@@ -17,6 +17,7 @@ import { useBuildInfo } from "../../hooks/useBuildInfo";
 import { useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
+import { useT } from "../../hooks/useT";
 import { APP_NAME } from "../../lib/app";
 import { formatElapsed, shortPath } from "../../lib/statusFormat";
 import type { StatusItemId } from "../../lib/statusBar";
@@ -28,9 +29,14 @@ const TICK_MS = 1000;
 function VersionItem() {
   const { data: build } = useBuildInfo();
   const setAboutOpen = useUiStore((s) => s.setAboutOpen);
+  const t = useT();
 
   return (
-    <Button variant="ghost" onClick={() => setAboutOpen(true)} tooltip={`About ${APP_NAME}`}>
+    <Button
+      variant="ghost"
+      onClick={() => setAboutOpen(true)}
+      tooltip={t("statusbar.about", { app: APP_NAME })}
+    >
       {APP_NAME} {build ? `v${build.version}` : ""}
       {build ? (
         <span className="text-dim ml-1">
@@ -38,7 +44,9 @@ function VersionItem() {
           {build.git_dirty ? "+" : ""})
         </span>
       ) : null}
-      {build?.channel === "dev" ? <span className="text-gold ml-1">· dev</span> : null}
+      {build?.channel === "dev" ? (
+        <span className="text-gold ml-1">{t("common.devChannel")}</span>
+      ) : null}
     </Button>
   );
 }
@@ -52,6 +60,7 @@ function VersionItem() {
  */
 function RepositoryItem() {
   const { query } = useGitSnapshot();
+  const t = useT();
   const snapshot = query.data;
   if (!snapshot) return null;
 
@@ -61,13 +70,16 @@ function RepositoryItem() {
 
   return (
     <Tooltip
-      content={`${snapshot.branch ?? "detached"}${ahead > 0 ? ` · ${ahead} to push` : ""}${
-        behind > 0 ? ` · ${behind} to pull` : ""
-      }${changed > 0 ? ` · ${changed} changed` : " · clean"}`}
+      content={[
+        snapshot.branch ?? t("statusbar.detached"),
+        ...(ahead > 0 ? [t("statusbar.toPush", { count: ahead })] : []),
+        ...(behind > 0 ? [t("statusbar.toPull", { count: behind })] : []),
+        changed > 0 ? t("statusbar.changed", { count: changed }) : t("statusbar.clean"),
+      ].join(" · ")}
     >
       <span className="flex items-center gap-1.5">
         <GitBranch size={11} strokeWidth={2} className="text-purple shrink-0" aria-hidden />
-        <span className="text-fg">{snapshot.branch ?? "detached"}</span>
+        <span className="text-fg">{snapshot.branch ?? t("statusbar.detached")}</span>
         {ahead > 0 ? <span className="text-green">↑{ahead}</span> : null}
         {behind > 0 ? <span className="text-gold">↓{behind}</span> : null}
         {changed > 0 ? <span className="text-cyan">±{changed}</span> : null}
@@ -85,6 +97,7 @@ function RepositoryItem() {
  */
 function CommandItem() {
   const pane = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey));
+  const t = useT();
   const since = pane?.activitySince ?? null;
   const [now, setNow] = useState(() => Date.now());
 
@@ -106,7 +119,9 @@ function CommandItem() {
   if (pane.activity === "ok" || pane.activity === "failed") {
     const failed = pane.activity === "failed";
     return (
-      <span className={failed ? "text-danger" : "text-green"}>{failed ? "failed" : "done"}</span>
+      <span className={failed ? "text-danger" : "text-green"}>
+        {failed ? t("statusbar.failed") : t("statusbar.done")}
+      </span>
     );
   }
   if (pane.activity !== "running") return null;
@@ -114,7 +129,7 @@ function CommandItem() {
   return (
     <span className="flex items-center gap-1.5">
       <TerminalIcon size={11} strokeWidth={2} className="text-cyan shrink-0" aria-hidden />
-      <span className="text-fg">{pane.command ?? "running"}</span>
+      <span className="text-fg">{pane.command ?? t("statusbar.running")}</span>
       {since === null ? null : <span className="text-dim">· {formatElapsed(now - since)}</span>}
     </span>
   );
@@ -140,10 +155,11 @@ function TmuxItem() {
   const session = useTerminalStore(
     (s) => s.panes.find((p) => p.key === s.activeKey)?.tmuxSession ?? null,
   );
+  const t = useT();
   if (session === null) return null;
 
   return (
-    <Tooltip content={`Attached to the tmux session “${session}”`}>
+    <Tooltip content={t("statusbar.tmuxAttached", { session })}>
       <span className="flex items-center gap-1.5">
         <Layers size={11} strokeWidth={2} className="text-green shrink-0" aria-hidden />
         <span className="text-fg">{session}</span>
@@ -185,11 +201,12 @@ export function StatusItemView({ id }: { id: StatusItemId }) {
  * do it.
  */
 export function StatusItemSample({ id }: { id: StatusItemId }) {
+  const t = useT();
   switch (id) {
     case "version":
       return (
         <span className="text-fg">
-          {APP_NAME} v0.0.0 <span className="text-gold">· dev</span>
+          {APP_NAME} v0.0.0 <span className="text-gold">{t("common.devChannel")}</span>
         </span>
       );
     case "repository":

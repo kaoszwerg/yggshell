@@ -16,10 +16,11 @@ import { GripVertical, MoveHorizontal, Minus } from "lucide-react";
 import { Button } from "../ui/Button";
 import { StatusItemSample } from "../layout/statusItems";
 import { useUiStore } from "../../store/ui";
+import { useT } from "../../hooks/useT";
+import type { MessageKey } from "../../i18n";
 import {
-  STATUS_ITEMS,
   availableItems,
-  statusItemInfo,
+  isStatusItemId,
   insertItem,
   moveItem,
   removeItem,
@@ -47,8 +48,8 @@ function decode(raw: string): Payload | null {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
     const p = parsed as Partial<Payload> & Record<string, unknown>;
-    if (p.from === "palette" && typeof p.id === "string" && p.id in STATUS_ITEMS) {
-      return { from: "palette", id: p.id as StatusItemId };
+    if (p.from === "palette" && isStatusItemId(p.id)) {
+      return { from: "palette", id: p.id };
     }
     if (p.from === "bar" && typeof p.index === "number" && Number.isInteger(p.index)) {
       return { from: "bar", index: p.index };
@@ -60,13 +61,25 @@ function decode(raw: string): Payload | null {
   }
 }
 
+/**
+ * The message keys for an item's name and its explanation.
+ *
+ * Derived from the id rather than stored beside it, so the registry in `lib/statusBar` stays a list
+ * of *what exists* and this file owns *what it is called* — which is the half that changes with the
+ * interface language.
+ */
+function itemKeys(id: StatusItemId): { label: MessageKey; hint: MessageKey } {
+  return { label: `statusbar.item.${id}`, hint: `statusbar.item.${id}.hint` };
+}
+
 /** What a placed item looks like in the editor: an icon for the two abstract ones, a name otherwise. */
-function chipFace(id: StatusItemId) {
+function ChipFace({ id }: { id: StatusItemId }) {
+  const t = useT();
   if (id === "spacer") {
     return (
       <>
         <MoveHorizontal size={12} strokeWidth={2} aria-hidden />
-        <span>Spacer</span>
+        <span>{t("statusbar.item.spacer")}</span>
       </>
     );
   }
@@ -74,11 +87,11 @@ function chipFace(id: StatusItemId) {
     return (
       <>
         <Minus size={12} strokeWidth={2} className="rotate-90" aria-hidden />
-        <span>Separator</span>
+        <span>{t("statusbar.item.separator")}</span>
       </>
     );
   }
-  return <span>{statusItemInfo(id).label}</span>;
+  return <span>{t(itemKeys(id).label)}</span>;
 }
 
 export function StatusBarEditor() {
@@ -146,42 +159,43 @@ export function StatusBarEditor() {
     }
   };
 
+  const t = useT();
   const offered = availableItems(layout);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5" role="group" aria-label="Available items">
-        <span className="text-dim text-xs">Available</span>
+      <div
+        className="flex flex-col gap-1.5"
+        role="group"
+        aria-label={t("statusbar.editor.availableItems")}
+      >
+        <span className="text-dim text-xs">{t("statusbar.editor.available")}</span>
         <div className="flex flex-wrap gap-1">
           {offered.length === 0 ? (
-            <span className="text-dim/60 font-mono text-xs">Everything is in the bar.</span>
+            <span className="text-dim/60 font-mono text-xs">{t("statusbar.editor.allPlaced")}</span>
           ) : (
             offered.map((id) => (
               <Button
                 key={id}
                 draggable
-                aria-label={`Add ${statusItemInfo(id).label}`}
-                tooltip={statusItemInfo(id).hint}
+                aria-label={t("statusbar.editor.add", { item: t(itemKeys(id).label) })}
+                tooltip={t(itemKeys(id).hint)}
                 onClick={() => add(id)}
                 onDragStart={(e) => e.dataTransfer.setData(MIME, encode({ from: "palette", id }))}
                 className="cursor-grab gap-1.5"
               >
-                {chipFace(id)}
+                <ChipFace id={id} />
               </Button>
             ))
           )}
         </div>
-        <span className="text-dim text-xs">
-          Drag one into the bar, or click to add it at the end. A{" "}
-          <strong className="text-fg">spacer</strong> is what does the aligning — everything after
-          it is pushed along, so two spacers around an item centre it.
-        </span>
+        <span className="text-dim text-xs">{t("statusbar.editor.paletteHint")}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Your status bar</span>
+        <span className="text-dim text-xs">{t("statusbar.editor.yourBar")}</span>
         <ul
-          aria-label="Your status bar"
+          aria-label={t("statusbar.editor.yourBar")}
           className="hud-clip-sm bg-elevated flex min-h-11 flex-wrap items-center gap-1 p-2"
           onDragOver={(e) => {
             e.preventDefault();
@@ -191,9 +205,7 @@ export function StatusBarEditor() {
           onDrop={(e) => onDrop(e, layout.length)}
         >
           {layout.length === 0 ? (
-            <li className="text-dim/60 font-mono text-xs">
-              The bar is empty — only the scroll-to-top control will show.
-            </li>
+            <li className="text-dim/60 font-mono text-xs">{t("statusbar.editor.empty")}</li>
           ) : null}
           {layout.map((item, index) => (
             <li
@@ -218,33 +230,27 @@ export function StatusBarEditor() {
                   if (el) chips.current.set(item.key, el);
                   else chips.current.delete(item.key);
                 }}
-                tooltip={`${statusItemInfo(item.id).hint} — arrow keys move it, Backspace removes it.`}
+                tooltip={t("statusbar.editor.itemHint", { hint: t(itemKeys(item.id).hint) })}
                 onKeyDown={(e) => onKey(e, index, item)}
                 className="cursor-grab gap-1.5"
               >
                 <GripVertical size={12} strokeWidth={2} className="text-dim" aria-hidden />
-                {chipFace(item.id)}
+                <ChipFace id={item.id} />
               </Button>
             </li>
           ))}
         </ul>
-        <span className="text-dim text-xs">
-          Drag to reorder. With the keyboard: <kbd className="text-fg">←</kbd>{" "}
-          <kbd className="text-fg">→</kbd> move the focused item,{" "}
-          <kbd className="text-fg">Backspace</kbd> removes it. The scroll-to-top control is not in
-          this list: it comes and goes with what is on screen, and it is the only way back to the
-          top of a long view.
-        </span>
+        <span className="text-dim text-xs">{t("statusbar.editor.barHint")}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Preview</span>
+        <span className="text-dim text-xs">{t("statusbar.editor.preview")}</span>
         {/* Sample values, not live ones: the preview exists to show the ARRANGEMENT, and live data
             would leave it empty exactly while somebody is arranging it (nothing running, no
             repository) — as well as dragging the Git query onto the settings page to do it. */}
         <div
           role="group"
-          aria-label="Preview"
+          aria-label={t("statusbar.editor.preview")}
           className="hud-clip-sm bg-base flex h-7 items-center gap-2 px-3 font-mono text-[10px] text-[var(--saga-text-dim)]"
         >
           {layout.map((item) =>
@@ -259,15 +265,12 @@ export function StatusBarEditor() {
             ),
           )}
         </div>
-        <span className="text-dim text-xs">
-          An item with nothing to say shows nothing at all — no branch outside a repository, no
-          session outside tmux. That is why the preview can look emptier than the list.
-        </span>
+        <span className="text-dim text-xs">{t("statusbar.editor.previewHint")}</span>
       </div>
 
       <div className="flex flex-wrap gap-1">
-        <Button onClick={() => reset()}>Reset to defaults</Button>
-        <Button onClick={() => apply([])}>Remove all</Button>
+        <Button onClick={() => reset()}>{t("statusbar.editor.reset")}</Button>
+        <Button onClick={() => apply([])}>{t("statusbar.editor.removeAll")}</Button>
       </div>
     </div>
   );

@@ -3,19 +3,21 @@ import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import type { HudAccent } from "../ui/hudButton";
 import { useUiStore, type ToolId, type ViewId } from "../../store/ui";
+import { useT } from "../../hooks/useT";
+import type { MessageKey } from "../../i18n";
 
-type NavItem = { id: ViewId; Icon: LucideIcon; label: string };
-type ToolItem = { id: ToolId; Icon: LucideIcon; label: string };
+type NavItem = { id: ViewId; Icon: LucideIcon; label: MessageKey };
+type ToolItem = { id: ToolId; Icon: LucideIcon; label: MessageKey };
 
-const MAIN_NAV: NavItem[] = [{ id: "terminal", Icon: TerminalSquare, label: "Terminal" }];
+const MAIN_NAV: NavItem[] = [{ id: "terminal", Icon: TerminalSquare, label: "nav.terminal" }];
 
 /** Tools open the column beside this rail. They never replace what is on screen — that is what a view
  *  does, and the difference is the reason the column exists. */
-const TOOLS: ToolItem[] = [{ id: "git", Icon: GitBranch, label: "Git" }];
+const TOOLS: ToolItem[] = [{ id: "git", Icon: GitBranch, label: "nav.git" }];
 
 const BOTTOM_NAV: NavItem[] = [
-  { id: "logs", Icon: ScrollText, label: "Logs" },
-  { id: "settings", Icon: Settings, label: "Settings" },
+  { id: "logs", Icon: ScrollText, label: "nav.logs" },
+  { id: "settings", Icon: Settings, label: "nav.settings" },
 ];
 
 /**
@@ -30,6 +32,7 @@ export function Sidebar() {
   const setView = useUiStore((s) => s.setView);
   const activeTool = useUiStore((s) => s.activeTool);
   const toggleTool = useUiStore((s) => s.toggleTool);
+  const t = useT();
 
   return (
     <nav
@@ -38,13 +41,13 @@ export function Sidebar() {
         borderRight: "1px solid rgb(var(--saga-neon-cyan-rgb) / 0.3)",
         borderBottom: "none",
       }}
-      aria-label="Primary"
+      aria-label={t("nav.primary")}
     >
       {MAIN_NAV.map((item) => (
         <RailButton
           key={item.id}
           Icon={item.Icon}
-          label={item.label}
+          label={t(item.label)}
           active={view === item.id}
           current={view === item.id ? "page" : undefined}
           onClick={() => setView(item.id)}
@@ -57,7 +60,7 @@ export function Sidebar() {
         <RailButton
           key={tool.id}
           Icon={tool.Icon}
-          label={tool.label}
+          label={t(tool.label)}
           active={activeTool === tool.id}
           // `page` would be a lie: a tool does not replace the page, it opens beside it. `pressed`
           // is what a toggle says, and this button is a toggle.
@@ -78,7 +81,7 @@ export function Sidebar() {
         <RailButton
           key={item.id}
           Icon={item.Icon}
-          label={item.label}
+          label={t(item.label)}
           active={view === item.id}
           current={view === item.id ? "page" : undefined}
           onClick={() => setView(item.id)}

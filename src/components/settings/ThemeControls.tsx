@@ -6,6 +6,7 @@ import { ColorField } from "../ui/ColorField";
 import { IconButton } from "../ui/IconButton";
 import { TextField } from "../ui/TextField";
 import { HUD_TERMINAL_THEME, resolveTheme } from "../../lib/terminalTheme";
+import { useT } from "../../hooks/useT";
 import {
   useDeleteTerminalTheme,
   useImportTerminalTheme,
@@ -77,6 +78,7 @@ const blank = (name: string): TerminalTheme => ({
  * gesture that is, for a file you already have open in Finder, the more direct one anyway.
  */
 export function ThemeControls() {
+  const t = useT();
   const settings = useSettings();
   const update = useUpdateSettings();
   const themes = useTerminalThemes();
@@ -135,8 +137,8 @@ export function ThemeControls() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5" role="group" aria-label="Terminal colour scheme">
-        <span className="text-dim text-xs">Colour scheme</span>
+      <div className="flex flex-col gap-1.5" role="group" aria-label={t("scheme.terminal")}>
+        <span className="text-dim text-xs">{t("scheme.label")}</span>
         <div className="flex flex-wrap gap-1">
           <Button
             aria-pressed={chosen === ""}
@@ -156,10 +158,7 @@ export function ThemeControls() {
             </Button>
           ))}
         </div>
-        <span className="text-dim text-xs">
-          Applies to every open terminal at once — the emulator is repainted, not restarted, so
-          nothing running is disturbed. A tab can be given its own scheme from its right-click menu.
-        </span>
+        <span className="text-dim text-xs">{t("scheme.appliesToAll")}</span>
       </div>
 
       <SchemeChoice
@@ -205,7 +204,7 @@ export function ThemeControls() {
 
       <div className="flex flex-wrap items-center gap-1">
         <Button accent="green" onClick={() => setEditing(blank("New scheme"))}>
-          New scheme
+          {t("scheme.new")}
         </Button>
         {chosen === "" ? null : (
           <Button
@@ -214,7 +213,9 @@ export function ThemeControls() {
               if (current) setEditing({ ...current, ansi: [...current.ansi] });
             }}
           >
-            Edit “{(themes.data ?? []).find((theme) => theme.id === chosen)?.name ?? chosen}”
+            {t("scheme.edit", {
+              name: (themes.data ?? []).find((theme) => theme.id === chosen)?.name ?? chosen,
+            })}
           </Button>
         )}
       </div>
@@ -287,6 +288,7 @@ function ThemeEditor({
   onEdited: (theme: TerminalTheme) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const save = useSaveTerminalTheme();
   const remove = useDeleteTerminalTheme();
   const update = useUpdateSettings();
@@ -303,15 +305,15 @@ function ThemeEditor({
     <div className="hud-clip-sm border-cyan/20 flex flex-col gap-3 border p-3">
       <div className="flex items-center gap-2">
         <TextField
-          aria-label="Scheme name"
+          aria-label={t("scheme.name")}
           value={theme.name}
-          placeholder="Scheme name"
+          placeholder={t("scheme.name")}
           className="max-w-xs font-mono"
           onChange={(e) => onEdited({ ...theme, name: e.target.value })}
         />
         {theme.id === "" || theme.builtin ? null : (
           <IconButton
-            label="Delete this scheme"
+            label={t("scheme.delete")}
             variant="ghost"
             accent="danger"
             onClick={() => {
@@ -331,7 +333,7 @@ function ThemeEditor({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Named colours</span>
+        <span className="text-dim text-xs">{t("scheme.named")}</span>
         <div className="grid grid-cols-2 gap-2">
           {NAMED.map((entry) => (
             <div key={entry.key} className="flex items-center gap-2">
@@ -345,14 +347,11 @@ function ThemeEditor({
             </div>
           ))}
         </div>
-        <span className="text-dim text-xs">
-          Left empty, a colour keeps the HUD&rsquo;s — which is what an imported scheme does for
-          anything it never mentioned.
-        </span>
+        <span className="text-dim text-xs">{t("scheme.namedHint")}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">ANSI palette</span>
+        <span className="text-dim text-xs">{t("scheme.ansi")}</span>
         <div className="grid grid-cols-2 gap-2">
           {ANSI_NAMES.map((name, index) => (
             <div key={name} className="flex items-center gap-2">
@@ -386,14 +385,21 @@ function ThemeEditor({
               />
             ))}
           </div>
+          {/* Sample terminal output, deliberately NOT translated: this is what a compiler prints,
+              and it prints it in English on every machine. Translating it would misrepresent what the
+              scheme will actually look like. `<code>` says so to the reader and to the i18n gate. */}
+          <code className="contents">
+            <span>
+              <span style={{ color: resolved.green }}>~/git-projects</span>{" "}
+              <span style={{ color: resolved.cyan }}>❯</span> cargo build
+            </span>
+            <span style={{ color: resolved.yellow }}>warning: unused variable `x`</span>
+            <span style={{ color: resolved.red }}>error: could not compile</span>
+          </code>
           <span>
-            <span style={{ color: resolved.green }}>~/git-projects</span>{" "}
-            <span style={{ color: resolved.cyan }}>❯</span> cargo build
-          </span>
-          <span style={{ color: resolved.yellow }}>warning: unused variable `x`</span>
-          <span style={{ color: resolved.red }}>error: could not compile</span>
-          <span>
-            <span style={{ backgroundColor: resolved.selectionBackground }}>selected text</span>
+            <span style={{ backgroundColor: resolved.selectionBackground }}>
+              {t("scheme.selectedText")}
+            </span>
           </span>
         </div>
       </div>

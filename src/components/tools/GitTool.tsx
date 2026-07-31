@@ -8,6 +8,7 @@ import { Row } from "../ui/Row";
 import { Splitter } from "../ui/Splitter";
 import { useTerminalStore } from "../../store/terminal";
 import { useGitSnapshot } from "../../hooks/useGitSnapshot";
+import { useT } from "../../hooks/useT";
 import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type GitDetail } from "../../store/ui";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
@@ -43,21 +44,20 @@ function changeMark(status: string): { mark: string; className: string } {
  * OSC 7 — so it follows a `cd` instead of being pinned to wherever the app happened to start.
  */
 export function GitTool() {
+  const t = useT();
   const { cwd, query, refresh, remoteProblem } = useGitSnapshot();
 
   if (cwd === null) {
     return (
       <Empty>
-        Waiting for the terminal to report where it is.
+        {t("git.waitingForCwd")}
         <br />
-        <span className="text-dim/70">
-          A shell that does not send OSC 7 never will — see the shell integration.
-        </span>
+        <span className="text-dim/70">{t("git.noOsc7")}</span>
       </Empty>
     );
   }
 
-  if (query.isPending) return <Empty>Reading the repository…</Empty>;
+  if (query.isPending) return <Empty>{t("git.reading")}</Empty>;
 
   if (query.isError) {
     // Surfaced, never swallowed (rule:logging). The message is the backend's, which already names
@@ -66,7 +66,7 @@ export function GitTool() {
   }
 
   const snapshot = query.data;
-  if (!snapshot) return <Empty>Not a git repository.</Empty>;
+  if (!snapshot) return <Empty>{t("git.notARepository")}</Empty>;
 
   return (
     <Body snapshot={snapshot} onRefresh={() => void refresh()} remoteProblem={remoteProblem} />
@@ -91,6 +91,7 @@ function Body({
   /** Why the ahead/behind counts may be out of date, or `null` when they are current. */
   remoteProblem: string | null;
 }) {
+  const t = useT();
   const split = useUiStore((s) => s.gitSplit);
   const setSplit = useUiStore((s) => s.setGitSplit);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -106,10 +107,10 @@ function Body({
     <div className="flex h-full flex-col font-mono text-[0.66rem]">
       <div className="border-cyan/15 shrink-0 border-b p-2">
         <Section
-          label="BRANCH"
+          label={t("git.branch")}
           action={
             <IconButton
-              label="Refresh"
+              label={t("common.refresh")}
               variant="ghost"
               tooltip={null}
               className="h-4 w-4"
@@ -134,7 +135,7 @@ function Body({
                 memory, and a number that is quietly wrong is worse than no number (ADR-PROJ-002). */}
             {remoteProblem === null ? null : (
               <Tooltip content={`The remote could not be reached: ${remoteProblem}`}>
-                <span className="text-gold shrink-0" aria-label="The counts may be out of date">
+                <span className="text-gold shrink-0" aria-label={t("git.staleCounts")}>
                   ⚠
                 </span>
               </Tooltip>
@@ -149,11 +150,11 @@ function Body({
         <div
           className="min-h-0 overflow-y-auto p-2"
           style={{ flex: `0 0 ${split}%` }}
-          aria-label="Changed files"
+          aria-label={t("git.changedFiles")}
         >
           <Section label={`CHANGED · ${snapshot.changes.length}`}>
             {snapshot.changes.length === 0 ? (
-              <span className="text-dim/60">Working tree clean.</span>
+              <span className="text-dim/60">{t("git.clean")}</span>
             ) : (
               snapshot.changes.map((change) => (
                 <ChangeRow key={changeKey(change)} change={change} />
@@ -163,7 +164,7 @@ function Body({
         </div>
 
         <Splitter
-          label="Changes and history"
+          label={t("git.changesAndHistory")}
           orientation="horizontal"
           value={split}
           min={GIT_SPLIT_MIN}
@@ -172,8 +173,8 @@ function Body({
           toValue={toShare}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2" aria-label="Commit history">
-          <Section label="HISTORY">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2" aria-label={t("git.commitHistory")}>
+          <Section label={t("git.history")}>
             <History commits={snapshot.commits} />
           </Section>
         </div>
@@ -242,7 +243,8 @@ const ROW_HEIGHT = 16;
  * would be tedious to build in a real repository. This only draws what that returns.
  */
 function History({ commits }: { commits: GitCommit[] }) {
-  if (commits.length === 0) return <span className="text-dim/60">No commits yet.</span>;
+  const t = useT();
+  if (commits.length === 0) return <span className="text-dim/60">{t("git.noCommits")}</span>;
 
   const { rows, lanes } = layoutHistory(commits);
   const width = lanes * LANE_STEP + 6;

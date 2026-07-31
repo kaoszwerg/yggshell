@@ -1,6 +1,7 @@
 import { Button } from "../ui/Button";
 import { StatusItemView } from "./statusItems";
 import { useUiStore } from "../../store/ui";
+import { useT } from "../../hooks/useT";
 
 /**
  * The bottom strip: whatever the user put in it, and the scroll-to-top control.
@@ -21,6 +22,7 @@ export function StatusBar({
   onScrollTop?: () => void;
 }) {
   const layout = useUiStore((s) => s.statusLayout);
+  const t = useT();
 
   return (
     <div className="hud-strip hud-strip-bottom flex h-7 shrink-0 items-center gap-2 px-3 font-mono text-[10px] text-[var(--saga-text-dim)]">
@@ -46,11 +48,11 @@ export function StatusBar({
           <Button
             variant="ghost"
             onClick={onScrollTop}
-            aria-label="Scroll to top"
-            tooltip="Scroll to top"
+            aria-label={t("statusbar.scrollTop")}
+            tooltip={t("statusbar.scrollTop")}
             className="tracking-wider uppercase"
           >
-            ↑ top
+            ↑ {t("statusbar.top")}
           </Button>
         ) : null}
       </div>

@@ -1,4 +1,5 @@
 import { useBuildInfo } from "../hooks/useBuildInfo";
+import { useT } from "../hooks/useT";
 
 /**
  * What this build actually is: version, channel, and the commit it came from (ADR-CORE-024).
@@ -9,6 +10,7 @@ import { useBuildInfo } from "../hooks/useBuildInfo";
  * tell anyone that what they are looking at is not a release.
  */
 export function BuildIdentity({ className = "" }: { className?: string }) {
+  const t = useT();
   const { data: build } = useBuildInfo();
 
   const commit = build?.commit_date ? new Date(build.commit_date) : null;
@@ -28,7 +30,7 @@ export function BuildIdentity({ className = "" }: { className?: string }) {
       {/* The dirty marker is the honest part: a build made from an edited tree is pinned to no
           commit at all, and quoting the SHA without it would be a claim that is not true. */}
       <Row label="commit" value={build ? `${build.git_sha}${build.git_dirty ? "+" : ""}` : "—"} />
-      <Row label="commit date" value={commitDate} />
+      <Row label={t("build.commitDate")} value={commitDate} />
     </dl>
   );
 }

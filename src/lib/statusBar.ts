@@ -8,58 +8,34 @@
  * later needs no decision about which bucket it belongs in.
  */
 
-/** Everything that can go in the bar. A new element is one entry here and one renderer. */
-export const STATUS_ITEMS = {
-  version: {
-    label: "Version",
-    hint: "The version and build channel. Opens About when clicked.",
-  },
-  repository: {
-    label: "Repository",
-    hint: "Branch, ahead/behind and how many files have changed, for the tab in front.",
-  },
-  command: {
-    label: "Running command",
-    hint: "What the active terminal is running, and for how long.",
-  },
-  cwd: {
-    label: "Directory",
-    hint: "Where the active terminal is.",
-  },
-  tmux: {
-    label: "tmux session",
-    hint: "The tmux session the active tab is attached to, if any.",
-  },
-  spacer: {
-    label: "Spacer",
-    hint: "Flexible gap. Everything after it is pushed along — this is what does the aligning.",
-  },
-  separator: {
-    label: "Separator",
-    hint: "A thin dividing line.",
-  },
-} as const;
-
-export type StatusItemId = keyof typeof STATUS_ITEMS;
-
 /**
- * The same registry, for lookup.
+ * Everything that can go in the bar.
  *
- * A `Map`, not `STATUS_ITEMS[id]`. The indexed form is type-safe here, but `security/detect-object-
- * injection` cannot see that and flags every call — and the honest options are then a suppression at
- * each site or a lookup with no injection path at all. This is the second one: a `Map` cannot reach
- * `__proto__` or `constructor`, so the rule stays armed everywhere else instead of being taught to
- * ignore a shape (rule:code-quality — never weaken a gate to make a finding go away).
+ * **Ids only.** What each one is *called* lives in the message catalogue (`i18n`, under
+ * `statusbar.item.<id>`), because that is the half that changes with the interface language — keeping
+ * a label here as well would be a second source for the same string, and the English one would be the
+ * one that quietly won (ADR-CORE-005).
+ *
+ * A new element is one id here, one renderer, and two messages per language — and the last part is a
+ * compile error until it is done, not something a German-speaking user discovers.
  */
-const ITEMS = new Map<StatusItemId, { label: string; hint: string }>(
-  Object.entries(STATUS_ITEMS) as [StatusItemId, { label: string; hint: string }][],
-);
+export const STATUS_ITEM_IDS = [
+  "version",
+  "repository",
+  "command",
+  "cwd",
+  "tmux",
+  "spacer",
+  "separator",
+] as const;
 
-/** What to call an item, and what to tell the user it does. */
-export function statusItemInfo(id: StatusItemId): { label: string; hint: string } {
-  // Every id is one of the keys above, so this cannot miss — but returning the id beats throwing in
-  // a settings page if a future item is ever added to the type and not to the registry.
-  return ITEMS.get(id) ?? { label: id, hint: "" };
+export type StatusItemId = (typeof STATUS_ITEM_IDS)[number];
+
+const KNOWN_IDS = new Set<string>(STATUS_ITEM_IDS);
+
+/** Whether a string names an element this build has. */
+export function isStatusItemId(value: unknown): value is StatusItemId {
+  return typeof value === "string" && KNOWN_IDS.has(value);
 }
 
 /** One placed element. `key` is its identity in the list — spacers repeat, so ids cannot be it. */
@@ -99,7 +75,7 @@ export function makeItem(id: StatusItemId): StatusItem {
 export const defaultLayout = (): StatusItem[] => DEFAULT_STATUS_LAYOUT.map(makeItem);
 
 /** Every id, in the order the palette offers them. */
-const allStatusItems = (): StatusItemId[] => Object.keys(STATUS_ITEMS) as StatusItemId[];
+const allStatusItems = (): StatusItemId[] => [...STATUS_ITEM_IDS];
 
 /**
  * Which ids the palette should still offer, given what is already placed.
@@ -148,7 +124,6 @@ export function removeItem(layout: readonly StatusItem[], key: string): StatusIt
  */
 export function sanitiseLayout(stored: unknown): StatusItem[] {
   if (!Array.isArray(stored)) return defaultLayout();
-  const known = new Set<string>(allStatusItems());
   const seen = new Set<string>();
   const keys = new Set<string>();
   const out: StatusItem[] = [];
@@ -156,8 +131,8 @@ export function sanitiseLayout(stored: unknown): StatusItem[] {
   for (const entry of stored) {
     const record = entry as { id?: unknown; key?: unknown } | null;
     const id: unknown = record?.id;
-    if (typeof id !== "string" || !known.has(id)) continue;
-    const typed = id as StatusItemId;
+    if (!isStatusItemId(id)) continue;
+    const typed = id;
     if (!isRepeatable(typed)) {
       if (seen.has(typed)) continue;
       seen.add(typed);

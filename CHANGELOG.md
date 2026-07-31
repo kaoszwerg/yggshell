@@ -8,6 +8,29 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The interface speaks German as well as English.** English is the default and the source; German
+  is chosen in Settings › Appearance › Language, and applies immediately without a restart. Each
+  language is listed in itself ("Deutsch", not "German") — somebody who has landed in a language they
+  cannot read needs a way out, and a list written in that language is no help.
+- **Two gates keep it from decaying.** `de.ts` is typed against `en.ts`, so a message added in
+  English and not translated **does not compile**. And a new `i18n/no-untranslated-text` lint rule
+  refuses a user-facing string written straight into a component — without it the interface would
+  drift back into English one new button at a time, and no type could object, because an English word
+  in JSX is a perfectly good string.
+- **What a program prints stays untranslated**, deliberately: sample terminal output, compiler
+  messages, shell paths. `cargo build` says `error: could not compile` on every machine. Marking it
+  `<code>` says so to the reader and to the gate.
+- **The settings log line now names the language**, so "the interface is in the wrong language" is a
+  question the log answers.
+
+### Changed
+
+- **The last-resort crash screen reads the language without a hook.** It runs when React has already
+  failed — possibly inside the very store a hook would subscribe to — so it falls back to English
+  rather than adding a second failure to the first.
+
+### Added
+
 - **The status bar is yours to arrange.** The strip along the bottom is now a list you assemble in
   Settings › Appearance › Status bar: version, repository, running command, directory, tmux session,
   plus spacers and separators. Spacers do the aligning rather than fixed left/centre/right regions —

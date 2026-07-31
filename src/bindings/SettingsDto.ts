@@ -52,6 +52,19 @@ terminal_font: string,
  */
 git_auto_fetch: boolean, 
 /**
+ * Which language the interface is in — `"en"` or `"de"`.
+ *
+ * Stored as a plain string rather than an enum, and the frontend decides what it means. The
+ * backend has no messages of its own to translate: everything it produces is either a
+ * diagnostic for the log (never translated — it is read by whoever is debugging, alongside
+ * English tooling output) or an error the frontend renders. Making this an enum here would put
+ * the list of shipped languages in a second place, so adding one would mean a Rust change and a
+ * regenerated binding for a value the backend never inspects.
+ *
+ * Empty means "not chosen", which the frontend reads as English (ADR-PROJ-003).
+ */
+language: string, 
+/**
  * Copy to the clipboard as soon as something is selected, the way many terminals do.
  *
  * Off by default, and deliberately so: it silently replaces whatever the user had copied, which

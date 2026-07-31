@@ -10,6 +10,7 @@ import { LogsView } from "./views/LogsView";
 import { SettingsView } from "./views/SettingsView";
 import { useScrollTop } from "./hooks/useScrollTop";
 import { useApplyUiScale } from "./hooks/useUiScale";
+import { useSyncLocale } from "./hooks/useT";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
 import { useUiStore } from "./store/ui";
 
@@ -22,6 +23,9 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const { canTop, scrollToTop } = useScrollTop(mainRef, view);
   useApplyUiScale();
+  // The interface language is mirrored into the UI store so the first frame is already right; this
+  // is where the stored setting — the durable one — reaches that mirror (`hooks/useT`).
+  useSyncLocale();
   useNativeContextMenuGuard();
 
   return (

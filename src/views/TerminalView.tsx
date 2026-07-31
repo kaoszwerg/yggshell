@@ -19,6 +19,7 @@ import { registerPasteTarget } from "../lib/terminalHandles";
 import { useSettings, useTerminalProfiles, useTerminalThemes } from "../hooks/useSettings";
 import { BUILTIN_THEME_ID, resolveTheme, themeById } from "../lib/terminalTheme";
 import type { Activity, ActivityState } from "../lib/osc133";
+import { useT } from "../hooks/useT";
 import { useTerminalStore } from "../store/terminal";
 
 /**
@@ -66,6 +67,7 @@ const KEYS = {
  * strip is driven by the same store this view renders from.
  */
 export function TerminalView() {
+  const t = useT();
   const panes = useTerminalStore((s) => s.panes);
   const activeKey = useTerminalStore((s) => s.activeKey);
   const openPane = useTerminalStore((s) => s.openPane);
@@ -143,9 +145,9 @@ export function TerminalView() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <TerminalSquare className="text-cyan/40" size={48} strokeWidth={1.25} aria-hidden />
-        <p className="text-dim font-mono text-sm">No terminal open.</p>
+        <p className="text-dim font-mono text-sm">{t("terminal.none")}</p>
         <Button accent="green" onClick={() => openPane()}>
-          New terminal
+          {t("terminal.newTab")}
         </Button>
       </div>
     );
@@ -238,6 +240,7 @@ function Pane({
   // the Git tool sits blank for a whole tick before the first real answer.
   const [sessionOpen, setSessionOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const t = useT();
   /**
    * What this terminal is doing, for the line along its top edge.
    *
@@ -492,7 +495,7 @@ function Pane({
       style={{ backgroundColor: resolveTheme(theme).background }}
       role="tabpanel"
       id={`terminal-panel-${paneKey}`}
-      aria-label="Terminal"
+      aria-label={t("nav.terminal")}
     >
       {/* Edge to edge across the terminal area, and no further: the rail and the tool column are not
           part of what is running, and a line sweeping across them would be claiming otherwise.
@@ -501,11 +504,11 @@ function Pane({
       <ActivityLine state={activity} className="absolute inset-x-0 top-0 z-10" />
 
       <ContextMenu
-        label="Terminal actions"
+        label={t("terminal.actions")}
         items={[
           {
             id: "copy",
-            label: "Copy",
+            label: t("terminal.copy"),
             shortcut: KEYS.copy,
             disabled: !hasSelection,
             onSelect: () => {
@@ -515,7 +518,7 @@ function Pane({
           },
           {
             id: "paste",
-            label: "Paste",
+            label: t("terminal.paste"),
             shortcut: KEYS.paste,
             onSelect: () => {
               navigator.clipboard
@@ -529,10 +532,10 @@ function Pane({
             },
           },
           { separator: true },
-          { id: "find", label: "Search…", shortcut: KEYS.find, onSelect: openSearch },
+          { id: "find", label: t("terminal.find"), shortcut: KEYS.find, onSelect: openSearch },
           {
             id: "scheme",
-            label: "Colour scheme…",
+            label: t("terminal.schemeMenu"),
             // A picker rather than a submenu of every scheme: the list grows with each import, and a
             // context menu forty entries long is a list you scroll past, not a menu.
             onSelect: () => setSchemeOpen(true),
@@ -540,7 +543,7 @@ function Pane({
           { separator: true },
           {
             id: "close",
-            label: "Close terminal",
+            label: t("terminal.closeTab"),
             accent: "danger",
             onSelect: () => closePane(paneKey),
           },
@@ -601,6 +604,7 @@ function SchemePicker({
   current: string | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const themes = useTerminalThemes();
   const setPaneTheme = useTerminalStore((s) => s.setPaneTheme);
   const first = useRef<HTMLButtonElement>(null);
@@ -624,10 +628,12 @@ function SchemePicker({
   return (
     <div
       role="group"
-      aria-label="Colour scheme for this terminal"
+      aria-label={t("terminal.schemeFor")}
       className="hud-popover hud-clip-sm hud-accent-cyan absolute top-4 right-6 z-20 flex max-h-[70%] flex-col gap-1 overflow-y-auto p-2"
     >
-      <span className="text-dim px-1 font-mono text-[0.6rem] tracking-[0.12em]">THIS TERMINAL</span>
+      <span className="text-dim px-1 font-mono text-[0.6rem] tracking-[0.12em]">
+        {t("scheme.thisTerminal")}
+      </span>
       <Button
         ref={first}
         aria-pressed={current === null}
@@ -635,7 +641,7 @@ function SchemePicker({
         className="justify-start"
         onClick={() => choose(null)}
       >
-        Follow the settings
+        {t("scheme.followSettings")}
       </Button>
       {/* The built-in scheme, choosable in its own right. Not the same as the entry above: this tab
           then stays on Yggdrasil whatever the setting is later changed to. */}
@@ -673,6 +679,7 @@ function SearchBar({
   handle: React.RefObject<TerminalHandle | null>;
   onClose: () => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [missed, setMissed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -694,14 +701,14 @@ function SearchBar({
   return (
     <div
       role="search"
-      aria-label="Search the terminal"
+      aria-label={t("terminal.searchThe")}
       className="hud-popover hud-clip-sm hud-accent-cyan absolute top-4 right-6 z-20 flex items-center gap-1 p-1"
     >
       <TextField
         ref={inputRef}
         value={query}
-        aria-label="Search the terminal"
-        placeholder="Find…"
+        aria-label={t("terminal.searchThe")}
+        placeholder={t("terminal.findPlaceholder")}
         className={`w-48 font-mono ${missed ? "text-danger" : ""}`.trim()}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -718,13 +725,22 @@ function SearchBar({
           }
         }}
       />
-      <IconButton label="Previous match" variant="ghost" onClick={() => step("previous")}>
+      <IconButton
+        label={t("terminal.searchPrevious")}
+        variant="ghost"
+        onClick={() => step("previous")}
+      >
         <ChevronUp size={14} strokeWidth={2.5} />
       </IconButton>
-      <IconButton label="Next match" variant="ghost" onClick={() => step("next")}>
+      <IconButton label={t("terminal.searchNext")} variant="ghost" onClick={() => step("next")}>
         <ChevronDown size={14} strokeWidth={2.5} />
       </IconButton>
-      <IconButton label="Close search" variant="ghost" accent="danger" onClick={onClose}>
+      <IconButton
+        label={t("terminal.closeSearch")}
+        variant="ghost"
+        accent="danger"
+        onClick={onClose}
+      >
         <X size={14} strokeWidth={2.5} />
       </IconButton>
     </div>

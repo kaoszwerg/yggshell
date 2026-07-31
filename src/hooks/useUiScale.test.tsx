@@ -29,6 +29,7 @@ function settings(ui_scale: number): SettingsDto {
     commit_theme: "",
     copy_on_select: false,
     git_auto_fetch: true,
+    language: "",
     terminal_font: "",
     tmux_mode: "off",
     tmux_session: "",

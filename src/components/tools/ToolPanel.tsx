@@ -2,16 +2,18 @@ import { useRef } from "react";
 import { Splitter } from "../ui/Splitter";
 import { Tooltip } from "../ui/Tooltip";
 import { repositoryName, useGitSnapshot } from "../../hooks/useGitSnapshot";
+import { useT } from "../../hooks/useT";
+import type { MessageKey } from "../../i18n";
 import { GitTool } from "./GitTool";
 import { TOOL_WIDTH_MAX, TOOL_WIDTH_MIN, useUiStore, type ToolId } from "../../store/ui";
 
 /** What each tool calls itself in the column header and to a screen reader. A switch rather than a
  *  lookup table: a computed member access is an object-injection sink and the gate runs at
  *  --max-warnings 0. */
-function toolLabel(tool: ToolId): string {
+function toolLabelKey(tool: ToolId): MessageKey {
   switch (tool) {
     case "git":
-      return "Git";
+      return "nav.git";
   }
 }
 
@@ -54,10 +56,11 @@ export function ToolPanel() {
   const width = useUiStore((s) => s.toolWidth);
   const setToolWidth = useUiStore((s) => s.setToolWidth);
   const columnRef = useRef<HTMLElement>(null);
+  const t = useT();
 
   if (activeTool === null) return null;
 
-  const label = toolLabel(activeTool);
+  const label = t(toolLabelKey(activeTool));
 
   return (
     <>
@@ -80,7 +83,7 @@ export function ToolPanel() {
       </aside>
 
       <Splitter
-        label={`${label} panel width`}
+        label={t("nav.panelWidth", { tool: label })}
         value={width}
         min={TOOL_WIDTH_MIN}
         max={TOOL_WIDTH_MAX}

@@ -6,6 +6,7 @@ import { DiffView } from "../ui/DiffView";
 import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
+import { useT } from "../../hooks/useT";
 import { useUiStore, type GitDetail } from "../../store/ui";
 import { useSettings, useTerminalThemes } from "../../hooks/useSettings";
 import { detailThemeId, resolveTheme, themeById } from "../../lib/terminalTheme";
@@ -52,6 +53,7 @@ function useDetailScheme(paneKey: string, kind: "diff" | "commit"): SyntaxScheme
 }
 
 export function GitDetailPanel({ paneKey }: { paneKey: string }) {
+  const t = useT();
   // Everything here is THIS tab's. A tabbed, multiplexed terminal has a repository per tab as often
   // as not, and one panel for the whole window meant opening a diff in one tab and finding it laid
   // over another.
@@ -83,7 +85,7 @@ export function GitDetailPanel({ paneKey }: { paneKey: string }) {
       ref={panelRef}
       tabIndex={-1}
       role="region"
-      aria-label="Git detail"
+      aria-label={t("git.detail")}
       // `hud-popover`, never `hud-panel`: that class pins `position: relative` (globals.css) so its
       // ::before can inset by 1px, which SILENTLY BEATS Tailwind's `absolute` — the panel then sits in
       // the flow underneath the terminal instead of over it, and with no height of its own the
@@ -130,10 +132,11 @@ function Header({
   /** Controls that belong to this particular view, placed before the close button. */
   extra?: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <header className="border-cyan/20 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
       {onBack ? (
-        <IconButton label="Back to the commit" variant="ghost" onClick={onBack}>
+        <IconButton label={t("git.backToCommit")} variant="ghost" onClick={onBack}>
           <ArrowLeft size={14} strokeWidth={2.5} />
         </IconButton>
       ) : null}
@@ -144,7 +147,12 @@ function Header({
         )}
       </div>
       {extra}
-      <IconButton label="Close" variant="ghost" accent="danger" onClick={() => show(null)}>
+      <IconButton
+        label={t("common.close")}
+        variant="ghost"
+        accent="danger"
+        onClick={() => show(null)}
+      >
         <X size={14} strokeWidth={2.5} />
       </IconButton>
     </header>
@@ -162,6 +170,7 @@ function DiffContent({
   show: (detail: GitDetail | null) => void;
   paneKey: string;
 }) {
+  const t = useT();
   const split = useUiStore((s) => s.diffSplit);
   const setSplit = useUiStore((s) => s.setDiffSplit);
   const scheme = useDetailScheme(paneKey, "diff");
@@ -191,7 +200,7 @@ function DiffContent({
         show={show}
         extra={
           <IconButton
-            label={split ? "Show as one column" : "Show side by side"}
+            label={split ? t("git.oneColumn") : t("git.sideBySide")}
             variant="ghost"
             active={split}
             onClick={() => setSplit(!split)}
@@ -202,13 +211,11 @@ function DiffContent({
       />
       <div className="min-h-0 flex-1 overflow-auto">
         {query.isPending ? (
-          <p className="text-dim p-4 font-mono text-xs">Reading the diff…</p>
+          <p className="text-dim p-4 font-mono text-xs">{t("git.readingDiff")}</p>
         ) : query.isError ? (
           <p className="text-danger p-4 font-mono text-xs">{String(query.error)}</p>
         ) : query.data === null || query.data === undefined ? (
-          <p className="text-dim p-4 font-mono text-xs">
-            That file is no longer in the repository.
-          </p>
+          <p className="text-dim p-4 font-mono text-xs">{t("diff.fileGone")}</p>
         ) : (
           <DiffView diff={query.data} split={split} scheme={scheme} fontSize={fontSize} />
         )}
@@ -228,6 +235,7 @@ function CommitContent({
   show: (detail: GitDetail | null) => void;
   paneKey: string;
 }) {
+  const t = useT();
   const scheme = useDetailScheme(paneKey, "commit");
   const fontSize = useDetailFontSize();
   const query = useQuery({
@@ -263,11 +271,11 @@ function CommitContent({
         }
       >
         {query.isPending ? (
-          <p className="text-dim font-mono text-xs">Reading the commit…</p>
+          <p className="text-dim font-mono text-xs">{t("git.readingCommit")}</p>
         ) : query.isError ? (
           <p className="text-danger font-mono text-xs">{String(query.error)}</p>
         ) : query.data === null || query.data === undefined ? (
-          <p className="text-dim font-mono text-xs">That commit is not in this repository.</p>
+          <p className="text-dim font-mono text-xs">{t("git.commitMissing")}</p>
         ) : (
           <CommitBody rev={rev} detail={query.data} show={show} fontSize={fontSize} />
         )}

@@ -32,6 +32,7 @@ pub struct SettingsPatch {
     pub commit_theme: Option<String>,
     pub terminal_font: Option<String>,
     pub git_auto_fetch: Option<bool>,
+    pub language: Option<String>,
     pub copy_on_select: Option<bool>,
     pub tmux_mode: Option<TmuxMode>,
     pub tmux_session: Option<String>,
@@ -57,6 +58,9 @@ impl SettingsStore {
                         path = %path.display(),
                         ui_scale = s.ui_scale,
                         minimize_to_tray = s.minimize_to_tray,
+                        // Logged because it decides what every label on screen says: when someone
+                        // reports "the interface is in the wrong language", this line answers it.
+                        language = %s.language,
                         "settings loaded"
                     );
                     sanitize(s)
@@ -137,6 +141,11 @@ impl SettingsStore {
             }
             if let Some(auto) = patch.git_auto_fetch {
                 guard.git_auto_fetch = auto;
+            }
+            if let Some(language) = patch.language {
+                // Stored verbatim: the backend has no messages of its own, so it neither validates
+                // nor normalises this — the frontend owns which languages exist (ADR-PROJ-003).
+                guard.language = language;
             }
             if let Some(copy) = patch.copy_on_select {
                 guard.copy_on_select = copy;

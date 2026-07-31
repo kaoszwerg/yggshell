@@ -66,6 +66,18 @@ pub struct SettingsDto {
     /// tree — but it is still traffic nobody asked for on the day they opened the app.
     #[serde(default = "default_auto_fetch")]
     pub git_auto_fetch: bool,
+    /// Which language the interface is in — `"en"` or `"de"`.
+    ///
+    /// Stored as a plain string rather than an enum, and the frontend decides what it means. The
+    /// backend has no messages of its own to translate: everything it produces is either a
+    /// diagnostic for the log (never translated — it is read by whoever is debugging, alongside
+    /// English tooling output) or an error the frontend renders. Making this an enum here would put
+    /// the list of shipped languages in a second place, so adding one would mean a Rust change and a
+    /// regenerated binding for a value the backend never inspects.
+    ///
+    /// Empty means "not chosen", which the frontend reads as English (ADR-PROJ-003).
+    #[serde(default)]
+    pub language: String,
     /// Copy to the clipboard as soon as something is selected, the way many terminals do.
     ///
     /// Off by default, and deliberately so: it silently replaces whatever the user had copied, which
@@ -297,6 +309,7 @@ impl Default for SettingsDto {
             commit_theme: String::new(),
             terminal_font: String::new(),
             git_auto_fetch: default_auto_fetch(),
+            language: String::new(),
             copy_on_select: false,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
@@ -317,6 +330,29 @@ mod tests {
     }
 
     #[test]
+    fn a_settings_file_from_before_the_language_existed_still_loads() {
+        // Every field is `serde(default)` for exactly this reason: a user upgrading has a
+        // settings.json written by a build that had never heard of `language`, and refusing to parse
+        // it would silently reset everything they had configured.
+        let old = r#"{"ui_scale":1.25,"terminal_font_size":14.0}"#;
+        let parsed: SettingsDto = serde_json::from_str(old).expect("an older file must still load");
+        assert_eq!(parsed.ui_scale, 1.25);
+        assert_eq!(
+            parsed.language, "",
+            "unset means the frontend picks the default"
+        );
+    }
+
+    #[test]
+    fn the_language_is_stored_as_written() {
+        // The backend does not interpret it — it has no messages of its own to translate — so it
+        // must not normalise, validate or reject what the frontend stored.
+        let json = r#"{"language":"de"}"#;
+        let parsed: SettingsDto = serde_json::from_str(json).expect("parse");
+        assert_eq!(parsed.language, "de");
+    }
+
+    #[test]
     fn settings_roundtrip_through_json() {
         let s = SettingsDto {
             terminal_font_size: 13.0,
@@ -326,6 +362,7 @@ mod tests {
             commit_theme: String::new(),
             terminal_font: "MesloLGS NF".into(),
             git_auto_fetch: true,
+            language: "de".into(),
             copy_on_select: true,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),

@@ -13,23 +13,22 @@ import { availableFonts, DEFAULT_FONT } from "../lib/fonts";
 import { labelShells } from "../lib/shellLabels";
 import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
 import { useFontSettled } from "../hooks/useFontSettled";
+import { useLocale, useT } from "../hooks/useT";
+import { useUiStore } from "../store/ui";
+import { LOCALES, type MessageKey } from "../i18n";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 const UI_SCALES = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
 const TERMINAL_FONT_SIZES = [11, 12, 13, 14, 16, 18, 20] as const;
 
 /** Three states, because "join one if it is running" and "always have one" are different wishes. */
-const TMUX_MODES: { id: TmuxMode; label: string; hint: string }[] = [
-  { id: "off", label: "Off", hint: "Start the shell directly." },
-  {
-    id: "attach",
-    label: "Attach if running",
-    hint: "Join an existing session; start a plain shell when there is none.",
-  },
+const TMUX_MODES: { id: TmuxMode; label: MessageKey; hint: MessageKey }[] = [
+  { id: "off", label: "settings.tmux.mode.off", hint: "settings.tmux.mode.off.hint" },
+  { id: "attach", label: "settings.tmux.mode.attach", hint: "settings.tmux.mode.attach.hint" },
   {
     id: "attach-or-create",
-    label: "Attach or create",
-    hint: "Always end up in a session, creating it the first time.",
+    label: "settings.tmux.mode.attachOrCreate",
+    hint: "settings.tmux.mode.attachOrCreate.hint",
   },
 ];
 
@@ -46,12 +45,12 @@ const TMUX_MODES: { id: TmuxMode; label: string; hint: string }[] = [
  * or extending one, never lengthening an unbroken page.
  */
 const SECTIONS = [
-  { id: "appearance", label: "Appearance" },
-  { id: "terminal", label: "Terminal" },
-  { id: "tools", label: "Tools" },
-  { id: "window", label: "Window" },
-  { id: "about", label: "About" },
-] as const;
+  { id: "appearance", label: "settings.tab.appearance" },
+  { id: "terminal", label: "settings.tab.terminal" },
+  { id: "tools", label: "settings.tab.tools" },
+  { id: "window", label: "settings.tab.window" },
+  { id: "about", label: "settings.tab.about" },
+] as const satisfies readonly { id: string; label: MessageKey }[];
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -60,14 +59,15 @@ const panelId = (id: string) => `settings-panel-${id}`;
 /** Settings, grouped into sections with the section list down the left (WAI-ARIA vertical tabs). */
 export function SettingsView() {
   const [section, setSection] = useState<SectionId>("appearance");
+  const t = useT();
   const current = SECTIONS.find((s) => s.id === section);
 
   return (
     <div className="flex h-full">
       <Tabs
-        label="Settings sections"
+        label={t("settings.sections")}
         orientation="vertical"
-        items={SECTIONS.map((s) => ({ id: s.id, label: s.label }))}
+        items={SECTIONS.map((s) => ({ id: s.id, label: t(s.label) }))}
         activeId={section}
         onSelect={(id) => setSection(id as SectionId)}
         getPanelId={panelId}
@@ -77,7 +77,7 @@ export function SettingsView() {
       <div
         role="tabpanel"
         id={panelId(section)}
-        aria-label={current?.label ?? "Settings"}
+        aria-label={current ? t(current.label) : t("nav.settings")}
         className="h-full flex-1 overflow-auto p-6"
       >
         <div className="flex flex-col gap-4">
@@ -93,24 +93,64 @@ export function SettingsView() {
 }
 
 function AppearanceSection() {
+  const t = useT();
   return (
     <>
       <InterfaceScale />
       <HudPanel
         accent="cyan"
-        label="Status bar"
-        description="What the strip along the bottom shows, and in what order."
-        info={
-          <p>
-            A flat list with flexible spacers rather than left/centre/right regions: a spacer pushes
-            everything after it along, so two of them around an item centre it, and &ldquo;second
-            from the right&rdquo; is something you can actually arrange.
-          </p>
-        }
+        label={t("settings.language.title")}
+        description={t("settings.language.description")}
+      >
+        <LanguageChoice />
+      </HudPanel>
+      <HudPanel
+        accent="cyan"
+        label={t("settings.statusbar.title")}
+        description={t("settings.statusbar.description")}
+        info={<p>{t("settings.statusbar.info")}</p>}
       >
         <StatusBarEditor />
       </HudPanel>
     </>
+  );
+}
+
+/**
+ * Which language the interface speaks.
+ *
+ * Each language is named in **itself** — "Deutsch", not "German". Someone who has landed in a
+ * language they cannot read needs to find their way out, and a list written in the language they are
+ * trying to leave is no help at all.
+ */
+function LanguageChoice() {
+  const update = useUpdateSettings();
+  const locale = useLocale();
+  const setLocale = useUiStore((s) => s.setLocale);
+  const t = useT();
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-dim text-xs">{t("settings.language.title")}</span>
+      <div className="flex flex-wrap gap-1">
+        {LOCALES.map((l) => (
+          <Button
+            key={l.id}
+            aria-pressed={locale === l.id}
+            active={locale === l.id}
+            onClick={() => {
+              // Both, and in this order: the mirror so the interface changes under the click rather
+              // than after a round trip, and the setting so it is still that language tomorrow.
+              setLocale(l.id);
+              update.mutate({ language: l.id });
+            }}
+          >
+            {l.label}
+          </Button>
+        ))}
+      </div>
+      <span className="text-dim text-xs">{t("settings.language.hint")}</span>
+    </div>
   );
 }
 
@@ -119,21 +159,17 @@ function InterfaceScale() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const scale = settings.data?.ui_scale ?? 1;
+  const t = useT();
 
   return (
     <HudPanel
       accent="cyan"
-      label="Interface"
-      description="How large the chrome is drawn — rail, tabs, panels."
-      info={
-        <p>
-          The UI scale sizes the chrome — rail, tabs, panels. Terminal text has its own size, under
-          Terminal, so the two can be set independently.
-        </p>
-      }
+      label={t("settings.interface.title")}
+      description={t("settings.interface.description")}
+      info={<p>{t("settings.interface.info")}</p>}
     >
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">UI scale</span>
+        <span className="text-dim text-xs">{t("settings.interface.scale")}</span>
         <div className="flex flex-wrap gap-1">
           {UI_SCALES.map((s) => (
             <Button
@@ -158,22 +194,22 @@ function InterfaceScale() {
  * behaves (Selection), and the two things that are a step beyond ordinary use (tmux, Profiles).
  */
 function TerminalSection() {
+  const t = useT();
   return (
     <>
-      <HudPanel accent="cyan" label="Shell" description="What a new terminal starts.">
+      <HudPanel
+        accent="cyan"
+        label={t("settings.shell.title")}
+        description={t("settings.shell.description")}
+      >
         <ShellControls />
       </HudPanel>
 
       <HudPanel
         accent="cyan"
-        label="Font"
-        description="The typeface and size the terminal renders in."
-        info={
-          <p>
-            Terminal text size is independent of the UI scale: the emulator is handed a size divided
-            by the WebView zoom, so changing one never drags the other along.
-          </p>
-        }
+        label={t("settings.font.title")}
+        description={t("settings.font.description")}
+        info={<p>{t("settings.font.info")}</p>}
       >
         <FontChoice />
         <div className="bg-cyan/15 my-4 h-px" aria-hidden />
@@ -182,32 +218,32 @@ function TerminalSection() {
 
       <HudPanel
         accent="cyan"
-        label="Theme"
-        description="The colours a terminal, a diff and a commit are drawn in."
+        label={t("settings.theme.title")}
+        description={t("settings.theme.description")}
       >
         <ThemeControls />
       </HudPanel>
 
       <HudPanel
         accent="cyan"
-        label="Selection"
-        description="What happens when you drag across output."
+        label={t("settings.selection.title")}
+        description={t("settings.selection.description")}
       >
         <SelectionChoice />
       </HudPanel>
 
       <HudPanel
         accent="cyan"
-        label="tmux"
-        description="Whether a terminal joins a multiplexer session, and which one."
+        label={t("settings.tmux.title")}
+        description={t("settings.tmux.description")}
       >
         <TmuxControls />
       </HudPanel>
 
       <HudPanel
         accent="cyan"
-        label="Profiles"
-        description="Saved combinations of shell and colour scheme, opened from the tab strip's right-click menu."
+        label={t("settings.profiles.title")}
+        description={t("settings.profiles.description")}
       >
         <ProfileControls />
       </HudPanel>
@@ -220,10 +256,11 @@ function TextSizeChoice() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const size = settings.data?.terminal_font_size ?? 13;
+  const t = useT();
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-dim text-xs">Text size</span>
+      <span className="text-dim text-xs">{t("settings.font.size")}</span>
       <div className="flex flex-wrap gap-1">
         {TERMINAL_FONT_SIZES.map((s) => (
           <Button
@@ -236,9 +273,7 @@ function TextSizeChoice() {
           </Button>
         ))}
       </div>
-      <span className="text-dim text-xs">
-        How much output fits on screen. The UI scale under Appearance sizes the chrome around it.
-      </span>
+      <span className="text-dim text-xs">{t("settings.font.sizeHint")}</span>
     </div>
   );
 }
@@ -248,30 +283,28 @@ function SelectionChoice() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const copyOnSelect = settings.data?.copy_on_select ?? false;
+  const t = useT();
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-dim text-xs">Selecting text</span>
+      <span className="text-dim text-xs">{t("settings.selection.label")}</span>
       <div className="flex flex-wrap gap-1">
         <Button
           aria-pressed={!copyOnSelect}
           active={!copyOnSelect}
           onClick={() => update.mutate({ copyOnSelect: false })}
         >
-          Select only
+          {t("settings.selection.selectOnly")}
         </Button>
         <Button
           aria-pressed={copyOnSelect}
           active={copyOnSelect}
           onClick={() => update.mutate({ copyOnSelect: true })}
         >
-          Copy to clipboard
+          {t("settings.selection.copy")}
         </Button>
       </div>
-      <span className="text-dim text-xs">
-        Off by default because it replaces whatever you had copied, without saying so. A
-        middle-click always pastes the last selection either way, as on X11.
-      </span>
+      <span className="text-dim text-xs">{t("settings.selection.hint")}</span>
     </div>
   );
 }
@@ -284,11 +317,12 @@ function SelectionChoice() {
  * called "Git" inside a tab called "Terminal".
  */
 function ToolsSection() {
+  const t = useT();
   return (
     <HudPanel
       accent="cyan"
-      label="Git"
-      description="What the Git tool is allowed to do while it is open."
+      label={t("settings.git.title")}
+      description={t("settings.git.description")}
     >
       <GitRemoteChoice />
     </HudPanel>
@@ -300,34 +334,28 @@ function GitRemoteChoice() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const autoFetch = settings.data?.git_auto_fetch ?? true;
+  const t = useT();
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-dim text-xs">Git remote</span>
+      <span className="text-dim text-xs">{t("settings.git.remote")}</span>
       <div className="flex flex-wrap gap-1">
         <Button
           aria-pressed={autoFetch}
           active={autoFetch}
           onClick={() => update.mutate({ gitAutoFetch: true })}
         >
-          Check the remote
+          {t("settings.git.check")}
         </Button>
         <Button
           aria-pressed={!autoFetch}
           active={!autoFetch}
           onClick={() => update.mutate({ gitAutoFetch: false })}
         >
-          Stay offline
+          {t("settings.git.offline")}
         </Button>
       </div>
-      <span className="text-dim text-xs">
-        The ahead/behind counts come from what was last fetched, so without this they go quietly
-        wrong — not <em>unknown</em>, but <strong className="text-fg">↓0</strong> while the remote
-        has moved on. This is the only outbound connection the app makes (ADR-PROJ-002): a{" "}
-        <code>git fetch</code> every five minutes while something is showing those counts — the Git
-        tool, or the status bar&rsquo;s repository item — never interactive, and it cannot touch
-        your working tree.
-      </span>
+      <span className="text-dim text-xs">{t("settings.git.hint")}</span>
     </div>
   );
 }
@@ -356,6 +384,7 @@ function FontChoice() {
   // Re-render once the face has loaded: a bundled @font-face is fetched lazily, so the first paint
   // would otherwise be the fallback — which for this sample means boxes.
   const settled = useFontSettled(effective);
+  const t = useT();
   // Probed once: fonts are not installed while a settings page is open, and each probe measures text
   // on a canvas.
   const options = useMemo(
@@ -370,19 +399,19 @@ function FontChoice() {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-dim text-xs">Font</span>
+      <span className="text-dim text-xs">{t("settings.font.label")}</span>
       <div className="flex flex-wrap items-start gap-2">
         <SearchableSelect
-          label="Terminal font"
+          label={t("settings.font.select")}
           value={chosen}
           options={options}
           placeholder={DEFAULT_FONT}
-          emptyHint="Not found on this machine — it will be used anyway if you have it."
+          emptyHint={t("settings.font.notFound")}
           className="max-w-xs flex-1"
           onChange={(family) => update.mutate({ terminalFont: family })}
         />
         {chosen === "" ? null : (
-          <Button onClick={() => update.mutate({ terminalFont: "" })}>Default</Button>
+          <Button onClick={() => update.mutate({ terminalFont: "" })}>{t("common.default")}</Button>
         )}
       </div>
       {/* The sample is the answer to the question people actually have: are the Powerline glyphs
@@ -391,17 +420,11 @@ function FontChoice() {
         className="hud-clip-sm bg-elevated text-fg overflow-x-auto px-2 py-1 text-xs whitespace-pre"
         style={{ fontFamily: `"${effective}", monospace` }}
         data-font-settled={settled}
-        aria-label="Font preview"
+        aria-label={t("settings.font.preview")}
       >
         {"\ue0b0 \ue0b2 \uf07b \uf126  ~/git-projects  0O1lI| {} => != ->"}
       </div>
-      <span className="text-dim text-xs">
-        <strong className="text-fg">{DEFAULT_FONT}</strong> ships with the app and is what a
-        terminal uses when you have not chosen anything — it is the font powerlevel10k recommends,
-        so a Powerline prompt works without installing anything. A font this list does not show can
-        still be typed in: a WebView cannot enumerate what is installed, so the list is what could
-        be detected rather than everything you have.
-      </span>
+      <span className="text-dim text-xs">{t("settings.font.hint", { font: DEFAULT_FONT })}</span>
     </div>
   );
 }
@@ -420,16 +443,15 @@ function ShellControls() {
   const chosen = settings.data?.terminal_shell ?? "";
   const choices = labelShells(shells.data ?? []);
   const defaultShell = shells.data?.find((s) => s.is_default);
+  const t = useT();
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-dim text-xs">Shell</span>
+      <span className="text-dim text-xs">{t("settings.shell.title")}</span>
       {shells.isPending ? (
-        <span className="text-dim font-mono text-xs">Reading what this machine offers…</span>
+        <span className="text-dim font-mono text-xs">{t("settings.shell.reading")}</span>
       ) : shells.isError ? (
-        <span className="text-danger font-mono text-xs">
-          Could not read the available shells. New terminals still start your default shell.
-        </span>
+        <span className="text-danger font-mono text-xs">{t("settings.shell.failed")}</span>
       ) : (
         <>
           <div className="flex flex-wrap gap-1">
@@ -438,7 +460,7 @@ function ShellControls() {
               active={chosen === ""}
               onClick={() => update.mutate({ terminalShell: "" })}
             >
-              System default
+              {t("common.systemDefault")}
             </Button>
             {choices.map((choice) => (
               <Button
@@ -454,19 +476,21 @@ function ShellControls() {
           <span className="text-dim text-xs">
             {chosen === "" ? (
               <>
-                Your account&rsquo;s own shell
+                {t("settings.shell.usingDefault")}
                 {defaultShell ? (
                   <>
                     {" — "}
                     <code>{defaultShell.path}</code>
                   </>
                 ) : null}
-                . Takes effect for terminals opened from now on.
+                {". "}
+                {t("settings.shell.takesEffect")}
               </>
             ) : (
               <>
-                <code>{chosen}</code>. Takes effect for terminals opened from now on; the ones
-                already running keep the shell they started with.
+                <code>{chosen}</code>
+                {". "}
+                {t("settings.shell.keepsRunning")}
               </>
             )}
           </span>
@@ -483,6 +507,7 @@ function TmuxControls() {
   const mode: TmuxMode = settings.data?.tmux_mode ?? "off";
   const session = settings.data?.tmux_session ?? "";
   const [draft, setDraft] = useState<string | null>(null);
+  const t = useT();
   const value = draft ?? session;
 
   const commit = () => {
@@ -494,7 +519,7 @@ function TmuxControls() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">tmux</span>
+        <span className="text-dim text-xs">{t("settings.tmux.title")}</span>
         <div className="flex flex-wrap gap-1">
           {TMUX_MODES.map((m) => (
             <Button
@@ -503,25 +528,25 @@ function TmuxControls() {
               active={mode === m.id}
               onClick={() => update.mutate({ tmuxMode: m.id })}
             >
-              {m.label}
+              {t(m.label)}
             </Button>
           ))}
         </div>
         <span className="text-dim text-xs">
-          {TMUX_MODES.find((m) => m.id === mode)?.hint} Closing a tab or the app{" "}
-          <strong className="text-fg">detaches</strong> — a session is never killed from here.
+          {t(TMUX_MODES.find((m) => m.id === mode)?.hint ?? "settings.tmux.mode.off.hint")}{" "}
+          {t("settings.tmux.neverKilled")}
         </span>
       </div>
 
       {mode === "off" ? null : (
         <div className="flex flex-col gap-1.5">
           <label className="text-dim text-xs" htmlFor="tmux-session">
-            Session name
+            {t("settings.tmux.sessionName")}
           </label>
           <TextField
             id="tmux-session"
             value={value}
-            placeholder={mode === "attach" ? "any running session" : "yggshell"}
+            placeholder={mode === "attach" ? t("settings.tmux.anyRunning") : "yggshell"}
             className="max-w-xs font-mono"
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
@@ -530,11 +555,7 @@ function TmuxControls() {
               if (e.key === "Escape") setDraft(null);
             }}
           />
-          <span className="text-dim text-xs">
-            Left empty, &ldquo;attach&rdquo; joins whatever is running and &ldquo;attach or
-            create&rdquo; uses <code>yggshell</code>. A name cannot contain <code>:</code> or{" "}
-            <code>.</code> — tmux reads those as a window or pane.
-          </span>
+          <span className="text-dim text-xs">{t("settings.tmux.sessionHint")}</span>
         </div>
       )}
     </div>
@@ -545,9 +566,14 @@ function WindowSection() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const minimizeToTray = settings.data?.minimize_to_tray ?? false;
+  const t = useT();
 
   return (
-    <HudPanel accent="cyan" label="Close button" description="What the window's close button does.">
+    <HudPanel
+      accent="cyan"
+      label={t("settings.window.closeButton")}
+      description={t("settings.window.closeDescription")}
+    >
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap gap-1">
           <Button
@@ -555,20 +581,17 @@ function WindowSection() {
             active={!minimizeToTray}
             onClick={() => update.mutate({ minimizeToTray: false })}
           >
-            Quit app
+            {t("settings.window.quit")}
           </Button>
           <Button
             aria-pressed={minimizeToTray}
             active={minimizeToTray}
             onClick={() => update.mutate({ minimizeToTray: true })}
           >
-            Minimize to tray
+            {t("settings.window.tray")}
           </Button>
         </div>
-        <span className="text-dim text-xs">
-          &ldquo;Minimize to tray&rdquo; keeps the app running in the system tray with an Open/Quit
-          menu.
-        </span>
+        <span className="text-dim text-xs">{t("settings.window.trayHint")}</span>
       </div>
     </HudPanel>
   );
@@ -576,8 +599,9 @@ function WindowSection() {
 
 /** What the old Home view was actually good for: saying which build this is. */
 function AboutSection() {
+  const t = useT();
   return (
-    <HudPanel accent="green" label="About">
+    <HudPanel accent="green" label={t("about.title")}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2

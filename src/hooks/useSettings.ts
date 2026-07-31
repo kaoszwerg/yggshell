@@ -26,6 +26,7 @@ export function useUpdateSettings() {
       commitTheme?: string;
       terminalFont?: string;
       gitAutoFetch?: boolean;
+      language?: string;
       copyOnSelect?: boolean;
       tmuxMode?: TmuxMode;
       tmuxSession?: string;

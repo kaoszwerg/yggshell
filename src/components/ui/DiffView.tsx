@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { languageFor, tokenize, type SyntaxScheme, type Token } from "../../lib/highlight";
 import { sideBySide } from "../../lib/diffLayout";
+import { useT } from "../../hooks/useT";
 import type { GitDiff } from "../../bindings/GitDiff";
 import type { GitDiffLine } from "../../bindings/GitDiffLine";
 import type { GitHunk } from "../../bindings/GitHunk";
@@ -75,19 +76,16 @@ export function DiffView({
   fontSize: number;
 }) {
   const coloured = useColoured(diff, scheme ?? null);
+  const t = useT();
 
   if (diff.binary) {
-    return (
-      <p className="text-dim p-4 font-mono text-xs">
-        Binary file — there is nothing to show line by line.
-      </p>
-    );
+    return <p className="text-dim p-4 font-mono text-xs">{t("diff.binary")}</p>;
   }
 
   if (diff.hunks.length === 0) {
     return (
       <p className="text-dim p-4 font-mono text-xs">
-        No changes in this file{diff.staged ? " between HEAD and the index" : ""}.
+        {t(diff.staged ? "diff.noChangesStaged" : "diff.noChanges")}
       </p>
     );
   }

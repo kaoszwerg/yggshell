@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 import { IconButton } from "./IconButton";
 import type { HudAccent } from "./hudButton";
+import { useT } from "../../hooks/useT";
 
 interface HudPanelProps {
   accent?: HudAccent;
@@ -25,6 +26,7 @@ interface HudPanelProps {
  * overflow can't clip it; closes on outside-click or Escape. The trigger is the shared `IconButton`
  * HUD primitive (ADR-APP-026) — no raw button, no native tooltip. */
 function InfoButton({ info }: { info: ReactNode }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const toggle = (e: MouseEvent<HTMLButtonElement>) => {
@@ -37,7 +39,7 @@ function InfoButton({ info }: { info: ReactNode }) {
   return (
     <>
       <IconButton
-        label="What is this?"
+        label={t("ui.whatIsThis")}
         variant="ghost"
         tooltip={null}
         onClick={toggle}

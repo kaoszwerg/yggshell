@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useT } from "../hooks/useT";
 import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 import { IconButton } from "./ui/IconButton";
@@ -15,6 +16,7 @@ import { api } from "../api/commands";
  * The marker is consumed by the backend on read, so the notice appears once and does not nag.
  */
 export function CrashNotice() {
+  const t = useT();
   const [dismissed, setDismissed] = useState(false);
 
   // `staleTime: Infinity` + no refetch: the backend clears the marker when it hands it over, so asking
@@ -37,16 +39,16 @@ export function CrashNotice() {
     >
       <AlertTriangle size={16} strokeWidth={2} className="text-danger mt-0.5 shrink-0" />
       <div className="min-w-0 flex-1 text-xs leading-relaxed">
-        <span className="text-fg">The last session ended in a crash.</span>{" "}
+        <span className="text-fg">{t("crash.lastSession")}</span>{" "}
         <span className="text-dim">
-          A report was saved to <span className="font-mono break-all">{reportPath}</span>. It stays
-          on this device.
+          {t("crash.reportSavedTo")} <span className="font-mono break-all">{reportPath}</span>
+          {t("crash.staysOnDevice")}
         </span>
       </div>
       <IconButton
-        label="Dismiss"
+        label={t("common.dismiss")}
         variant="ghost"
-        tooltip="Dismiss"
+        tooltip={t("common.dismiss")}
         onClick={() => setDismissed(true)}
         className="text-dim shrink-0"
       >

@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { defaultLayout, sanitiseLayout, type StatusItem } from "../lib/statusBar";
+import { DEFAULT_LOCALE, isLocale, type Locale } from "../i18n";
 
 /** Top-level views (sidebar navigation). Product views are added here as they land. */
 export type ViewId = "terminal" | "logs" | "settings";
@@ -74,6 +75,21 @@ export interface UiState {
    * expressible and a new element needs no decision about which region owns it (`lib/statusBar`).
    */
   statusLayout: StatusItem[];
+  /**
+   * The language the interface is drawn in.
+   *
+   * **The durable source is `settings.json`**, like every other preference — this is a mirror of it,
+   * and `useSyncLocale` writes the stored value here once it has loaded. Two reasons it is mirrored
+   * rather than read directly:
+   *
+   *  - **the first frame**. The settings arrive over IPC, so reading them directly means the whole
+   *    interface paints in English and then switches — a visible flicker on every launch, in the one
+   *    place a user notices immediately.
+   *  - **every component would need the query client.** `t()` is used in leaf primitives; sourcing it
+   *    from a query would drag a `QueryClientProvider` into each of their tests, for a value that
+   *    changes about once in a user's life.
+   */
+  locale: Locale;
   /** Whether the HUD About dialog is open (transient — not persisted). */
   aboutOpen: boolean;
 
@@ -86,6 +102,7 @@ export interface UiState {
   /** Replace the bar's contents. Sanitised on the way in, so the renderer never meets an unknown id. */
   setStatusLayout: (items: StatusItem[]) => void;
   resetStatusLayout: () => void;
+  setLocale: (locale: Locale) => void;
   setAboutOpen: (v: boolean) => void;
 }
 
@@ -111,6 +128,7 @@ export const useUiStore = create<UiState>()(
       // interleaved form is the one to fall back to in a narrow window.
       diffSplit: true,
       statusLayout: defaultLayout(),
+      locale: DEFAULT_LOCALE,
       aboutOpen: false,
 
       setView: (view) => set({ view }),
@@ -123,6 +141,7 @@ export const useUiStore = create<UiState>()(
       setStatusLayout: (items) =>
         set({ statusLayout: items.length === 0 ? [] : sanitiseLayout(items) }),
       resetStatusLayout: () => set({ statusLayout: defaultLayout() }),
+      setLocale: (locale) => set({ locale }),
       setAboutOpen: (aboutOpen) => set({ aboutOpen }),
     }),
     {
@@ -142,6 +161,7 @@ export const useUiStore = create<UiState>()(
         gitSplit: s.gitSplit,
         diffSplit: s.diffSplit,
         statusLayout: s.statusLayout,
+        locale: s.locale,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -163,6 +183,9 @@ export const useUiStore = create<UiState>()(
         if (typeof state.diffSplit !== "boolean") state.diffSplit = true;
         // An empty bar is a legitimate choice and must survive a restart; `undefined` is a payload
         // from a build that predates the setting and gets the defaults (`sanitiseLayout`).
+        // A language this build does not have — a downgrade, a hand-edited payload — would otherwise
+        // put raw message keys on screen.
+        if (!isLocale(state.locale)) state.locale = DEFAULT_LOCALE;
         state.statusLayout = Array.isArray(state.statusLayout)
           ? state.statusLayout.length === 0
             ? []

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLogs } from "../hooks/useLogs";
+import { useT } from "../hooks/useT";
 import { HudPanel } from "../components/ui/HudPanel";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
@@ -24,6 +25,7 @@ export function LogsView() {
   const [level, setLevel] = useState<LevelFilter>("ALL");
   const [q, setQ] = useState("");
   const [desc, setDesc] = useState(true);
+  const t = useT();
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -62,13 +64,13 @@ export function LogsView() {
           <TextField
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="search…"
-            aria-label="Search logs"
+            placeholder={t("common.search")}
+            aria-label={t("logs.search")}
             className="w-40"
           />
           <Button
             onClick={() => setDesc((d) => !d)}
-            tooltip="Toggle sort order"
+            tooltip={t("logs.sort")}
             className="px-2.5 py-1 text-xs"
           >
             {desc ? "newest" : "oldest"}
@@ -87,14 +89,14 @@ export function LogsView() {
         </div>
       </header>
 
-      <HudPanel accent="cyan" label={`${rows.length} records`}>
+      <HudPanel accent="cyan" label={t("logs.records", { count: rows.length })}>
         <div className="flex max-h-[calc(100vh-260px)] flex-col overflow-auto font-mono text-xs">
           {error ? (
-            <p style={{ color: PALETTE.danger }}>Failed to load logs: {error.message}</p>
+            <p style={{ color: PALETTE.danger }}>{t("logs.failed", { message: error.message })}</p>
           ) : isLoading && logs.length === 0 ? (
-            <p className="text-dim">Loading…</p>
+            <p className="text-dim">{t("common.loading")}</p>
           ) : rows.length === 0 ? (
-            <p className="text-dim">No log records.</p>
+            <p className="text-dim">{t("logs.empty")}</p>
           ) : (
             rows.map((r, i) => <LogLine key={`${r.ts}-${i}`} rec={r} />)
           )}

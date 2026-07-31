@@ -12,6 +12,7 @@
 // typed parser; the reasoning lives here so the next attempt starts from what was already learned.
 
 import { hudPlugin } from "./scripts/project/eslint-hud-position.mjs";
+import { i18nPlugin } from "./scripts/project/eslint-no-untranslated.mjs";
 
 export default [
   {
@@ -24,6 +25,17 @@ export default [
       // them, so adding a selector to the base config's entry here would have silently switched
       // off its bans on native <button>, <input> and the `title` tooltip. Verified by trying it.
       "hud/floating-panel-position": "error",
+    },
+  },
+  {
+    // Every user-facing string comes from the catalogue. Two languages are easy to ship and hard to
+    // KEEP: without this, the interface drifts back into English one new button at a time, and the
+    // type system cannot object — an English word in JSX is a perfectly good string.
+    files: ["src/**/*.tsx"],
+    ignores: ["src/**/*.test.tsx"],
+    plugins: { i18n: i18nPlugin },
+    rules: {
+      "i18n/no-untranslated-text": "error",
     },
   },
   {

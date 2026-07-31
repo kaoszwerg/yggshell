@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import { TextField } from "../ui/TextField";
 import { labelShells } from "../../lib/shellLabels";
+import { useT } from "../../hooks/useT";
 import {
   useDeleteTerminalProfile,
   useSaveTerminalProfile,
@@ -31,6 +32,7 @@ const blank = (): TerminalProfile => ({
  * value into the profile.
  */
 export function ProfileControls() {
+  const t = useT();
   const profiles = useTerminalProfiles();
   const [editing, setEditing] = useState<TerminalProfile | null>(null);
 
@@ -39,7 +41,7 @@ export function ProfileControls() {
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap gap-1">
           {(profiles.data ?? []).length === 0 ? (
-            <span className="text-dim/60 font-mono text-xs">None yet.</span>
+            <span className="text-dim/60 font-mono text-xs">{t("profiles.none")}</span>
           ) : (
             (profiles.data ?? []).map((profile) => (
               <Button key={profile.id} onClick={() => setEditing({ ...profile })}>
@@ -48,15 +50,12 @@ export function ProfileControls() {
             ))
           )}
         </div>
-        <span className="text-dim text-xs">
-          A tab keeps the profile it was opened with — it decided which shell is running, so
-          changing it under a live tab would be a claim about a process that is not true.
-        </span>
+        <span className="text-dim text-xs">{t("profiles.hint")}</span>
       </div>
 
       <div>
         <Button accent="green" onClick={() => setEditing(blank())}>
-          New profile
+          {t("profiles.new")}
         </Button>
       </div>
 
@@ -76,6 +75,7 @@ function ProfileEditor({
   onEdited: (profile: TerminalProfile) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const save = useSaveTerminalProfile();
   const remove = useDeleteTerminalProfile();
   const shells = useShells();
@@ -86,9 +86,9 @@ function ProfileEditor({
     <div className="hud-clip-sm border-cyan/20 flex flex-col gap-3 border p-3">
       <div className="flex items-center gap-2">
         <TextField
-          aria-label="Profile name"
+          aria-label={t("profiles.name")}
           value={profile.name}
-          placeholder="Profile name"
+          placeholder={t("profiles.name")}
           className="max-w-xs font-mono"
           onChange={(e) => onEdited({ ...profile, name: e.target.value })}
         />
@@ -100,7 +100,7 @@ function ProfileEditor({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Shell</span>
+        <span className="text-dim text-xs">{t("settings.shell.title")}</span>
         <div className="flex flex-wrap gap-1">
           <Button
             aria-pressed={profile.shell === null}
@@ -123,7 +123,7 @@ function ProfileEditor({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Colour scheme</span>
+        <span className="text-dim text-xs">{t("profiles.scheme")}</span>
         <div className="flex flex-wrap gap-1">
           <Button
             aria-pressed={profile.theme === null}
@@ -147,19 +147,16 @@ function ProfileEditor({
 
       <div className="flex flex-col gap-1.5">
         <label className="text-dim text-xs" htmlFor="profile-cwd">
-          Start in
+          {t("profiles.startIn")}
         </label>
         <TextField
           id="profile-cwd"
           value={profile.cwd ?? ""}
-          placeholder="the shell's own default"
+          placeholder={t("profiles.startInPlaceholder")}
           className="max-w-md font-mono"
           onChange={(e) => onEdited({ ...profile, cwd: e.target.value })}
         />
-        <span className="text-dim text-xs">
-          An absolute path. It is validated when a terminal opens — a directory that has since gone
-          means the terminal starts where the shell would have, not that it refuses to start.
-        </span>
+        <span className="text-dim text-xs">{t("profiles.startInHint")}</span>
       </div>
 
       <div className="flex flex-wrap gap-1">
