@@ -39,6 +39,11 @@ function survivable(what: string): (error: unknown) => void {
 const encoder = new TextEncoder();
 const notice = (text: string) => encoder.encode(`\r\n\x1b[38;2;255;51;102m${text}\x1b[0m\r\n`);
 
+/** How often the backend is asked where a tmux session is. Only the visible tab polls, and only
+ *  inside tmux does the call do any work — outside it the answer is `null` and OSC 7 has already
+ *  delivered the truth without waiting for a tick. */
+const CWD_POLL_MS = 2000;
+
 /** Shown in the menu so the shortcut is discoverable rather than folklore. */
 const KEYS = {
   copy: isMac() ? "⌘C" : "Ctrl+Shift+C",
@@ -221,6 +226,30 @@ function Pane({
     handle.current?.clearSearch();
     handle.current?.focus();
   }, []);
+
+  // Inside tmux the shell never reports where it is — tmux eats OSC 7 — so the backend is asked
+  // instead, and only for the tab in front. It answers `null` for an ordinary shell, where the hook
+  // has already said so instantly and this poll costs nothing but the call.
+  useEffect(() => {
+    if (!active) return;
+    let stopped = false;
+    const ask = () => {
+      const id = sessionId.current;
+      if (id === null) return;
+      terminalApi
+        .cwd(id)
+        .then((path) => {
+          if (!stopped && path !== null) setCwd(paneKey, path);
+        })
+        .catch(survivable("read the working directory"));
+    };
+    ask();
+    const timer = setInterval(ask, CWD_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [active, paneKey, setCwd]);
 
   // ⌘F / Ctrl+Shift+F on the WINDOW, not on the emulator: xterm's key handler only fires while the
   // terminal holds focus, so binding it there made the search unreachable the moment the caret was

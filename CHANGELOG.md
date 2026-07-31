@@ -80,6 +80,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The Git tool now follows a `cd` inside tmux.** It never did: tmux consumes OSC 7 for its own
+  `pane_current_path` and does not forward it, so the sequence the shell hook emits was measured
+  arriving zero times at the outer terminal — wrapping it in tmux's DCS passthrough changed nothing.
+  What does work is asking tmux, which tracks the path itself; the active tab polls
+  `terminal_cwd` while the backend answers `null` for an ordinary shell, where OSC 7 has already said
+  so instantly. It also covers a session that existed **before** this app started and could never have
+  had a hook injected into it.
+  - Consequence, and a welcome one: **inside tmux no shell integration is installed at all.** No
+    injected `ZDOTDIR`, none of the repairs that go with it — a tmux user's shell starts untouched.
 - **A tmux detach took the whole interface down.** Sessions end underneath pending calls constantly —
   the user typed `exit`, tmux detached, the tab closed a keystroke ago — and the backend answers
   `no terminal session N`. Those rejections were unhandled, reached the app's global handler and

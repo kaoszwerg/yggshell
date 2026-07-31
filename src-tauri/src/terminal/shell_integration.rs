@@ -68,6 +68,13 @@ fn shell_kind(program: &str) -> Option<Kind> {
 
 /// The hook itself, in POSIX-ish shell.
 ///
+/// Plain OSC 7, with no tmux handling of any kind — **inside tmux this integration is not installed
+/// at all**. tmux consumes OSC 7 for its own `pane_current_path` and does not forward it; wrapping it
+/// in tmux's DCS passthrough was tried and measured, and nothing arrived at the outer terminal. What
+/// does work there is asking tmux (`terminal::tmux::pane_cwd`), which has the further advantage of
+/// answering for a session that already existed and could never have had a hook injected into it. So
+/// the two cases are cleanly split, and a tmux user's shell starts completely untouched.
+///
 /// **Defined only — never called here.** It used to run once at the end of the rc file, on the theory
 /// that the first reading should not wait for the user to press Enter. It does not have to: `precmd`
 /// (zsh) and `PROMPT_COMMAND` (bash) both run before the *first* prompt as well, so the immediate call
@@ -76,31 +83,11 @@ fn shell_kind(program: &str) -> Option<Kind> {
 /// output had no trailing newline and makes it print its `%` end-of-line mark at the top of every
 /// fresh terminal.
 fn hook(host_var: &str) -> String {
-    // Inside tmux the sequence has to be smuggled out. tmux CONSUMES OSC 7 for its own
-    // `pane_current_path` and does not forward it, so the outer terminal — us — never sees it and the
-    // Git tool stops following `cd` the moment a session runs under tmux. The way through is tmux's
-    // DCS passthrough (`ESC P tmux; <escaped> ESC \`), where every ESC in the payload is doubled.
-    // It is gated behind the pane option `allow-passthrough`, which is off by default since tmux 3.3,
-    // so the hook turns it on for ITS OWN PANE only — never for the server, never for the user's
-    // other windows.
     format!(
         r#"
 _yggshell_report_cwd() {{
-  local seq
-  seq=$(printf '\033]7;file://%s%s\033\\' "${{{host_var}:-}}" "$PWD")
-  if [ -n "${{TMUX:-}}" ]; then
-    # Double every ESC and wrap, which is what tmux's passthrough expects.
-    printf '\033Ptmux;%s\033\\' "${{seq//$'\033'/$'\033\033'}}"
-  else
-    printf '%s' "$seq"
-  fi
+  printf '\033]7;file://%s%s\033\\' "${{{host_var}:-}}" "$PWD"
 }}
-_yggshell_enable_passthrough() {{
-  [ -n "${{TMUX:-}}" ] && command -v tmux >/dev/null 2>&1 \
-    && tmux set -p allow-passthrough on >/dev/null 2>&1
-}}
-_yggshell_enable_passthrough
-unset -f _yggshell_enable_passthrough
 "#
     )
 }

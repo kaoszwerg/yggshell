@@ -44,6 +44,15 @@ export const terminalApi = {
   resize: (id: SessionId, rows: number, cols: number) =>
     invoke<void>("terminal_resize", { id, rows, cols }),
 
+  /**
+   * Where this session's shell is, when the backend can answer it — inside tmux.
+   *
+   * `null` for an ordinary shell, where OSC 7 has already told the frontend instantly and no polling
+   * is needed. Inside tmux the sequence never arrives (tmux consumes it), and a session that existed
+   * before this app started could never have had a hook injected into it, so tmux is asked directly.
+   */
+  cwd: (id: SessionId) => invoke<string | null>("terminal_cwd", { id }),
+
   /** End a session because its tab was closed. Takes the foreground process group with it. */
   close: (id: SessionId) => invoke<void>("terminal_close", { id }),
 

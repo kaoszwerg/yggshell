@@ -23,6 +23,9 @@ pub struct Launch {
     /// the caller: getting it wrong means killing a tmux session instead of detaching from it, and a
     /// string comparison is not something that failure should hang on.
     pub kind: SessionKind,
+    /// The tmux session this joined, when it joined one. Kept so the working directory can be read
+    /// back from tmux later.
+    pub tmux_session: Option<String>,
 }
 
 impl Launch {
@@ -31,14 +34,16 @@ impl Launch {
             program: program.to_string(),
             args: Vec::new(),
             kind: SessionKind::Shell,
+            tmux_session: None,
         }
     }
 
-    fn tmux(program: String, args: Vec<String>) -> Self {
+    fn tmux(program: String, args: Vec<String>, session: String) -> Self {
         Self {
             program,
             args,
             kind: SessionKind::TmuxClient,
+            tmux_session: Some(session),
         }
     }
 }
@@ -81,13 +86,15 @@ pub fn launch(mode: TmuxMode, session: &str, shell: &str) -> Launch {
                 );
                 return Launch::shell(shell);
             }
+            // Attaching joins shells that were started before this app existed, so no hook can be
+            // installed in them. Their working directory is read from tmux instead — see [`pane_cwd`].
             let mut args = vec!["attach-session".to_string()];
             if !session.is_empty() {
                 args.push("-t".to_string());
                 args.push(session.to_string());
             }
             tracing::info!(session, "attaching to tmux");
-            Launch::tmux(tmux, args)
+            Launch::tmux(tmux, args, session.to_string())
         }
 
         // `new-session -A` is attach-or-create in one call, which is why the session gets a name even
@@ -108,6 +115,7 @@ pub fn launch(mode: TmuxMode, session: &str, shell: &str) -> Launch {
                     "-s".to_string(),
                     name.to_string(),
                 ],
+                name.to_string(),
             )
         }
     }
@@ -142,6 +150,36 @@ fn has_session(tmux: &str, session: &str) -> bool {
             tracing::warn!(error = %e, "could not ask tmux whether a session exists");
             false
         }
+    }
+}
+
+/// Where the active pane of `session` currently is, asked of tmux itself.
+///
+/// The shell hook cannot answer this for a session that already existed: those shells were started
+/// before this app ran, so nothing was injected into them. tmux, on the other hand, tracks
+/// `pane_current_path` for every pane — it is what it consumes OSC 7 *for*. Asking it works for a
+/// session we created and one we merely joined, which is why this is the primary source inside tmux
+/// and the hook is the fast path outside it.
+pub fn pane_cwd(session: &str) -> Option<String> {
+    let tmux = find_tmux()?;
+    let out = Command::new(tmux)
+        .args([
+            "display-message",
+            "-p",
+            "-t",
+            session,
+            "#{pane_current_path}",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
     }
 }
 
@@ -227,6 +265,18 @@ mod tests {
         let Some(_) = find_tmux() else { return };
         let launch = launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh");
         assert_eq!(launch.args, vec!["new-session", "-A", "-s", "work"]);
+    }
+
+    #[test]
+    fn a_tmux_launch_remembers_which_session_it_joined() {
+        // Inside tmux the working directory is read back from tmux, so the session name has to
+        // survive the launch — a hook cannot answer for a shell that was already running.
+        let Some(_) = find_tmux() else { return };
+        assert_eq!(
+            launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh").tmux_session,
+            Some("work".to_string())
+        );
+        assert_eq!(launch(TmuxMode::Off, "work", "/bin/zsh").tmux_session, None);
     }
 
     #[test]

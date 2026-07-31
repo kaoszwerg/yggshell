@@ -185,13 +185,15 @@ pub fn spawn(request: Spawn<'_>) -> Result<Spawned> {
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
-    // Teach the SHELL to report its working directory (OSC 7) — the shell, not whatever we happen to
-    // spawn. With tmux enabled the direct child is `tmux`, and asking about that yielded no
-    // integration at all: the hook silently stopped being installed and the Git tool stopped
-    // following `cd`. The environment is inherited by every shell tmux starts, so preparing it for
-    // the shell is right either way. Best-effort: an empty integration means things start exactly as
-    // they otherwise would (see `shell_integration`).
-    let integration = crate::terminal::shell_integration::prepare(&default_shell());
+    // Teach the shell to report its working directory (OSC 7) — but ONLY when we are starting a
+    // shell. Inside tmux this is deliberately skipped: tmux consumes OSC 7 rather than forwarding it,
+    // so the hook could not help there even if it were installed (measured), and the working
+    // directory is read back from tmux instead. The happy side effect is that a tmux user's shell
+    // starts completely untouched — no injected ZDOTDIR, and none of the repairs that go with it.
+    let integration = match kind {
+        SessionKind::Shell => crate::terminal::shell_integration::prepare(program),
+        SessionKind::TmuxClient => Default::default(),
+    };
     for arg in &integration.args {
         cmd.arg(arg);
     }

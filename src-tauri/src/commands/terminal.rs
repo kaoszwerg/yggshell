@@ -71,6 +71,18 @@ pub fn terminal_resize(
     registry.resize(id, Size { rows, cols })
 }
 
+/// Where a session's shell currently is, when the backend can answer it (inside tmux).
+///
+/// `null` for an ordinary shell — there the frontend already has the answer from OSC 7, instantly and
+/// without polling anything.
+#[tauri::command]
+pub fn terminal_cwd(
+    registry: State<'_, TerminalRegistry>,
+    id: SessionId,
+) -> Result<Option<String>> {
+    registry.cwd(id)
+}
+
 /// End a session because the user closed its tab.
 ///
 /// This takes down the foreground process group, not just the shell: a build or an AI harness

@@ -89,6 +89,9 @@ impl Coalescer {
 /// One live session as the registry sees it.
 struct Session {
     pty: Pty,
+    /// The tmux session this joined, if any. Inside tmux the working directory is read back from tmux
+    /// rather than from the shell — see [`TerminalRegistry::cwd`].
+    tmux_session: Option<String>,
 }
 
 /// Every live terminal in this process. Managed by Tauri, so a command reaches it as `State`.
@@ -234,10 +237,13 @@ impl TerminalRegistry {
             }
         });
 
-        self.sessions
-            .lock()
-            .map_err(poisoned)?
-            .insert(id, Session { pty: spawned.pty });
+        self.sessions.lock().map_err(poisoned)?.insert(
+            id,
+            Session {
+                pty: spawned.pty,
+                tmux_session: launch.tmux_session,
+            },
+        );
         Ok(id)
     }
 
@@ -273,6 +279,28 @@ impl TerminalRegistry {
         session.pty.close();
         tracing::info!(session = id, "terminal session closed");
         Ok(())
+    }
+
+    /// Where this session's shell currently is, when the backend can answer it.
+    ///
+    /// Only meaningful inside tmux. A shell we started reports its own directory over OSC 7, which is
+    /// instant and needs no polling; a shell that was already running in a tmux session we merely
+    /// joined has no hook in it and never will, so tmux — which tracks `pane_current_path` itself — is
+    /// asked instead. `None` for an ordinary shell session means exactly "the frontend already knows
+    /// better than I do".
+    pub fn cwd(&self, id: SessionId) -> Result<Option<String>> {
+        // The name is copied out and the lock released before tmux is asked: that call spawns a
+        // process, and holding the registry lock across it would stall every keystroke in every other
+        // terminal for as long as it takes.
+        let name = {
+            let sessions = self.sessions.lock().map_err(poisoned)?;
+            match sessions.get(&id) {
+                // Not an error: a poll can outlive the tab it was polling for.
+                None => return Ok(None),
+                Some(session) => session.tmux_session.clone(),
+            }
+        };
+        Ok(name.as_deref().and_then(tmux::pane_cwd))
     }
 
     /// Drop a session that ended by itself. Never an error: the tab may already have been closed.
