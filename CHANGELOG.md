@@ -80,6 +80,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Your shell history was empty, and completion was degraded.** The shell integration points
+  `ZDOTDIR` at a generated directory so its rc files are found — but macOS' `/etc/zshrc` runs
+  *between* those two files and contains `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`, so every terminal
+  wrote its history into this app's data directory and opened with nothing in it. `ZDOTDIR` is now
+  restored around each hand-off, and a `HISTFILE` that points into our directory is put back. Verified
+  against the real shell: `HISTFILE=/Users/…/.zsh_history` with 2939 entries, `ZSH_COMPDUMP` back in
+  `$HOME`. The shell itself was never the problem — it reported `INTERACTIVE=on ZLE=on` with 421
+  widgets loaded throughout.
 - The terminal now reports geometry only when the row/column count actually **changed**. Dragging the
   tool column fires the resize observer every frame, but a terminal's size only moves every whole
   cell — without the filter one drag would have been a hundred IPC calls and a hundred `SIGWINCH`s

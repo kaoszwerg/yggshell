@@ -4,6 +4,7 @@ import { gitApi } from "../../api/git";
 import { IconButton } from "../ui/IconButton";
 import { Tooltip } from "../ui/Tooltip";
 import { PALETTE } from "../../styles/palette";
+import { layoutHistory, type GraphRow } from "../../lib/gitGraph";
 import { useTerminalStore } from "../../store/terminal";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
@@ -142,51 +143,45 @@ function ChangeRow({ change }: { change: GitChange }) {
   );
 }
 
+/** One hue per lane, cycled. Four distinct ones rather than a generated ramp: past four parallel
+ *  branches in one window the colour stops carrying identity anyway, and four HUD hues stay
+ *  distinguishable at 2px where an interpolated palette would not (rule:theming — these are the
+ *  palette's own values, not new ones). */
+const LANE_COLOURS = [PALETTE.cyan, PALETTE.green, PALETTE.gold, PALETTE.purple] as const;
+
+const laneColour = (lane: number) => LANE_COLOURS.at(lane % LANE_COLOURS.length) ?? PALETTE.cyan;
+
+/** Pixels per lane, and the height of one row. Small enough that four branches fit in a narrow
+ *  column, large enough that two adjacent lines are still two lines. */
+const LANE_STEP = 9;
+const ROW_HEIGHT = 16;
+
 /**
- * The history, drawn rather than listed.
+ * The history, drawn rather than listed — every local branch, not just the one you are on.
  *
- * Lanes are assigned as the walk proceeds: a commit takes the lane its child reserved for it, and a
- * merge reserves a new lane for its second parent. That is what makes a branch visible as a branch —
- * a column of shas says nothing about how the work came together.
+ * The layout itself lives in `lib/gitGraph`, which is where it can be tested against shapes that
+ * would be tedious to build in a real repository. This only draws what that returns.
  */
 function History({ commits }: { commits: GitCommit[] }) {
   if (commits.length === 0) return <span className="text-dim/60">No commits yet.</span>;
 
-  // Lane reservations: sha -> lane, filled in by whichever commit refers to it first.
-  const lanes = new Map<string, number>();
-  let nextLane = 0;
-  const rows = commits.map((commit) => {
-    const lane = lanes.get(commit.sha) ?? nextLane++;
-    lanes.set(commit.sha, lane);
-    // The first parent continues this lane; any further parent is a merged branch and gets its own.
-    commit.parents.forEach((parent, index) => {
-      if (lanes.has(parent)) return;
-      lanes.set(parent, index === 0 ? lane : nextLane++);
-    });
-    return { commit, lane, merge: commit.parents.length > 1 };
-  });
-
-  const width = Math.min(4, nextLane) * 9 + 10;
+  const { rows, lanes } = layoutHistory(commits);
+  const width = lanes * LANE_STEP + 6;
 
   return (
-    <div className="flex flex-col gap-px">
-      {rows.map(({ commit, lane, merge }, index) => (
-        <div key={commit.sha} className="flex items-center gap-1.5">
-          <Lane
-            width={width}
-            lane={lane}
-            merge={merge}
-            head={index === 0}
-            last={index === rows.length - 1}
-          />
-          <span className="text-cyan/60 shrink-0">{commit.short_sha}</span>
-          <span className={`truncate ${index === 0 ? "text-fg" : "text-dim"}`}>
-            {commit.summary}
+    <div className="flex flex-col">
+      {rows.map((row, index) => (
+        <div key={row.commit.sha} className="flex items-center gap-1.5">
+          <Lane row={row} width={width} last={index === rows.length - 1} />
+          <span className="shrink-0" style={{ color: `${laneColour(row.lane)}99` }}>
+            {row.commit.short_sha}
           </span>
-          {commit.refs.map((ref) => (
+          <span className="text-dim truncate">{row.commit.summary}</span>
+          {row.commit.refs.map((ref) => (
             <span
               key={ref}
-              className="hud-clip-sm bg-elevated text-green shrink-0 px-1 text-[0.55rem]"
+              className="hud-clip-sm bg-elevated shrink-0 px-1 text-[0.55rem]"
+              style={{ color: laneColour(row.lane) }}
             >
               {ref}
             </span>
@@ -197,46 +192,57 @@ function History({ commits }: { commits: GitCommit[] }) {
   );
 }
 
-function Lane({
-  width,
-  lane,
-  merge,
-  head,
-  last,
-}: {
-  width: number;
-  lane: number;
-  merge: boolean;
-  head: boolean;
-  last: boolean;
-}) {
-  // Canvas-free and hand-drawn, because it is four line segments — a charting library for this would
-  // be a dependency to draw a dot on a line.
-  const x = 5 + Math.min(lane, 3) * 9;
-  const colour = head ? PALETTE.green : merge ? PALETTE.purple : PALETTE.cyan;
+/** The gutter for one row: the lines still running past it, this commit's dot, and any curve to a
+ *  branch that joins or leaves here. */
+function Lane({ row, width, last }: { row: GraphRow; width: number; last: boolean }) {
+  const x = (lane: number) => 3 + lane * LANE_STEP;
+  const mid = ROW_HEIGHT / 2;
+  const tip = row.commit.refs.length > 0;
+
   return (
     <svg
       width={width}
-      height={14}
-      viewBox={`0 0 ${width} 14`}
+      height={ROW_HEIGHT}
+      viewBox={`0 0 ${width} ${ROW_HEIGHT}`}
       className="shrink-0"
       aria-hidden
       focusable="false"
     >
-      <line x1={x} y1={0} x2={x} y2={7} stroke={colour} strokeWidth={1.5} opacity={0.5} />
-      {last ? null : (
-        <line x1={x} y1={7} x2={x} y2={14} stroke={colour} strokeWidth={1.5} opacity={0.5} />
-      )}
-      {merge ? (
+      {row.through.map((lane) => (
+        <line
+          key={lane}
+          x1={x(lane)}
+          // The line above stops at the dot on this row's own lane and runs the full height on any
+          // other — that is the difference between "this commit is on that branch" and "that branch
+          // simply carries on past it".
+          y1={0}
+          x2={x(lane)}
+          y2={lane === row.lane && last ? mid : ROW_HEIGHT}
+          stroke={laneColour(lane)}
+          strokeWidth={1.5}
+          opacity={0.55}
+        />
+      ))}
+
+      {row.links.map((link) => (
         <path
-          d={`M${x} 7 C${x + 5} 7, ${x + 5} 14, ${x + 9} 14`}
-          stroke={PALETTE.purple}
+          key={`${link.from}-${link.to}`}
+          d={`M${x(link.from)} ${mid} C${x(link.from)} ${ROW_HEIGHT}, ${x(link.to)} ${mid}, ${x(link.to)} ${ROW_HEIGHT}`}
+          stroke={laneColour(link.to)}
           strokeWidth={1.5}
           fill="none"
-          opacity={0.7}
+          opacity={0.75}
         />
-      ) : null}
-      <circle cx={x} cy={7} r={head ? 3 : 2.2} fill={colour} />
+      ))}
+
+      <circle
+        cx={x(row.lane)}
+        cy={mid}
+        r={tip ? 3.2 : 2.2}
+        fill={tip ? laneColour(row.lane) : PALETTE.deep}
+        stroke={laneColour(row.lane)}
+        strokeWidth={1.5}
+      />
     </svg>
   );
 }

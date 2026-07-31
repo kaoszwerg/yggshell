@@ -47,10 +47,7 @@ pub fn snapshot(cwd: &Path) -> Result<Option<GitSnapshot>> {
 
     let changes = read_changes(&repo)?;
     let refs = refs_by_commit(&repo);
-    let commits = head_id
-        .map(|id| read_history(&repo, id, &refs))
-        .transpose()?
-        .unwrap_or_default();
+    let commits = read_history(&repo, head_id, &refs)?;
     let (ahead, behind) = ahead_behind(&repo, head_id);
 
     tracing::debug!(
@@ -157,14 +154,43 @@ fn refs_by_commit(repo: &gix::Repository) -> HashMap<gix::ObjectId, Vec<String>>
     map
 }
 
-/// The last [`HISTORY_LIMIT`] commits reachable from `head`, newest first.
+/// The last [`HISTORY_LIMIT`] commits, newest first, from **every local branch** — not only HEAD's.
+///
+/// Walking from HEAD alone hides exactly what a history view is for: a branch you are not on. The
+/// walk therefore starts at every local branch tip (plus HEAD, which may be detached and on none of
+/// them) and is sorted by commit time, so the rows read as one timeline the way they do in an editor.
 fn read_history(
     repo: &gix::Repository,
-    head: gix::ObjectId,
+    head: Option<gix::ObjectId>,
     refs: &HashMap<gix::ObjectId, Vec<String>>,
 ) -> Result<Vec<GitCommit>> {
+    let mut tips: Vec<gix::ObjectId> = Vec::new();
+    if let Some(head) = head {
+        tips.push(head);
+    }
+    if let Ok(platform) = repo.references() {
+        if let Ok(branches) = platform.local_branches() {
+            for branch in branches.flatten() {
+                if let Ok(id) = branch.into_fully_peeled_id() {
+                    let id = id.detach();
+                    if !tips.contains(&id) {
+                        tips.push(id);
+                    }
+                }
+            }
+        }
+    }
+    if tips.is_empty() {
+        return Ok(Vec::new());
+    }
+
     let walk = repo
-        .rev_walk([head])
+        .rev_walk(tips)
+        // By time, not by graph order: with several tips, breadth-first would interleave branches in
+        // an order that means nothing to a reader.
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(
+            gix::traverse::commit::simple::CommitTimeOrder::NewestFirst,
+        ))
         .all()
         .map_err(other("walk the history"))?;
 

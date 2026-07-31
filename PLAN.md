@@ -67,8 +67,9 @@ The reason the product exists: enriching an AI development harness.
 - [x] List of changed files, staged and unstaged, with status marks.
 - [x] Branch history, drawn: lanes assigned as the walk proceeds, merges given their own lane, refs
       labelled on the commit they point at.
+- [x] The history covers **every local branch**, sorted by commit time, with a colour per lane.
 - [ ] Still open here: fish and other shells get no hook (fish reports OSC 7 itself; the rest do not).
-      The history is HEAD's — branches that are not ancestors of HEAD do not appear yet.
+      Remote-only branches are not drawn — only local ones and HEAD.
 
 ## Later — discussed before it is built
 
