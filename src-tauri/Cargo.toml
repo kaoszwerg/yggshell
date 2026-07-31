@@ -1,0 +1,61 @@
+[package]
+name = "saga_rust_template"
+version = "0.10.0"
+description = "Cross-platform desktop application shell (Tauri 2 + React) with HUD design system, structured logging and governance."
+authors = ["kaoszwerg"]
+edition = "2021"
+publish = false
+# The app binary carries the product name so the dev dock/process shows it (ADR-024).
+default-run = "saga-rust-template"
+
+[lib]
+# `_lib` suffix keeps the lib name distinct from the bin on Windows (rust-lang/cargo#8519).
+name = "saga_rust_template_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "saga-rust-template"
+path = "src/main.rs"
+
+# Versions pinned to the stable releases used by the shell and verified against crates.io (ADR-009).
+# EXACT `=` requirements (ADR-CORE-039, ADR-APP-033: dep-pinning at maximum): the manifest itself pins each
+# direct dependency to the exact version the committed Cargo.lock resolved and tested — not only the lock —
+# so a `cargo update` cannot silently move a direct dep. Bumping one is a deliberate edit of both files.
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-window-state = "=2.4.1"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json"] }
+tracing-appender = "=0.2.5"
+chrono = { version = "=0.4.45", features = ["serde"] }
+thiserror = "=2.0.18"
+ts-rs = "=12.0.1"
+tokio = { version = "=1.52.3", features = ["rt-multi-thread", "macros", "sync"] }
+
+# On non-Windows targets the `open` crate handles URL launching via the system default handler.
+# On Windows we drive ShellExecuteW directly (see commands::open_external) — `cmd /c start` from a
+# windows-subsystem binary exits silently before the browser appears.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+open = "=5.3.6"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+
+# Maximum defensible posture (ADR-CORE-039, ADR-APP-033). Every unsafe block must justify itself in a
+# `// SAFETY:` comment — an undocumented one is a denied clippy lint, not a review note.
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+
+# Integer overflow is a security class, not just a bug: in release, wrapping is silent by default. Turn on
+# the checks so an overflow panics (and is caught by the crash handler, ADR-APP-032) instead of corrupting.
+[profile.release]
+overflow-checks = true

@@ -1,0 +1,23 @@
+{
+  "$comment": [
+    "Every background task in the backend, and how it dies (ADR-CORE-037, ADR-APP-032).",
+    "",
+    "Spawning work creates an entry point: something starts running with nobody above it to report to.",
+    "A task that ends quietly — a loop that exits on the first Err, a worker that returns on a closed",
+    "channel without a word — is a silent death, and the user's first hint is a feature that stopped",
+    "working with nothing in the log.",
+    "",
+    "The crash gate (scripts/lib/crash-gate.mjs, run by `npm run lint`) counts the spawns in every Rust",
+    "source file and rejects any it does not find here. Adding a task therefore forces one question to",
+    "be answered in writing: HOW DOES THIS ONE DIE? Answer it in `why`.",
+    "",
+    "This file is PROJECT-OWNED: never pinned, never delivered by `governance:update`. A fork inherits",
+    "the entries below with the template and maintains its own from there."
+  ],
+  "tasks": {
+    "src-tauri/src/lib.rs": {
+      "spawns": 1,
+      "why": "The log bridge (setup): forwards tracing records to the UI log view. On RecvError::Lagged it warns and KEEPS BRIDGING — the receiver is still valid, so the old `while let Ok(..)` loop, which ended the task and silently froze the log view for the rest of the session, is exactly what this entry exists to prevent. On RecvError::Closed the sender is gone (logging is shutting down): it logs that and ends, which is the only way this task is allowed to stop."
+    }
+  }
+}

@@ -1,0 +1,14 @@
+# Compiler/linker hardening (ADR-CORE-039, ADR-APP-033: "linker-hardening" at maximum). Per-platform,
+# because each flag names a linker/toolchain. Applied to every build (not only release) so the gate on
+# this machine actually exercises them. Recorded in security-posture.json → "linker-hardening".
+#
+# Windows: Control Flow Guard — the compiler/linker emit CFG checks on indirect calls (MSVC).
+# Linux:   Full RELRO + BIND_NOW — the GOT is mapped read-only after relocation, closing GOT overwrite.
+# macOS:   left at the toolchain default (PIE + hardened runtime); no extra per-arch flags are added here,
+#          because they would need verification on a mac this machine cannot do (rule:automation — a
+#          platform-specific break surfaces in the release build, which runs on every target).
+[target.'cfg(windows)']
+rustflags = ["-C", "control-flow-guard"]
+
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "link-arg=-Wl,-z,relro,-z,now"]

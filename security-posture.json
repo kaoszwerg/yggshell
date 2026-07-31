@@ -1,0 +1,86 @@
+{
+  "$doc": "SSOT for the maximum defensible security posture (ADR-CORE-039, ADR-APP-033). Project-owned: every project has a different toolchain, so this is never pinned and never delivered by governance:update. The gate scripts/lib/security-posture-gate.mjs (loaded from eslint.config.mjs) enforces it: every canonical category is declared; every 'enabled' safety is actually wired into check:all (or its config stays set); every 'deferred' safety carries a non-empty 'why'; the key linters keep their teeth. To change the posture you change THIS file — and the gate keeps you honest.",
+  "safeties": {
+    "rust-advisory-scan": {
+      "status": "enabled",
+      "gate": "security:audit",
+      "note": "cargo-audit against Cargo.lock (RUSTSEC)."
+    },
+    "rust-supply-chain-bans": {
+      "status": "enabled",
+      "gate": "security:deny",
+      "note": "cargo-deny: advisories, bans, licenses, sources."
+    },
+    "js-advisory-scan": {
+      "status": "enabled",
+      "gate": "security:audit-js",
+      "note": "npm audit on production deps, --audit-level=high. Rust deps were scanned; JS deps were not — this closes that gap."
+    },
+    "secret-scan": {
+      "status": "enabled",
+      "gate": "secrets",
+      "note": "secretlint over the working tree; eslint-plugin-no-secrets in the lint run as a second layer."
+    },
+    "sast": {
+      "status": "enabled",
+      "gate": "lint",
+      "note": "eslint-plugin-security (recommended) on src and the tooling scripts."
+    },
+    "dead-code": {
+      "status": "enabled",
+      "gate": "knip",
+      "note": "unused files/exports/deps are a red build."
+    },
+    "rust-lint-strict": {
+      "status": "enabled",
+      "gate": "rust:clippy",
+      "note": "clippy -D warnings PLUS [lints.clippy] undocumented_unsafe_blocks = deny — the gate verifies the Cargo.toml setting directly, so every unsafe block must justify itself."
+    },
+    "ts-lint-strict": {
+      "status": "enabled",
+      "gate": "lint",
+      "note": "eslint --max-warnings 0 PLUS tsconfig strict + noUncheckedIndexedAccess — the gate verifies the tsconfig setting directly."
+    },
+    "compiler-hardening": {
+      "status": "enabled",
+      "note": "[profile.release] overflow-checks = true in src-tauri/Cargo.toml — the gate verifies it directly (no check:all step exercises the release profile). An integer overflow panics (and is caught by ADR-APP-032) instead of wrapping silently."
+    },
+    "dep-pinning": {
+      "status": "enabled",
+      "gate": "security:deny",
+      "note": "npm exact versions + committed package-lock.json / Cargo.lock; --locked on cargo build/test; cargo-deny 'sources' check."
+    },
+    "rust-supply-chain-vet": {
+      "status": "deferred",
+      "why": "cargo-vet needs audits or exemptions for ~450 transitive crates; it is not clean by any reasonable bar even after importing Mozilla/Google audit sets. Revisit if the trust base shrinks or a maintained audit set covers most of the tree."
+    },
+    "sast-semgrep": {
+      "status": "deferred",
+      "why": "Semgrep CLI needs a curated, pinned ruleset to be net-positive; with --config=auto it is high-noise on day one and trains suppression. eslint-plugin-security covers the JS SAST surface today. Revisit with a vetted ruleset."
+    },
+    "sast-codeql": {
+      "status": "deferred",
+      "why": "CodeQL's normal GitHub-Action-on-push model contradicts this stack's release-only CI (no push/PR CI, ADR-APP-103/rule:automation). A local CLI-only run is nonstandard; semgrep is the better local fit if a dedicated SAST is added."
+    },
+    "secret-scan-history": {
+      "status": "deferred",
+      "why": "secretlint and eslint-no-secrets scan the working tree; gitleaks (git history) adds a Go binary to the local gate. Working-tree coverage holds now; a history scan is a one-time/CI concern, not a per-commit gate."
+    },
+    "sbom": {
+      "status": "deferred",
+      "why": "An SBOM is a release artifact, not a per-commit pass/fail check; cargo-cyclonedx + cyclonedx-npm add binary friction to the local gate for no gate semantics. It belongs in the release build (release.yml) and is tracked there, not here."
+    },
+    "fuzzing": {
+      "status": "deferred",
+      "why": "ADR-CORE-039 scopes fuzzing to code that parses UNTRUSTED input; none exists yet — only local, self-produced settings.json and crash markers are deserialized. Add a cargo-fuzz harness when a network-facing or externally-supplied format is parsed."
+    },
+    "cargo-exact-pins": {
+      "status": "enabled",
+      "note": "Every direct dependency in src-tauri/Cargo.toml carries an exact '=' requirement (the gate verifies it); a `cargo update` cannot silently move a direct dep off the committed Cargo.lock."
+    },
+    "linker-hardening": {
+      "status": "enabled",
+      "note": ".cargo/config.toml: Windows Control Flow Guard, Linux full RELRO + BIND_NOW (the gate verifies rustflags are set). macOS stays at the toolchain default (PIE + hardened runtime) — not verifiable on this machine, so it surfaces in the release build per rule:automation."
+    }
+  }
+}

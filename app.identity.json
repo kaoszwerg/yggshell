@@ -1,0 +1,11 @@
+{
+  "$comment": "SINGLE SOURCE OF TRUTH for the app identity (ADR-APP-031). Edit ONLY here, then run `npm run identity:sync`. Never hand-edit the derived name/identifier in package.json, Cargo.toml, tauri.conf.json, tauri.dev.conf.json, src/lib/app.ts or index.html — `identity:check` (in check:all) fails on drift.",
+  "displayName": "saga-rust-template",
+  "binaryName": "saga-rust-template",
+  "packageName": "saga-rust-template",
+  "crateName": "saga_rust_template",
+  "identifier": "com.kaoszwerg.sagarusttemplate",
+  "vendor": "kaoszwerg",
+  "tagline": "Application shell",
+  "description": "Cross-platform desktop application shell (Tauri 2 + React) with HUD design system, structured logging and governance."
+}
