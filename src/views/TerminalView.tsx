@@ -471,9 +471,11 @@ function Pane({
       id={`terminal-panel-${paneKey}`}
       aria-label="Terminal"
     >
-      {/* Only as wide as the terminal: the rail and the tool column are not part of what is running,
-          and a line sweeping across them would be claiming otherwise. */}
-      <ActivityLine state={activity} className="absolute inset-x-2 top-0 z-10" />
+      {/* Edge to edge across the terminal area, and no further: the rail and the tool column are not
+          part of what is running, and a line sweeping across them would be claiming otherwise.
+          `inset-x-0` rather than matching the pane's padding — this is the boundary of the terminal
+          area, so it runs the full width of it and stops exactly where that area does. */}
+      <ActivityLine state={activity} className="absolute inset-x-0 top-0 z-10" />
 
       <ContextMenu
         label="Terminal actions"

@@ -543,6 +543,9 @@ describe("TerminalView", () => {
       const line = container.querySelector("[data-activity]") as HTMLElement;
       expect(line.className).toContain("absolute");
       expect(line.className).not.toContain("fixed");
+      // Edge to edge across the terminal area: inset on either side leaves a visible stub of
+      // unanimated line at each end, which reads as the animation being broken.
+      expect(line.className).toContain("inset-x-0");
     });
 
     it("clears a held result by itself, so a signal does not become decoration", async () => {
