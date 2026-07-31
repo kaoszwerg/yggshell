@@ -479,4 +479,37 @@ describe("SettingsView", () => {
       expect(screen.getByRole("button", { name: "In die Zwischenablage" })).toBeInTheDocument();
     });
   });
+
+  // Reported from the running app: the About panel spelled the name YGGSHELL and had no mark at all.
+  // Both are the product's identity, so both are pinned here.
+  describe("the About panel", () => {
+    const openAbout = () => fireEvent.click(screen.getByRole("tab", { name: "About" }));
+
+    beforeEach(() => useUiStore.setState({ locale: "en" }));
+
+    it("writes the name the way the product is written, not in capitals", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openAbout();
+
+      // Small caps are built by SPLITTING the name into runs and shrinking the ones that were
+      // lowercase — the text stays uppercase throughout, because the layout uppercases it anyway
+      // (`lib/smallCaps`). So the property to assert is the structure, not the characters: four
+      // runs, of which the ones that were lowercase are drawn smaller.
+      const heading = screen.getByRole("heading", { name: "YggShell" });
+      const runs = [...heading.querySelectorAll("span")];
+      expect(runs.map((r) => r.textContent)).toEqual(["Y", "GG", "S", "HELL"]);
+      expect(runs.filter((r) => r.getAttribute("style")?.includes("font-size"))).toHaveLength(2);
+    });
+
+    it("shows the app mark beside it", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openAbout();
+
+      const panel = screen.getByRole("group", { name: "About" });
+      // Decorative, so it has no accessible name — found as an element rather than by role.
+      expect(panel.querySelector("img")).not.toBeNull();
+    });
+  });
 });

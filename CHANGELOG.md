@@ -8,6 +8,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **"New YggShell Terminal Here" in Finder's context menu.** The folder association alone was not
+  enough — that only reaches the "Open With" submenu. The menu line itself is an `NSServices` entry
+  plus a provider registered at runtime, which is the same mechanism iTerm2 uses.
+
+### Fixed
+
+- **"Open With ▸ YggShell" did not appear for folders at all.** The document type was declared as
+  `Viewer` with `LSHandlerRank: Alternate` — chosen so the app would offer itself without claiming to
+  be the default handler for folders. Well meant, and it cost the feature: it is now `Editor` with no
+  rank, matching iTerm2, and Finder still owns folders either way.
+- **The About panel spelled the name YGGSHELL and showed no app mark.** It now uses the same
+  small-caps treatment as the title bar, from the same helper, with the icon beside it.
+- **Quitting the app left nothing in the log.** `save_geometry` only ran on the window's × and the
+  tray's Quit, so ⌘Q, "Quit" in the dock and a logout wrote nothing at all — which made "who closed
+  it?" a question the log could not answer. The run loop now logs the exit and saves the window
+  geometry there too.
+
+### Added
+
 - **`ygg` and `yggshell` open a terminal where you are.** `ygg` uses the current directory, `ygg
   <path>` the one you name, and a file resolves to the directory holding it. Install it from Settings
   › Tools › Command line — nothing is written to your PATH until you press the button, and it says

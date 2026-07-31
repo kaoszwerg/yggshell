@@ -56,6 +56,15 @@ pub fn install_close_handler(app: &AppHandle) {
 /// One place, because there are three ways out of this app — the × button, the tray's Quit, and
 /// hiding to tray — and the plugin's own hook covers only a clean process exit. Failure is logged,
 /// never propagated: losing the geometry must not stop the app from closing.
+/// Save the window geometry from the run loop's exit, where `save_geometry` is not reachable.
+///
+/// Public for exactly one caller (`lib::run`), because ⌘Q and "Quit" in the dock reach neither the
+/// window's close handler nor the tray menu — so without this they lose the window's size and
+/// position, silently, on the exit most people use.
+pub fn save_geometry_on_exit(app: &AppHandle) {
+    save_geometry(app);
+}
+
 fn save_geometry(app: &AppHandle) {
     use tauri_plugin_window_state::{AppHandleExt, StateFlags};
     match app.save_window_state(StateFlags::all()) {

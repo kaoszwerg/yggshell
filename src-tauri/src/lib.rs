@@ -13,6 +13,7 @@ pub mod git;
 pub mod launch;
 pub mod logging;
 pub mod profile;
+pub mod services;
 pub mod settings;
 pub mod state;
 pub mod terminal;
@@ -106,11 +107,27 @@ pub fn run() {
     // `run` with a handler rather than `run()`: macOS delivers "open these folders in this app" as a
     // run event, which is how both `ygg <dir>` and Finder's Open With reach us. It fires on a cold
     // start too, before the webview exists — `launch::Pending` is what makes that case work.
-    app.run(|handle, event| {
-        if let tauri::RunEvent::Opened { urls } = event {
+    app.run(|handle, event| match event {
+        tauri::RunEvent::Opened { urls } => {
             let paths: Vec<String> = urls.iter().map(ToString::to_string).collect();
             launch::handle_urls(handle, &paths);
         }
+        // Why the shutdown is logged at all: the app went away once and nobody could say who ended
+        // it. `save_geometry` only runs on the window's × and the tray's Quit, so the most common
+        // exit of all — ⌘Q, "Quit" in the dock menu, a logout — left NOTHING behind. That is a
+        // silent end to a process, which is exactly what rule:logging forbids: the lifecycle is
+        // logged, and "who closed it" must be a question the log answers.
+        tauri::RunEvent::ExitRequested { .. } => {
+            tracing::info!("exit requested — the app was asked to quit");
+        }
+        tauri::RunEvent::Exit => {
+            // Also the last chance to keep the window's size and position: the state plugin writes
+            // its own file here, but only for a clean exit, and this is that moment.
+            tray::save_geometry_on_exit(handle);
+            tracing::info!("shutting down");
+            logging::flush();
+        }
+        _ => {}
     });
 }
 
@@ -128,6 +145,11 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         data_dir = %data_dir.display(),
         "starting"
     );
+
+    // The Finder context-menu entry ("New YggShell Terminal Here"). Declaring it in Info.plist is
+    // only half — without a registered provider the item appears and does nothing (services.rs).
+    #[cfg(target_os = "macos")]
+    services::register(&app.handle().clone());
 
     // Bridge live log records to the frontend log view.
     let log_handle = app.handle().clone();

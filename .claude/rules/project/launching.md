@@ -75,15 +75,27 @@ script rather than a binary.
 The script also resolves the path itself, because `open` resolves a relative path against **its own**
 working directory: without that, `ygg .` lands somewhere unrelated.
 
-## The Finder association lives in `src-tauri/Info.plist`
+## Finder: two separate mechanisms, and they are not interchangeable
 
-Tauri's `fileAssociations` only speaks in **extensions**, and `ext: ["*"]` would register this app as
-an opener for every file on the machine — it would appear in every "Open With" menu in the system.
-A folder is a **UTI** (`public.folder`), which needs a merged `Info.plist`; Tauri picks that file up
-from beside `tauri.conf.json`.
+Both live in `src-tauri/Info.plist`, which Tauri merges (it looks for that name beside
+`tauri.conf.json`). Tauri's own `fileAssociations` cannot express either: it speaks only in
+**extensions**, and `ext: ["*"]` would register this app as an opener for every file on the machine.
 
-`LSHandlerRank` is `Alternate` on purpose: the app offers itself, it does not claim to be the default
-handler for folders. Finder is. Taking that over would be a hostile thing for a terminal to do.
+| Want | Mechanism | Also needs |
+| --- | --- | --- |
+| **Open With ▸ YggShell** on a folder | `CFBundleDocumentTypes` + `public.folder` | nothing |
+| **New YggShell Terminal Here** in the menu | `NSServices` | a provider registered at runtime (`services.rs`) |
+
+**The document type must be `Role: Editor` with no `LSHandlerRank`.** The first attempt used
+`Viewer` + `Alternate`, reasoning that the app should offer itself without claiming to be the default
+handler for folders. The reasoning was fine and the result was wrong: **the entry did not appear at
+all**. iTerm2 uses `Editor` with no rank — measured in its own `Info.plist` — and Finder still owns
+folders either way.
+
+**A Service has two halves, and the second one fails silently when missing.** `NSServices` says what
+the item is called and what it accepts; `services.rs` registers the object holding the method
+`NSMessage` names. Without the provider the item appears and does nothing — no error anywhere, on
+either side. The selector is therefore pinned by a test that reads the plist.
 
 ## Installing the command is a button, never a side effect
 
@@ -113,3 +125,13 @@ grep -E "queued launch requests|outside the app" <app-data>/logs/app.log.*
 
 Both lines must appear across the two runs — one per route. Never test this against the app the
 maintainer is using (rule:live-app).
+
+For the Finder halves, ask the OS rather than reading the source:
+
+```bash
+lsregister -f "…/YggShell Dev.app"                 # register the built bundle
+pbs -flush && pbs -dump | grep openTerminalHere    # the menu item the system knows about
+grep "registered the Finder service" <app-data>/logs/app.log.*   # the provider half
+```
+
+The click itself cannot be driven from a script — that part is the maintainer's to confirm.

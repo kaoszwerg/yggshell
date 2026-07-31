@@ -10,6 +10,8 @@ import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
 import { Tabs } from "../components/ui/Tabs";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
+import { smallCaps } from "../lib/smallCaps";
+import logoUrl from "../../src-tauri/icons/icon.svg";
 import { availableFonts, DEFAULT_FONT } from "../lib/fonts";
 import { labelShells } from "../lib/shellLabels";
 import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
@@ -609,14 +611,30 @@ function AboutSection() {
   return (
     <HudPanel accent="green" label={t("about.title")}>
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2
-            className="hud-label text-glow-cyan"
-            style={{ "--hud-label-size": "1rem" } as React.CSSProperties}
-          >
-            {APP_NAME}
-          </h2>
-          <p className="text-green font-mono text-xs tracking-wide">{APP_TAGLINE}</p>
+        <div className="flex items-center gap-3">
+          <img src={logoUrl} alt="" aria-hidden className="h-12 w-12 shrink-0 select-none" />
+          <div className="flex flex-col gap-1">
+            {/* The same small-caps treatment as the title bar, from the same helper: the name is
+                "YggShell", and `hud-label` alone would render it YGGSHELL — which is not how the
+                product is written. One source for the shape, so the two cannot drift. */}
+            <h2
+              className="hud-label text-glow-cyan"
+              style={
+                {
+                  fontFamily: "Orbitron, sans-serif",
+                  "--hud-label-size": "1.1rem",
+                } as React.CSSProperties
+              }
+              aria-label={APP_NAME}
+            >
+              {smallCaps(APP_NAME).map((run, at) => (
+                <span key={at} aria-hidden style={run.full ? undefined : { fontSize: "0.78em" }}>
+                  {run.text}
+                </span>
+              ))}
+            </h2>
+            <p className="text-green font-mono text-xs tracking-wide">{APP_TAGLINE}</p>
+          </div>
         </div>
         <p className="text-dim max-w-2xl text-sm leading-relaxed">{APP_DESCRIPTION}</p>
         <BuildIdentity className="border-elevated max-w-md border-t pt-3" />
