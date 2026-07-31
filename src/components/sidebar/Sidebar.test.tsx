@@ -39,4 +39,18 @@ describe("Sidebar", () => {
       "page",
     );
   });
+
+  it("marks a tool in a colour no view uses", () => {
+    // A tool is a different KIND of thing from a view — it opens beside what you are doing instead
+    // of replacing it. Green already means "the view you are in", so an active tool must not look
+    // like one.
+    useUiStore.setState({ view: "terminal", activeTool: "git" });
+    render(<Sidebar />);
+
+    const git = screen.getByRole("button", { name: "Git" });
+    const terminal = screen.getByRole("button", { name: "Terminal" });
+    expect(git.className).toContain("purple");
+    expect(git.className).not.toContain("green");
+    expect(terminal.className).toContain("green");
+  });
 });

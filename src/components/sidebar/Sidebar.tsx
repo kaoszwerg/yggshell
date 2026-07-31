@@ -1,6 +1,7 @@
 import { GitBranch, ScrollText, Settings, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
+import type { HudAccent } from "../ui/hudButton";
 import { useUiStore, type ToolId, type ViewId } from "../../store/ui";
 
 type NavItem = { id: ViewId; Icon: LucideIcon; label: string };
@@ -61,6 +62,12 @@ export function Sidebar() {
           // `page` would be a lie: a tool does not replace the page, it opens beside it. `pressed`
           // is what a toggle says, and this button is a toggle.
           pressed={activeTool === tool.id}
+          // Purple, and not by taste: it is the one accent in the palette that carries no other
+          // meaning here. Green already says "this is the view you are in", gold is reserved for
+          // warnings and the DEV badge, and danger is destructive. A tool is a different KIND of
+          // thing from a view — it opens beside what you are doing instead of replacing it — so it
+          // reads as different at a glance rather than as another view that happens to be off.
+          accent="purple"
           onClick={() => toggleTool(tool.id)}
         />
       ))}
@@ -89,6 +96,7 @@ function RailButton({
   active,
   current,
   pressed,
+  accent = "green",
   onClick,
 }: {
   Icon: LucideIcon;
@@ -96,12 +104,14 @@ function RailButton({
   active: boolean;
   current?: "page";
   pressed?: boolean;
+  /** The colour this entry fills with when it is on. Views are green; tools are purple. */
+  accent?: HudAccent;
   onClick: () => void;
 }) {
   return (
     <IconButton
       label={label}
-      accent={active ? "green" : "cyan"}
+      accent={active ? accent : "cyan"}
       active={active}
       onClick={onClick}
       aria-current={current}

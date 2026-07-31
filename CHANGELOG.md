@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **An active tool in the rail is purple, not green.** Not a matter of taste: purple is the one accent
+  in the palette carrying no other meaning here — green already says "the view you are in", gold is
+  the DEV badge and warnings, danger is destructive. A tool is a different *kind* of thing from a
+  view: it opens beside what you are doing instead of replacing it, and now it looks it.
+
 ### Added
 
 - **URLs in the terminal open with ⌘-click** (Ctrl-click elsewhere), in the default browser. The
