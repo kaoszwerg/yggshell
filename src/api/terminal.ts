@@ -28,6 +28,14 @@ export const terminalApi = {
     cwd?: string;
     /** A stored profile's id — a REFERENCE, never a command line (ADR-PROJ-001 §5). */
     profile?: string | null;
+    /**
+     * Start a plain shell whatever the tmux setting says.
+     *
+     * What a tab uses after the user detaches out of tmux: leaving tmux means going back to a
+     * terminal, not losing the window — and without this the tab would re-attach to the session it
+     * just left. A switch, not a program: it selects between things the backend already decides.
+     */
+    plain?: boolean;
     onOutput: (bytes: Uint8Array) => void;
   }): Promise<SessionId> => {
     const channel = new Channel<ArrayBuffer>();
@@ -38,6 +46,7 @@ export const terminalApi = {
       cols: opts.cols,
       cwd: opts.cwd ?? null,
       profile: opts.profile ?? null,
+      plain: opts.plain ?? false,
     });
   },
 

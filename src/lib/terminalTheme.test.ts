@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { HUD_TERMINAL_THEME, resolveTheme, themeById } from "./terminalTheme";
+import { detailThemeId, HUD_TERMINAL_THEME, resolveTheme, themeById } from "./terminalTheme";
 import { PALETTE } from "../styles/palette";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
 
@@ -7,6 +7,7 @@ const empty = (over: Partial<TerminalTheme> = {}): TerminalTheme => ({
   id: "x",
   name: "X",
   ansi: Array.from({ length: 16 }, () => null),
+  builtin: false,
   background: null,
   foreground: null,
   cursor: null,
@@ -122,5 +123,53 @@ describe("themeById", () => {
   it("falls back to the HUD palette when the theme has since been deleted", () => {
     expect(themeById(themes, "gone")).toBeNull();
     expect(themeById(undefined, "nord")).toBeNull();
+  });
+});
+
+describe("detailThemeId", () => {
+  const settings = (over: Partial<Record<string, string>> = {}) => ({
+    terminal_theme: "",
+    diff_theme: "",
+    commit_theme: "",
+    ...over,
+  });
+
+  it("follows the tab's terminal scheme when nothing else is set", () => {
+    // The common case: configure nothing, and a diff matches the terminal it sits over.
+    expect(detailThemeId("diff", settings(), "nord")).toBe("nord");
+    expect(detailThemeId("commit", settings(), "nord")).toBe("nord");
+  });
+
+  it("falls back to the default terminal scheme when the tab has none", () => {
+    expect(detailThemeId("diff", settings({ terminal_theme: "ayu" }), null)).toBe("ayu");
+  });
+
+  it("lets a diff be read in something other than what you type in", () => {
+    expect(detailThemeId("diff", settings({ diff_theme: "solarized-light" }), "nord")).toBe(
+      "solarized-light",
+    );
+  });
+
+  it("covers commits with the diff setting unless they have their own", () => {
+    expect(detailThemeId("commit", settings({ diff_theme: "solarized-light" }), "nord")).toBe(
+      "solarized-light",
+    );
+    expect(
+      detailThemeId(
+        "commit",
+        settings({ diff_theme: "solarized-light", commit_theme: "ayu" }),
+        "nord",
+      ),
+    ).toBe("ayu");
+  });
+
+  it("does not let a commit setting reach a diff", () => {
+    expect(detailThemeId("diff", settings({ commit_theme: "ayu" }), "nord")).toBe("nord");
+  });
+
+  it("answers the HUD palette when nothing anywhere is set", () => {
+    expect(detailThemeId("diff", settings(), null)).toBe("");
+    expect(detailThemeId("commit", null, null)).toBe("");
+    expect(detailThemeId("diff", undefined, null)).toBe("");
   });
 });

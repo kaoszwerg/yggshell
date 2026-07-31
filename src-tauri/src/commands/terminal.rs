@@ -18,6 +18,9 @@ use tauri::State;
 /// decoding and a multi-byte character split across two reads still renders. Batching happens in the
 /// backend (ADR-PROJ-001 §3).
 ///
+/// `plain` starts a plain shell whatever the tmux setting says. It is what a tab uses after the user
+/// detaches from tmux: leaving tmux means going back to a terminal, not losing the window.
+///
 /// `profile` names a stored [`crate::dto::TerminalProfile`] — a *reference*, never a command line
 /// (ADR-PROJ-001 §5). What it overrides (shell, directory, colour scheme) is resolved in the backend;
 /// what it does not override comes from Settings.
@@ -38,8 +41,10 @@ pub fn terminal_open(
     cols: u16,
     cwd: Option<String>,
     profile: Option<String>,
+    plain: Option<bool>,
 ) -> Result<SessionId> {
-    tracing::info!(rows, cols, ?cwd, ?profile, "terminal_open");
+    let plain = plain.unwrap_or(false);
+    tracing::info!(rows, cols, ?cwd, ?profile, plain, "terminal_open");
     // tmux and the shell are persisted PREFERENCES, not something the webview may choose per call.
     // Even the shell setting is only ever a pick from a list the backend produced, and the registry
     // checks it again before it spawns anything (ADR-PROJ-001 §5, `terminal::shells`).
@@ -53,10 +58,13 @@ pub fn terminal_open(
     let id = registry.open(
         app,
         on_output,
-        cwd.map(Into::into),
-        Size { rows, cols },
-        &settings,
-        profile.as_ref(),
+        crate::terminal::Open {
+            cwd: cwd.map(Into::into),
+            size: Size { rows, cols },
+            settings: &settings,
+            profile: profile.as_ref(),
+            plain,
+        },
     )?;
     tracing::debug!(session = id, "terminal_open ok");
     Ok(id)

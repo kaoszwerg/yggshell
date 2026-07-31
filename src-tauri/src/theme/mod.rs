@@ -67,6 +67,7 @@ pub fn from_itermcolors(name: &str, colours: &itermcolors::Colours) -> TerminalT
         ansi: (0..ANSI_COUNT)
             .map(|i| get(&format!("Ansi {i} Color")))
             .collect(),
+        builtin: false,
         background: get("Background Color"),
         foreground: get("Foreground Color"),
         cursor: get("Cursor Color"),
@@ -76,7 +77,14 @@ pub fn from_itermcolors(name: &str, colours: &itermcolors::Colours) -> TerminalT
     }
 }
 
-/// Read an `.itermcolors` file from disk and turn it into a theme.
+/// The extensions a colour scheme may arrive as.
+///
+/// `.yggtheme` is **the same format** — an iTerm2 plist, byte for byte. The extension says where a
+/// file came from and nothing else, which is exactly why an iTerm2 file still imports and why iTerm2
+/// can still open ours. A private format would have bought nothing and cost that.
+pub const SCHEME_EXTENSIONS: [&str; 2] = ["itermcolors", "yggtheme"];
+
+/// Read an `.itermcolors` or `.yggtheme` file from disk and turn it into a theme.
 ///
 /// The path comes from a file the user dropped on the window, so it is a path from outside: the
 /// extension is checked, the size is bounded before anything is read into memory, and the contents are
@@ -85,9 +93,12 @@ pub fn import(path: &Path) -> Result<TerminalTheme> {
     let extension = path
         .extension()
         .map(|e| e.to_string_lossy().to_ascii_lowercase());
-    if extension.as_deref() != Some("itermcolors") {
+    if !extension
+        .as_deref()
+        .is_some_and(|e| SCHEME_EXTENSIONS.contains(&e))
+    {
         return Err(AppError::Other(format!(
-            "not an iTerm2 colour scheme: {}",
+            "not a colour scheme (.itermcolors or .yggtheme): {}",
             path.display()
         )));
     }
@@ -111,6 +122,38 @@ pub fn import(path: &Path) -> Result<TerminalTheme> {
 
     tracing::info!(name = %name, colours = colours.len(), "imported an iTerm2 colour scheme");
     Ok(from_itermcolors(&name, &colours))
+}
+
+/// The schemes shipped with the app, read from its resource directory.
+///
+/// Marked `builtin`, which is what stops them being deleted: a user can copy one, edit the copy and
+/// keep both, but the originals are part of the app rather than of their data. A resource directory
+/// that is missing entirely — a development run, an unusual install — is empty rather than an error.
+pub fn bundled(resource_dir: &Path) -> Vec<TerminalTheme> {
+    let directory = resource_dir.join("resources/themes");
+    let mut themes = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&directory) else {
+        tracing::debug!(path = %directory.display(), "no bundled themes here");
+        return themes;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().map(|e| e.to_string_lossy().into_owned()) != Some("yggtheme".into()) {
+            continue;
+        }
+        match import(&path) {
+            Ok(mut theme) => {
+                theme.builtin = true;
+                themes.push(theme);
+            }
+            Err(error) => {
+                tracing::warn!(path = %path.display(), %error, "skipping an unreadable bundled theme");
+            }
+        }
+    }
+    themes.sort_by_key(|theme| theme.name.to_lowercase());
+    tracing::debug!(count = themes.len(), "bundled themes");
+    themes
 }
 
 /// Every theme stored on disk, by name.
@@ -148,6 +191,9 @@ pub fn save(data_dir: &Path, theme: &TerminalTheme) -> Result<TerminalTheme> {
     // that could choose one could choose `../settings`.
     theme.id = slug(&theme.name);
     theme.name = theme.name.chars().take(MAX_NAME).collect();
+    // `builtin` describes where a file came from, and a file written here came from the user — a
+    // saved theme claiming otherwise would be undeletable in the UI for no reason.
+    theme.builtin = false;
     if theme.ansi.len() != ANSI_COUNT {
         theme.ansi.resize(ANSI_COUNT, None);
     }
@@ -189,6 +235,7 @@ mod tests {
             id: String::new(),
             name: name.to_string(),
             ansi: vec![None; ANSI_COUNT],
+            builtin: false,
             background: Some("#0a0a0f".into()),
             foreground: None,
             cursor: None,
@@ -301,6 +348,74 @@ mod tests {
         save(dir.path(), &theme("Gone")).expect("save");
         remove(dir.path(), "gone").expect("remove");
         assert!(list(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn a_yggtheme_imports_exactly_like_an_itermcolors() {
+        // The whole basis of the extension: same bytes, same format, different name on the tin.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let body = r#"<plist><dict>
+            <key>Ansi 0 Color</key><dict>
+                <key>Red Component</key><real>0.0</real>
+                <key>Green Component</key><real>0.5</real>
+                <key>Blue Component</key><real>1.0</real>
+            </dict>
+        </dict></plist>"#;
+        std::fs::write(dir.path().join("A.itermcolors"), body).expect("write");
+        std::fs::write(dir.path().join("A.yggtheme"), body).expect("write");
+
+        let from_iterm = import(&dir.path().join("A.itermcolors")).expect("import");
+        let from_ours = import(&dir.path().join("A.yggtheme")).expect("import");
+        assert_eq!(from_iterm.ansi, from_ours.ansi);
+        assert_eq!(
+            from_ours.ansi.first().cloned().flatten().as_deref(),
+            Some("#0080ff")
+        );
+    }
+
+    #[test]
+    fn bundled_themes_are_read_from_the_resource_directory_and_marked_builtin() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let themes = dir.path().join("resources/themes");
+        std::fs::create_dir_all(&themes).expect("mkdir");
+        std::fs::write(
+            themes.join("Shipped.yggtheme"),
+            r#"<plist><dict><key>Background Color</key><dict>
+                <key>Red Component</key><real>0.0</real>
+                <key>Green Component</key><real>0.0</real>
+                <key>Blue Component</key><real>0.0</real>
+            </dict></dict></plist>"#,
+        )
+        .expect("write");
+        // A file in the wrong format is skipped rather than failing the whole list.
+        std::fs::write(themes.join("notes.txt"), "ignored").expect("write");
+        std::fs::write(themes.join("broken.yggtheme"), "not a plist").expect("write");
+
+        let found = bundled(dir.path());
+        assert_eq!(found.len(), 1);
+        let first = found.first().expect("one");
+        assert_eq!(first.name, "Shipped");
+        assert!(
+            first.builtin,
+            "a shipped scheme is not the user's to delete"
+        );
+    }
+
+    #[test]
+    fn a_missing_resource_directory_is_empty_rather_than_an_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert!(bundled(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn a_saved_theme_is_never_marked_builtin() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut pretender = theme("Mine");
+        pretender.builtin = true;
+        save(dir.path(), &pretender).expect("save");
+        // Round-tripped through disk: `builtin` says where a file came FROM, and a user's file came
+        // from the user however its JSON is written.
+        assert!(list(dir.path()).first().is_some_and(|t| !t.builtin));
     }
 
     #[test]

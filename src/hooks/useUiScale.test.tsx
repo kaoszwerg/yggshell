@@ -25,6 +25,8 @@ function settings(ui_scale: number): SettingsDto {
     terminal_font_size: 13,
     terminal_shell: "",
     terminal_theme: "",
+    diff_theme: "",
+    commit_theme: "",
     tmux_mode: "off",
     tmux_session: "",
     minimize_to_tray: false,

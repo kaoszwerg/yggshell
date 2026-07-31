@@ -332,4 +332,69 @@ describe("TerminalView", () => {
       expect(useTerminalStore.getState().panes[0]?.themeId).toBeNull();
     });
   });
+
+  // Detaching from tmux is not the end of anything: the session keeps running, and the user asked to
+  // be back in a terminal. Closing the tab took away the one thing they had not asked to lose.
+  describe("detaching from tmux", () => {
+    /** The exit the backend reports; `onExit` was captured when the view mounted. */
+    function exit(payload: { id: number; code: number | null; tmux_client: boolean }) {
+      const handler = vi.mocked(terminalApi.onExit).mock.calls[0]?.[0];
+      act(() => handler?.(payload));
+    }
+
+    it("puts a plain shell in the same tab instead of closing it", async () => {
+      const opened = deferOpen(30);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      const key = useTerminalStore.getState().panes[0]?.key;
+      vi.mocked(terminalApi.open).mockResolvedValue(31);
+
+      exit({ id: 30, code: 0, tmux_client: true });
+
+      const pane = useTerminalStore.getState().panes[0];
+      expect(pane?.key).toBe(key);
+      expect(pane?.plain).toBe(true);
+      expect(pane?.generation).toBe(1);
+    });
+
+    it("opens that replacement session without tmux", async () => {
+      const opened = deferOpen(32);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      vi.mocked(terminalApi.open).mockResolvedValue(33);
+
+      await act(async () => {
+        exit({ id: 32, code: 0, tmux_client: true });
+      });
+
+      const last = vi.mocked(terminalApi.open).mock.calls.at(-1)?.[0];
+      expect(last).toMatchObject({ plain: true, rows: 30, cols: 100 });
+    });
+
+    it("still closes the tab when the SHELL exits", async () => {
+      const opened = deferOpen(34);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      exit({ id: 34, code: 0, tmux_client: false });
+
+      expect(useTerminalStore.getState().panes).toHaveLength(0);
+    });
+
+    it("still closes the tab when the tmux client dies badly", async () => {
+      // A detach is a clean exit. A client that died is a failure, and the tab goes with it rather
+      // than silently becoming something else.
+      const opened = deferOpen(35);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      exit({ id: 35, code: 1, tmux_client: true });
+
+      expect(useTerminalStore.getState().panes).toHaveLength(0);
+    });
+  });
 });

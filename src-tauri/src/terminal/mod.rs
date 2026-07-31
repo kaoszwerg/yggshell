@@ -102,6 +102,22 @@ pub struct TerminalRegistry {
     next_id: AtomicU32,
 }
 
+/// What a new session should be.
+///
+/// A struct rather than five more parameters: what a terminal starts as has grown from "a shell" to a
+/// shell, a directory, a profile, a colour scheme and whether tmux is bypassed — and a call site
+/// reading `open(app, ch, None, size, &s, None, false)` says nothing about which `false` that is.
+pub struct Open<'a> {
+    /// Where to start, when the caller asked for somewhere specific. A profile's directory wins.
+    pub cwd: Option<PathBuf>,
+    pub size: Size,
+    pub settings: &'a crate::dto::SettingsDto,
+    pub profile: Option<&'a crate::dto::TerminalProfile>,
+    /// Start a plain shell whatever the tmux setting says. Used when a tab drops out of tmux: a
+    /// detach means "put me back in a terminal", not "close the window".
+    pub plain: bool,
+}
+
 impl TerminalRegistry {
     /// Start a session and stream its output into `output`.
     ///
@@ -113,11 +129,15 @@ impl TerminalRegistry {
         &self,
         app: AppHandle,
         output: Channel<InvokeResponseBody>,
-        cwd: Option<PathBuf>,
-        size: Size,
-        settings: &crate::dto::SettingsDto,
-        profile: Option<&crate::dto::TerminalProfile>,
+        request: Open<'_>,
     ) -> Result<SessionId> {
+        let Open {
+            cwd,
+            size,
+            settings,
+            profile,
+            plain,
+        } = request;
         // Two different kinds of directory, and they fail differently on purpose.
         //
         // The one on the CALL is a request: if it is not a directory, that is an error, because the
@@ -153,7 +173,25 @@ impl TerminalRegistry {
                 .and_then(|p| p.shell.as_deref())
                 .unwrap_or(&settings.terminal_shell),
         );
-        let launch = tmux::launch(settings.tmux_mode, &settings.tmux_session, &shell);
+        // Which tmux sessions this app's other tabs already hold. Two tabs on one session share one
+        // view of it, so a new tab must not land on a session that is already being shown.
+        let taken: Vec<String> = {
+            let sessions = self.sessions.lock().map_err(poisoned)?;
+            sessions
+                .values()
+                .filter_map(|session| session.tmux_session.clone())
+                .collect()
+        };
+        let launch = tmux::launch(
+            if plain {
+                crate::dto::TmuxMode::Off
+            } else {
+                settings.tmux_mode
+            },
+            &settings.tmux_session,
+            &shell,
+            &taken,
+        );
         let kind = launch.kind;
         let spawned = pty::spawn(pty::Spawn {
             program: &launch.program,
@@ -263,7 +301,14 @@ impl TerminalRegistry {
                 bytes_out = sent,
                 "terminal session ended"
             );
-            if let Err(e) = pump_app.emit(EXIT_EVENT, TerminalExit { id, code }) {
+            if let Err(e) = pump_app.emit(
+                EXIT_EVENT,
+                TerminalExit {
+                    id,
+                    code,
+                    tmux_client: kind == pty::SessionKind::TmuxClient,
+                },
+            ) {
                 tracing::warn!(session = id, error = %e, "could not announce the terminal exit");
             }
             if let Some(state) = registry_of(&pump_app) {

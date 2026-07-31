@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, TerminalSquare, X } from "lucide-react";
 import { api } from "../api/commands";
 import { terminalApi, type SessionId } from "../api/terminal";
+import { GitDetailPanel } from "../components/tools/GitDetailPanel";
 import { Button } from "../components/ui/Button";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { IconButton } from "../components/ui/IconButton";
@@ -65,6 +66,7 @@ export function TerminalView() {
   const openPane = useTerminalStore((s) => s.openPane);
   const bootstrap = useTerminalStore((s) => s.bootstrap);
   const closePane = useTerminalStore((s) => s.closePane);
+  const detachToShell = useTerminalStore((s) => s.detachToShell);
 
   /** Backend session id per pane, learned once the PTY is actually open. */
   const sessions = useRef(new Map<string, SessionId>());
@@ -108,6 +110,14 @@ export function TerminalView() {
         for (const [key, id] of sessions.current) {
           if (id !== exit.id) continue;
           sessions.current.delete(key);
+          // Detaching from tmux is not the end of anything: the session keeps running, and the user
+          // asked to be back in a terminal. Closing the tab took the window away instead — the one
+          // thing they had not asked for. A tmux client that ended cleanly puts a plain shell in the
+          // same tab; a shell that exited, or a client that died, closes it as before.
+          if (exit.tmux_client && (exit.code ?? 0) === 0) {
+            detachToShell(key);
+            return;
+          }
           closePane(key);
           return;
         }
@@ -122,7 +132,7 @@ export function TerminalView() {
       cancelled = true;
       unlisten?.();
     };
-  }, [closePane]);
+  }, [closePane, detachToShell]);
 
   if (panes.length === 0) {
     return (
@@ -144,6 +154,8 @@ export function TerminalView() {
           paneKey={pane.key}
           profileId={pane.profileId}
           themeId={pane.themeId}
+          plain={pane.plain}
+          generation={pane.generation}
           active={pane.key === activeKey}
           onSession={registerSession}
         />
@@ -157,6 +169,8 @@ function Pane({
   paneKey,
   profileId,
   themeId,
+  plain,
+  generation,
   active,
   onSession,
 }: {
@@ -165,6 +179,10 @@ function Pane({
   profileId: string | null;
   /** This tab's own colour scheme, if the user gave it one. Changeable at any time. */
   themeId: string | null;
+  /** Ignore the tmux setting for this tab — set once the user has detached out of it. */
+  plain: boolean;
+  /** Bumped to ask for a fresh session in this same tab. */
+  generation: number;
   active: boolean;
   onSession: (key: string, id: SessionId) => void;
 }) {
@@ -173,6 +191,9 @@ function Pane({
   const opening = useRef(false);
   /** Geometry measured while the open call was still in flight. Applied the moment it lands. */
   const pending = useRef<{ rows: number; cols: number } | null>(null);
+  /** The last geometry this pane reported, so a new session can be started without waiting for the
+   *  emulator to be resized into reporting one again. */
+  const lastGeometry = useRef<{ rows: number; cols: number } | null>(null);
   const settings = useSettings();
   // UI scale and text size are separate questions: how big the chrome is, and how much output fits.
   // The WebView zoom multiplies EVERYTHING, so the emulator is handed a size divided by that zoom —
@@ -223,11 +244,13 @@ function Pane({
       opening.current = true;
       const spawnedAt = { rows, cols };
 
+      lastGeometry.current = { rows, cols };
       terminalApi
         .open({
           rows,
           cols,
           profile: profileId,
+          plain,
           onOutput: (bytes) => handle.current?.write(bytes),
         })
         .then((id) => {
@@ -250,8 +273,21 @@ function Pane({
           handle.current?.write(notice(`could not start a terminal: ${String(error)}`));
         });
     },
-    [onSession, paneKey, profileId, setTitle],
+    [onSession, paneKey, plain, profileId, setTitle],
   );
+
+  // A bumped generation means "this tab wants a new session" — today, that the user detached out of
+  // tmux. The emulator, the scrollback and the tab all stay; only the process behind them is new.
+  const started = useRef(generation);
+  useEffect(() => {
+    if (started.current === generation) return;
+    started.current = generation;
+    sessionId.current = null;
+    opening.current = false;
+    setSessionOpen(false);
+    const geometry = lastGeometry.current;
+    if (geometry) onResize(geometry.rows, geometry.cols);
+  }, [generation, onResize]);
 
   const onData = useCallback((data: string) => {
     const id = sessionId.current;
@@ -417,6 +453,11 @@ function Pane({
           />
         </div>
       </ContextMenu>
+
+      {/* Inside the pane, so it covers THIS terminal and travels with the tab: two tabs are two
+          repositories as often as not, and a panel belonging to the window meant opening a diff in
+          one tab and finding it over another. */}
+      <GitDetailPanel paneKey={paneKey} />
 
       {searchOpen ? <SearchBar handle={handle} onClose={closeSearch} /> : null}
       {schemeOpen ? (

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ThemeControls } from "./ThemeControls";
 import type { TerminalTheme } from "../../bindings/TerminalTheme";
@@ -38,6 +38,7 @@ const NORD: TerminalTheme = {
   id: "nord",
   name: "Nord",
   ansi: ["#2e3440", ...Array.from({ length: 15 }, () => null)],
+  builtin: false,
   background: "#2e3440",
   foreground: "#d8dee9",
   cursor: null,
@@ -75,6 +76,9 @@ function setup(over: { chosen?: string; themes?: TerminalTheme[]; importing?: bo
   } as unknown as ReturnType<typeof useDeleteTerminalTheme>);
 }
 
+/** The terminal scheme buttons, which is where "Nord" means the terminal's Nord. */
+const terminalGroup = () => within(screen.getByRole("group", { name: "Terminal colour scheme" }));
+
 /** Deliver a drop of these paths to the component. */
 function drop(...paths: string[]) {
   fireEvent(window, new Event("noop"));
@@ -90,24 +94,28 @@ describe("ThemeControls", () => {
 
   it("offers the HUD palette alongside every stored scheme", async () => {
     render(<ThemeControls />);
-    expect(screen.getByRole("button", { name: "HUD" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Nord" })).toBeTruthy();
+    expect(terminalGroup().getByRole("button", { name: "HUD" })).toBeTruthy();
+    expect(terminalGroup().getByRole("button", { name: "Nord" })).toBeTruthy();
     await waitFor(() => expect(onDrop).toBeDefined());
   });
 
   it("marks the chosen one, and HUD when nothing is chosen", () => {
     render(<ThemeControls />);
-    expect(screen.getByRole("button", { name: "HUD" }).getAttribute("aria-pressed")).toBe("true");
+    expect(terminalGroup().getByRole("button", { name: "HUD" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
 
+    cleanup();
     setup({ chosen: "nord" });
     render(<ThemeControls />);
-    const nord = screen.getAllByRole("button", { name: "Nord" }).at(-1);
-    expect(nord?.getAttribute("aria-pressed")).toBe("true");
+    expect(terminalGroup().getByRole("button", { name: "Nord" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
   });
 
   it("stores the scheme id when one is picked", () => {
     render(<ThemeControls />);
-    fireEvent.click(screen.getByRole("button", { name: "Nord" }));
+    fireEvent.click(terminalGroup().getByRole("button", { name: "Nord" }));
     expect(update).toHaveBeenCalledWith({ terminalTheme: "nord" });
   });
 
@@ -200,5 +208,24 @@ describe("ThemeControls", () => {
     await waitFor(() => expect(onDrop).toBeDefined());
     view.unmount();
     await waitFor(() => expect(unlisten).toHaveBeenCalled());
+  });
+
+  it("lets diffs and commits be read in a scheme of their own", () => {
+    render(<ThemeControls />);
+    const diffs = within(screen.getByRole("group", { name: "Diffs colour scheme" }));
+
+    // "Same as the terminal" is a button rather than the absence of a choice: an inheritance chain
+    // nobody can see is one nobody can predict.
+    expect(
+      diffs.getByRole("button", { name: "Same as the terminal" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    fireEvent.click(diffs.getByRole("button", { name: "Nord" }));
+    expect(update).toHaveBeenCalledWith({ diffTheme: "nord" });
+
+    const commits = within(screen.getByRole("group", { name: "Commits colour scheme" }));
+    expect(commits.getByRole("button", { name: "Same as diffs" })).toBeTruthy();
+    fireEvent.click(commits.getByRole("button", { name: "Nord" }));
+    expect(update).toHaveBeenCalledWith({ commitTheme: "nord" });
   });
 });

@@ -8,6 +8,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Fourteen colour schemes ship with the app** — three of ours (Yggdrasil, Bifrost, Fimbulwinter) and
+  eleven ported ones whose licences were each checked at their own upstream, not at the collection they
+  were downloaded from: Solarized (dark/light), Dracula, Nord, Catppuccin (Mocha/Latte), Tomorrow,
+  Tomorrow Night and Ayu (dark/mirage/light). All MIT; attribution in
+  `src-tauri/resources/themes/CREDITS.md`. **Gruvbox is deliberately absent**: its repository carries no
+  licence file, and "widely used" is not a licence. A shipped scheme can be copied and edited, never
+  deleted — it is part of the app rather than of your data.
+- **`.yggtheme`, which is an iTerm2 plist with our name on it.** Byte for byte the same format, so
+  iTerm2 reads our files and we read `.itermcolors` — the extension marks where a file came from and
+  changes nothing else. A round-trip test pins that, because the moment it stopped being true the
+  extension would be a lie.
+- **Diffs side by side**, old on the left with its line numbers and new on the right with its own,
+  which is what makes a reindent or a rename readable at all. A row where one side has no line renders
+  as a *gap* rather than a blank line — a blank line is a line that exists. Toggled in the panel header
+  and remembered; the interleaved view is still there for a narrow window.
+- **Diffs and commits can be read in a scheme of their own** (Settings → Terminal). The chain is
+  explicit and every step earns its place: the setting for that kind of view, then the diff setting for
+  commits, then the tab's own terminal scheme, then the default. "Same as the terminal" is a button
+  rather than the absence of a choice — an inheritance chain nobody can see is one nobody can predict.
 - **A colour scheme per tab.** Right-click a terminal → *Colour scheme…* A tab without a choice of its
   own follows its profile, and failing that the setting — so changing the default in Settings repaints
   every tab that has not opted out, immediately.
@@ -158,6 +177,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Every tab attached to the SAME tmux session.** With attach-or-create, every terminal joined one
+  session — and two clients on one session share one *view* of it: same window, same scrollback. A
+  second tab therefore appeared to do nothing at all, which is not a multi-terminal app. The first tab
+  now takes the configured session, and each one after it gets its own (`work`, `work-2`, …), reusing a
+  name as soon as a tab closes. In plain attach mode, a session another tab is already showing yields a
+  plain shell instead of a duplicate view.
+- **Detaching from tmux closed the tab.** Detaching ends the *client*, not the work: the session keeps
+  running and the user asked to be back in a terminal. The tab now gets a plain shell in place of the
+  tmux client, keeping its window, its scrollback and its place in the strip. A shell that exited, or a
+  client that died with a failure, still closes the tab.
+- **The diff and commit panel belonged to the window instead of to a tab.** Two tabs are two
+  repositories as often as not, so opening a diff in one and finding it laid over another was the
+  natural consequence. Each tab now carries its own.
 - **Looking at Settings or Logs killed every running terminal.** Navigating away unmounted the
   terminal view, and each pane closed its session on unmount — so a glance at a preferences page took
   down whatever was running in every tab, and coming back left an empty workspace. Two things were

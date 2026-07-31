@@ -18,7 +18,12 @@ id: string, name: string,
 /**
  * The 16 ANSI colours, in order. Always 16 entries; an undefined one is `null`.
  */
-ansi: Array<string | null>, background: string | null, foreground: string | null, cursor: string | null, 
+ansi: Array<string | null>, 
+/**
+ * True for a scheme shipped with the app. It can be copied and edited, never deleted — it is
+ * part of the app rather than of the user's data.
+ */
+builtin: boolean, background: string | null, foreground: string | null, cursor: string | null, 
 /**
  * The colour of the character *under* the cursor.
  */

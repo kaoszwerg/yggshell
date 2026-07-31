@@ -22,6 +22,8 @@ export function useUpdateSettings() {
       terminalFontSize?: number;
       terminalShell?: string;
       terminalTheme?: string;
+      diffTheme?: string;
+      commitTheme?: string;
       tmuxMode?: TmuxMode;
       tmuxSession?: string;
       minimizeToTray?: boolean;

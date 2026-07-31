@@ -5,6 +5,7 @@
 // sessions across a restart is its own milestone, and a tab list that outlived the processes it names
 // would be a lie.
 import { create } from "zustand";
+import type { GitDetail } from "./ui";
 
 /** One tab. `key` is the frontend's identity for it and is stable for the pane's whole life; the
  * backend session id is private to the pane, because it does not exist until the PTY is open. */
@@ -30,6 +31,27 @@ export interface TerminalPane {
    * different scheme" mean "open a different tab".
    */
   themeId: string | null;
+  /**
+   * Start a plain shell for this tab, whatever the tmux setting says.
+   *
+   * Set when the user detaches from tmux: leaving tmux means going back to a terminal, not losing the
+   * window. Without it the tab would immediately re-attach to the session just left.
+   */
+  plain: boolean;
+  /**
+   * Bumped to ask the pane for a fresh session in the same tab.
+   *
+   * A counter rather than a flag, because the same request can be made repeatedly — attach, detach,
+   * attach, detach — and a flag would only ever be seen once.
+   */
+  generation: number;
+  /**
+   * What the Git detail panel shows for THIS tab, or `null` when it is closed.
+   *
+   * Per tab, not per window: tabs are usually in different repositories, and a single global panel
+   * meant opening a diff in one tab and finding it laid over another.
+   */
+  detail: GitDetail | null;
 }
 
 export interface TerminalState {
@@ -58,6 +80,10 @@ export interface TerminalState {
   setCwd: (key: string, cwd: string) => void;
   /** Give one tab its own colour scheme; `null` returns it to the profile's or the Settings one. */
   setPaneTheme: (key: string, themeId: string | null) => void;
+  /** Put a tab back into a plain shell and ask it for a new session — what a tmux detach means. */
+  detachToShell: (key: string) => void;
+  /** Show something in this tab's detail panel; `null` closes it. */
+  setPaneDetail: (key: string, detail: GitDetail | null) => void;
 }
 
 /** Monotonic, process-local. Never shown to the user; the title is. */
@@ -91,7 +117,19 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   openPane: (profileId = null) => {
     const key = `term-${nextKey++}`;
     set((s) => ({
-      panes: [...s.panes, { key, title: "Terminal", cwd: null, profileId, themeId: null }],
+      panes: [
+        ...s.panes,
+        {
+          key,
+          title: "Terminal",
+          cwd: null,
+          profileId,
+          themeId: null,
+          plain: false,
+          generation: 0,
+          detail: null,
+        },
+      ],
       activeKey: key,
     }));
     return key;
@@ -118,5 +156,17 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   setPaneTheme: (key, themeId) =>
     set((s) => ({
       panes: s.panes.map((p) => (p.key === key && p.themeId !== themeId ? { ...p, themeId } : p)),
+    })),
+
+  detachToShell: (key) =>
+    set((s) => ({
+      panes: s.panes.map((p) =>
+        p.key === key ? { ...p, plain: true, generation: p.generation + 1 } : p,
+      ),
+    })),
+
+  setPaneDetail: (key, detail) =>
+    set((s) => ({
+      panes: s.panes.map((p) => (p.key === key ? { ...p, detail } : p)),
     })),
 }));

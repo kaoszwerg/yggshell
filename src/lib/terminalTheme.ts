@@ -146,3 +146,40 @@ export function themeById(
   // leaving the terminal unstyled — the setting is a file a user can edit, and themes can be removed.
   return themes?.find((theme) => theme.id === id) ?? null;
 }
+
+/**
+ * Which scheme a detail view is drawn in.
+ *
+ * The chain, most specific first — and every step exists because somebody would reasonably want it:
+ *
+ * 1. the setting for **this kind of view** (`diff_theme`, `commit_theme`), for reading diffs in
+ *    something other than what you type in;
+ * 2. for a commit, the **diff** setting, so configuring one covers both unless you say otherwise;
+ * 3. this **tab's** own terminal scheme, so a detail panel matches the terminal it sits over;
+ * 4. the **default** terminal scheme.
+ *
+ * An empty string at any step means "not set here, ask the next one" — which is what makes the common
+ * case, configuring nothing at all, look right.
+ */
+export function detailThemeId(
+  kind: "diff" | "commit",
+  settings:
+    | {
+        diff_theme?: string;
+        commit_theme?: string;
+        terminal_theme?: string;
+      }
+    | null
+    | undefined,
+  paneThemeId: string | null,
+): string {
+  const own = kind === "commit" ? (settings?.commit_theme ?? "") : "";
+  const diff = settings?.diff_theme ?? "";
+  return own !== ""
+    ? own
+    : diff !== ""
+      ? diff
+      : (paneThemeId ?? "") !== ""
+        ? (paneThemeId ?? "")
+        : (settings?.terminal_theme ?? "");
+}

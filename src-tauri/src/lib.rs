@@ -136,7 +136,13 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    app.manage(AppState::new(&data_dir));
+    // The resource directory holds what we ship (the bundled colour schemes). A build that cannot
+    // resolve it still runs — the user simply starts with no schemes rather than with no app.
+    let resource_dir = app.path().resource_dir().unwrap_or_else(|error| {
+        tracing::warn!(%error, "no resource directory — bundled colour schemes will be missing");
+        data_dir.clone()
+    });
+    app.manage(AppState::new(&data_dir, &resource_dir));
     app.manage(crate::terminal::TerminalRegistry::default());
     crate::terminal::shell_integration::set_data_dir(&data_dir);
     // Close handler is always registered; it consults the live `minimize_to_tray` setting. The tray

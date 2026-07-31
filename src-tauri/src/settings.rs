@@ -28,6 +28,8 @@ pub struct SettingsPatch {
     pub terminal_font_size: Option<f64>,
     pub terminal_shell: Option<String>,
     pub terminal_theme: Option<String>,
+    pub diff_theme: Option<String>,
+    pub commit_theme: Option<String>,
     pub tmux_mode: Option<TmuxMode>,
     pub tmux_session: Option<String>,
     pub minimize_to_tray: Option<bool>,
@@ -107,6 +109,12 @@ impl SettingsStore {
             }
             if let Some(shell) = patch.terminal_shell {
                 guard.terminal_shell = shell.trim().to_string();
+            }
+            if let Some(theme) = patch.diff_theme {
+                guard.diff_theme = theme.trim().to_string();
+            }
+            if let Some(theme) = patch.commit_theme {
+                guard.commit_theme = theme.trim().to_string();
             }
             if let Some(theme) = patch.terminal_theme {
                 // Stored as given: an id naming a theme that has since been deleted is handled where

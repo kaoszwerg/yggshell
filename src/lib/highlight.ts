@@ -1,6 +1,6 @@
 import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { PALETTE } from "../styles/palette";
+import { HUD_TERMINAL_THEME as HUD_COLOURS, type XtermTheme } from "./terminalTheme";
 
 /**
  * Syntax highlighting for the diff and commit views.
@@ -20,48 +20,63 @@ import { PALETTE } from "../styles/palette";
  * Grammars load on demand: a diff of a Rust file must not cost the user the TypeScript grammar too.
  */
 
-/** The HUD's own token colours. Every value comes from `PALETTE`. */
-const HUD_THEME: ThemeRegistration = {
-  name: "hud",
-  type: "dark",
-  colors: {
-    "editor.background": PALETTE.deep,
-    "editor.foreground": PALETTE.fg,
-  },
-  tokenColors: [
-    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: PALETTE.dim } },
-    {
-      scope: ["string", "constant.other.symbol", "string.regexp"],
-      settings: { foreground: PALETTE.green },
+/**
+ * Build a shiki theme out of a terminal colour scheme.
+ *
+ * A colour scheme is sixteen ANSI slots plus a foreground and a background — which is exactly what
+ * every terminal syntax highlighter has ever had to work with, and it is enough: keywords take the
+ * scheme's magenta, strings its green, comments its bright black. That is what makes "configure the
+ * diff's colours" the same act as "configure a terminal's", rather than a second palette to maintain.
+ *
+ * With no scheme the HUD's own colours are used, which is what `PALETTE` is for.
+ */
+function syntaxTheme(scheme: XtermTheme | null): ThemeRegistration {
+  const c = scheme ?? HUD_COLOURS;
+  return {
+    name: "hud",
+    type: "dark",
+    colors: {
+      "editor.background": c.background,
+      "editor.foreground": c.foreground,
     },
-    {
-      scope: ["constant.numeric", "constant.language", "constant.character"],
-      settings: { foreground: PALETTE.gold },
-    },
-    {
-      scope: ["keyword", "storage", "storage.type", "keyword.operator.new"],
-      settings: { foreground: PALETTE.purple },
-    },
-    {
-      scope: ["entity.name.function", "support.function", "meta.function-call"],
-      settings: { foreground: PALETTE.cyan },
-    },
-    {
-      scope: ["entity.name.type", "support.type", "support.class", "entity.name.class"],
-      settings: { foreground: PALETTE.gold },
-    },
-    { scope: ["variable.parameter", "variable.other"], settings: { foreground: PALETTE.fg } },
-    {
-      scope: ["entity.name.tag", "punctuation.definition.tag"],
-      settings: { foreground: PALETTE.purple },
-    },
-    { scope: ["entity.other.attribute-name"], settings: { foreground: PALETTE.cyan } },
-    { scope: ["invalid", "invalid.illegal"], settings: { foreground: PALETTE.danger } },
-    { scope: ["markup.heading"], settings: { foreground: PALETTE.cyan } },
-    { scope: ["markup.inserted"], settings: { foreground: PALETTE.green } },
-    { scope: ["markup.deleted"], settings: { foreground: PALETTE.danger } },
-  ],
-};
+    tokenColors: [
+      {
+        scope: ["comment", "punctuation.definition.comment"],
+        settings: { foreground: c.brightBlack },
+      },
+      {
+        scope: ["string", "constant.other.symbol", "string.regexp"],
+        settings: { foreground: c.green },
+      },
+      {
+        scope: ["constant.numeric", "constant.language", "constant.character"],
+        settings: { foreground: c.yellow },
+      },
+      {
+        scope: ["keyword", "storage", "storage.type", "keyword.operator.new"],
+        settings: { foreground: c.magenta },
+      },
+      {
+        scope: ["entity.name.function", "support.function", "meta.function-call"],
+        settings: { foreground: c.blue },
+      },
+      {
+        scope: ["entity.name.type", "support.type", "support.class", "entity.name.class"],
+        settings: { foreground: c.yellow },
+      },
+      { scope: ["variable.parameter", "variable.other"], settings: { foreground: c.foreground } },
+      {
+        scope: ["entity.name.tag", "punctuation.definition.tag"],
+        settings: { foreground: c.magenta },
+      },
+      { scope: ["entity.other.attribute-name"], settings: { foreground: c.cyan } },
+      { scope: ["invalid", "invalid.illegal"], settings: { foreground: c.red } },
+      { scope: ["markup.heading"], settings: { foreground: c.cyan } },
+      { scope: ["markup.inserted"], settings: { foreground: c.green } },
+      { scope: ["markup.deleted"], settings: { foreground: c.red } },
+    ],
+  };
+}
 
 /**
  * The grammars we carry, and the extensions that reach them.
@@ -154,14 +169,21 @@ export interface Token {
 
 let highlighter: Promise<HighlighterCore> | null = null;
 const loaded = new Set<string>();
+const themes = new Set<string>();
 
 function core(): Promise<HighlighterCore> {
   highlighter ??= createHighlighterCore({
-    themes: [HUD_THEME],
+    themes: [syntaxTheme(null)],
     langs: [],
     engine: createJavaScriptRegexEngine(),
   });
   return highlighter;
+}
+
+/** A scheme to colour with: its id names the shiki theme, its colours build it. */
+export interface SyntaxScheme {
+  id: string;
+  colours: XtermTheme;
 }
 
 /**
@@ -172,7 +194,11 @@ function core(): Promise<HighlighterCore> {
  * always wins over colouring it**: this is a viewer, and a viewer that shows nothing because the
  * syntax highlighter had an opinion is worse than one that shows plain text.
  */
-export async function tokenize(code: string, language: string | null): Promise<Token[][]> {
+export async function tokenize(
+  code: string,
+  language: string | null,
+  scheme?: SyntaxScheme | null,
+): Promise<Token[][]> {
   const plain = () => code.split("\n").map((line) => [{ content: line }]);
   const loader = language === null ? undefined : LOADERS.get(language);
   if (language === null || loader === undefined) return plain();
@@ -183,7 +209,17 @@ export async function tokenize(code: string, language: string | null): Promise<T
       await shiki.loadLanguage((await loader()) as never);
       loaded.add(language);
     }
-    const { tokens } = shiki.codeToTokens(code, { lang: language, theme: "hud" });
+    // A theme per scheme, registered once and named after it. Registering it under one shared name
+    // would mean the last diff rendered decided the colours of every other.
+    let name = "hud";
+    if (scheme) {
+      name = `hud-${scheme.id}`;
+      if (!themes.has(name)) {
+        await shiki.loadTheme({ ...syntaxTheme(scheme.colours), name });
+        themes.add(name);
+      }
+    }
+    const { tokens } = shiki.codeToTokens(code, { lang: language, theme: name });
     return tokens.map((line) =>
       line.map((token) => ({ content: token.content, color: token.color })),
     );

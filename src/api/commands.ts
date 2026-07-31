@@ -76,6 +76,8 @@ export const api = {
     terminalFontSize?: number;
     terminalShell?: string;
     terminalTheme?: string;
+    diffTheme?: string;
+    commitTheme?: string;
     tmuxMode?: TmuxMode;
     tmuxSession?: string;
     minimizeToTray?: boolean;
@@ -85,6 +87,8 @@ export const api = {
       terminalFontSize: opts.terminalFontSize ?? null,
       terminalShell: opts.terminalShell ?? null,
       terminalTheme: opts.terminalTheme ?? null,
+      diffTheme: opts.diffTheme ?? null,
+      commitTheme: opts.commitTheme ?? null,
       tmuxMode: opts.tmuxMode ?? null,
       tmuxSession: opts.tmuxSession ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,

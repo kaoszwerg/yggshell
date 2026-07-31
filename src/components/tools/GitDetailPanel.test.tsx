@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GitDetailPanel } from "./GitDetailPanel";
 import { useTerminalStore } from "../../store/terminal";
-import { useUiStore } from "../../store/ui";
+import { pane } from "../../test/panes";
+import type { GitDetail } from "../../store/ui";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitDiff } from "../../bindings/GitDiff";
 
@@ -58,11 +59,19 @@ const COMMIT: GitCommitDetail = {
   ],
 };
 
+/** Put something in the one tab this suite renders — the panel belongs to a tab, not to the window. */
+function showDetail(detail: GitDetail | null, cwd: string | null = "/repo") {
+  useTerminalStore.setState({
+    panes: [pane({ key: "p1", title: "Terminal 1", cwd, detail })],
+    activeKey: "p1",
+  });
+}
+
 function renderPanel() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <GitDetailPanel />
+      <GitDetailPanel paneKey="p1" />
     </QueryClientProvider>,
   );
 }
@@ -73,11 +82,8 @@ describe("GitDetailPanel", () => {
     vi.mocked(gitApi.fileDiff).mockResolvedValue(DIFF);
     vi.mocked(gitApi.commit).mockResolvedValue(COMMIT);
     vi.mocked(gitApi.commitFileDiff).mockResolvedValue({ ...DIFF, staged: true });
-    useUiStore.setState({ gitDetail: null });
-    useTerminalStore.setState({
-      panes: [{ key: "p1", title: "Terminal 1", cwd: "/repo" }] as never,
-      activeKey: "p1",
-    });
+    showDetail(null);
+    showDetail(null);
   });
 
   it("renders nothing while it is closed — the terminal is what you should be looking at", () => {
@@ -86,17 +92,14 @@ describe("GitDetailPanel", () => {
   });
 
   it("stays closed when no terminal has said which repository this is", () => {
-    useTerminalStore.setState({ panes: [], activeKey: null });
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: false } });
+    showDetail({ kind: "file", path: "a.ts", staged: false }, null);
     renderPanel();
     expect(screen.queryByRole("region", { name: "Git detail" })).toBeNull();
     expect(gitApi.fileDiff).not.toHaveBeenCalled();
   });
 
   it("shows a file diff with both line numbers and its added and removed lines", async () => {
-    useUiStore.setState({
-      gitDetail: { kind: "file", path: "src/lib/highlight.ts", staged: false },
-    });
+    showDetail({ kind: "file", path: "src/lib/highlight.ts", staged: false });
     renderPanel();
 
     expect(await screen.findByText("const b = 3;")).toBeTruthy();
@@ -106,39 +109,39 @@ describe("GitDetailPanel", () => {
   });
 
   it("says which side of the change it is showing, because they are different diffs", async () => {
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: true } });
+    showDetail({ kind: "file", path: "a.ts", staged: true });
     renderPanel();
     expect(await screen.findByText(/HEAD vs\. the index/)).toBeTruthy();
   });
 
   it("closes on Escape and gives the terminal back", async () => {
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: false } });
+    showDetail({ kind: "file", path: "a.ts", staged: false });
     renderPanel();
     await screen.findByRole("region", { name: "Git detail" });
 
     fireEvent.keyDown(window, { key: "Escape" });
 
-    expect(useUiStore.getState().gitDetail).toBeNull();
+    expect(useTerminalStore.getState().panes[0]?.detail).toBeNull();
   });
 
   it("closes on the × as well", async () => {
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: false } });
+    showDetail({ kind: "file", path: "a.ts", staged: false });
     renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: "Close" }));
 
-    expect(useUiStore.getState().gitDetail).toBeNull();
+    expect(useTerminalStore.getState().panes[0]?.detail).toBeNull();
   });
 
   it("takes focus, so a keystroke cannot land in a terminal the user can no longer see", async () => {
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: false } });
+    showDetail({ kind: "file", path: "a.ts", staged: false });
     renderPanel();
     const panel = await screen.findByRole("region", { name: "Git detail" });
     await waitFor(() => expect(document.activeElement).toBe(panel));
   });
 
   it("shows a commit's whole message, not the summary the graph already had", async () => {
-    useUiStore.setState({ gitDetail: { kind: "commit", rev: COMMIT.sha } });
+    showDetail({ kind: "commit", rev: COMMIT.sha });
     renderPanel();
 
     expect(await screen.findByText(/The gap was small/)).toBeTruthy();
@@ -147,7 +150,7 @@ describe("GitDetailPanel", () => {
   });
 
   it("lists a commit's files with line counts, and says 'binary' instead of a fake zero", async () => {
-    useUiStore.setState({ gitDetail: { kind: "commit", rev: COMMIT.sha } });
+    showDetail({ kind: "commit", rev: COMMIT.sha });
     renderPanel();
 
     expect(await screen.findByText("src/api/commands.ts")).toBeTruthy();
@@ -157,24 +160,27 @@ describe("GitDetailPanel", () => {
   });
 
   it("opens a file from a commit, and offers the way back to it", async () => {
-    useUiStore.setState({ gitDetail: { kind: "commit", rev: COMMIT.sha } });
+    showDetail({ kind: "commit", rev: COMMIT.sha });
     renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: /src\/api\/commands\.ts/ }));
 
-    expect(useUiStore.getState().gitDetail).toEqual({
+    expect(useTerminalStore.getState().panes[0]?.detail).toEqual({
       kind: "commit-file",
       rev: COMMIT.sha,
       path: "src/api/commands.ts",
     });
 
     fireEvent.click(await screen.findByRole("button", { name: "Back to the commit" }));
-    expect(useUiStore.getState().gitDetail).toEqual({ kind: "commit", rev: COMMIT.sha });
+    expect(useTerminalStore.getState().panes[0]?.detail).toEqual({
+      kind: "commit",
+      rev: COMMIT.sha,
+    });
   });
 
   it("surfaces a backend failure instead of showing an empty panel", async () => {
     vi.mocked(gitApi.fileDiff).mockRejectedValue(new Error("git: could not read a blob"));
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: false } });
+    showDetail({ kind: "file", path: "a.ts", staged: false });
     renderPanel();
 
     expect(await screen.findByText(/could not read a blob/)).toBeTruthy();
@@ -182,7 +188,7 @@ describe("GitDetailPanel", () => {
 
   it("says so when the file has since gone, rather than rendering nothing", async () => {
     vi.mocked(gitApi.fileDiff).mockResolvedValue(null);
-    useUiStore.setState({ gitDetail: { kind: "file", path: "a.ts", staged: false } });
+    showDetail({ kind: "file", path: "a.ts", staged: false });
     renderPanel();
 
     expect(await screen.findByText(/no longer in the repository/)).toBeTruthy();

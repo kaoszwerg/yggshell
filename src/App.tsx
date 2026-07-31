@@ -2,7 +2,6 @@ import { useRef } from "react";
 import { TitleBar } from "./components/layout/TitleBar";
 import { StatusBar } from "./components/layout/StatusBar";
 import { Sidebar } from "./components/sidebar/Sidebar";
-import { GitDetailPanel } from "./components/tools/GitDetailPanel";
 import { ToolPanel } from "./components/tools/ToolPanel";
 import { AboutDialog } from "./components/AboutDialog";
 import { CrashNotice } from "./components/CrashNotice";
@@ -51,11 +50,6 @@ export default function App() {
             </div>
             {view === "logs" ? <LogsView /> : null}
             {view === "settings" ? <SettingsView /> : null}
-            {/* Over the view rather than beside it: a diff needs the widest surface in the window,
-                and the terminal underneath keeps running rather than being torn down and rebuilt. It
-                only ever appears on the terminal — Logs and Settings are views of their own, and
-                covering one with a diff would be a second navigation nobody asked for. */}
-            {view === "terminal" ? <GitDetailPanel /> : null}
           </main>
         </div>
         <StatusBar canScrollTop={canTop} onScrollTop={scrollToTop} />

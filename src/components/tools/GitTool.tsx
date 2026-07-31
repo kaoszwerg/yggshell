@@ -9,7 +9,7 @@ import { layoutHistory, type GraphRow } from "../../lib/gitGraph";
 import { Row } from "../ui/Row";
 import { Splitter } from "../ui/Splitter";
 import { useTerminalStore } from "../../store/terminal";
-import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore } from "../../store/ui";
+import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type GitDetail } from "../../store/ui";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
 import type { GitSnapshot } from "../../bindings/GitSnapshot";
@@ -180,13 +180,19 @@ const changeKey = (c: GitChange) => `${c.staged ? "s" : "w"}:${c.path}`;
 
 function ChangeRow({ change }: { change: GitChange }) {
   const { mark, className } = changeMark(change.status);
-  const show = useUiStore((s) => s.showGitDetail);
-  const shown = useUiStore(
-    (s) =>
-      s.gitDetail?.kind === "file" &&
-      s.gitDetail.path === change.path &&
-      s.gitDetail.staged === change.staged,
-  );
+  // Into the ACTIVE tab: the tool shows the repository the tab in front is in, so what it opens
+  // belongs to that tab and travels with it.
+  const activeKey = useTerminalStore((s) => s.activeKey);
+  const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
+  const shown = useTerminalStore((s) => {
+    const detail = s.panes.find((p) => p.key === s.activeKey)?.detail;
+    return (
+      detail?.kind === "file" && detail.path === change.path && detail.staged === change.staged
+    );
+  });
+  const show = (detail: GitDetail) => {
+    if (activeKey !== null) setPaneDetail(activeKey, detail);
+  };
 
   return (
     // The full path in a HUD tooltip, because the column is narrow and the interesting part of a
@@ -246,10 +252,15 @@ function History({ commits }: { commits: GitCommit[] }) {
 /** One commit in the graph. Clicking it opens the commit — the whole message and its files — in the
  *  detail panel over the terminal. */
 function CommitRow({ row, width, last }: { row: GraphRow; width: number; last: boolean }) {
-  const show = useUiStore((s) => s.showGitDetail);
-  const shown = useUiStore(
-    (s) => s.gitDetail?.kind !== "file" && s.gitDetail?.rev === row.commit.sha,
-  );
+  const activeKey = useTerminalStore((s) => s.activeKey);
+  const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
+  const shown = useTerminalStore((s) => {
+    const detail = s.panes.find((p) => p.key === s.activeKey)?.detail;
+    return detail?.kind !== "file" && detail?.rev === row.commit.sha;
+  });
+  const show = (detail: GitDetail) => {
+    if (activeKey !== null) setPaneDetail(activeKey, detail);
+  };
 
   return (
     <Row

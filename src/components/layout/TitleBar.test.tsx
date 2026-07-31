@@ -7,6 +7,7 @@ import type { BuildInfo } from "../../bindings/BuildInfo";
 import { clearPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
 import { clearPasteTargets, registerPasteTarget } from "../../lib/terminalHandles";
 import { useTerminalStore } from "../../store/terminal";
+import { pane } from "../../test/panes";
 import { useUiStore } from "../../store/ui";
 
 // TitleBar imports this SVG for the app icon; the build pipeline normally provides it, jsdom needs a stub.
@@ -104,7 +105,7 @@ describe("TitleBar", () => {
       // Screen space in a terminal belongs to the terminal (ADR-PROJ-001): the tabs cost no extra
       // height precisely because they take the room the tagline was using.
       useTerminalStore.setState({
-        panes: [{ key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null }],
+        panes: [pane({ key: "term-0", title: "zsh", cwd: null })],
         activeKey: "term-0",
       });
       renderTitleBar(devBuild);
@@ -117,8 +118,8 @@ describe("TitleBar", () => {
     it("switches to the terminal view when a tab is clicked from elsewhere", () => {
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
+          pane({ key: "term-0", title: "zsh", cwd: null }),
+          pane({ key: "term-1", title: "cargo", cwd: null }),
         ],
         activeKey: "term-0",
       });
@@ -134,7 +135,7 @@ describe("TitleBar", () => {
 
     it("opens a terminal from the add control and shows it", () => {
       useTerminalStore.setState({
-        panes: [{ key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null }],
+        panes: [pane({ key: "term-0", title: "zsh", cwd: null })],
         activeKey: "term-0",
       });
       renderTitleBar(devBuild);
@@ -148,8 +149,8 @@ describe("TitleBar", () => {
     it("closes a terminal from its tab without switching to it", () => {
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
+          pane({ key: "term-0", title: "zsh", cwd: null }),
+          pane({ key: "term-1", title: "cargo", cwd: null }),
         ],
         activeKey: "term-0",
       });
@@ -169,8 +170,8 @@ describe("TitleBar", () => {
       setPrimarySelection("cargo test --locked");
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
+          pane({ key: "term-0", title: "zsh", cwd: null }),
+          pane({ key: "term-1", title: "cargo", cwd: null }),
         ],
         activeKey: "term-0",
       });
@@ -193,8 +194,8 @@ describe("TitleBar", () => {
       registerPasteTarget("term-1", { paste });
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh", cwd: null, profileId: null, themeId: null },
-          { key: "term-1", title: "cargo", cwd: null, profileId: null, themeId: null },
+          pane({ key: "term-0", title: "zsh", cwd: null }),
+          pane({ key: "term-1", title: "cargo", cwd: null }),
         ],
         activeKey: "term-0",
       });
@@ -216,7 +217,7 @@ describe("TitleBar", () => {
   describe("right-clicking the tab strip", () => {
     it("offers a new terminal and every saved profile", async () => {
       useTerminalStore.setState({
-        panes: [{ key: "a", title: "Terminal 1", cwd: null, profileId: null, themeId: null }],
+        panes: [pane({ key: "a", title: "Terminal 1", cwd: null })],
         activeKey: "a",
       });
       renderTitleBar({
@@ -236,7 +237,7 @@ describe("TitleBar", () => {
 
     it("opens a tab carrying the profile that was chosen", async () => {
       useTerminalStore.setState({
-        panes: [{ key: "a", title: "Terminal 1", cwd: null, profileId: null, themeId: null }],
+        panes: [pane({ key: "a", title: "Terminal 1", cwd: null })],
         activeKey: "a",
       });
       renderTitleBar({

@@ -38,10 +38,11 @@ export const GIT_SPLIT_MAX = 85;
 const GIT_SPLIT_DEFAULT = 45;
 
 /**
- * What the Git detail panel is showing, or `null` when it is closed.
+ * What a Git detail panel is showing.
  *
- * Transient, like `aboutOpen` and for the same reason: reopening the app onto a diff of a file that
- * has since been committed would be a stale view presented as a current one.
+ * The *value* lives here; **where it is shown does not** — it belongs to a tab (`TerminalPane.detail`).
+ * This is a tabbed, multiplexed terminal: two tabs are usually two repositories, and one panel for the
+ * whole window meant opening a diff in one tab and finding it laid over another.
  */
 export type GitDetail =
   | { kind: "file"; path: string; staged: boolean }
@@ -57,19 +58,24 @@ export interface UiState {
   toolWidth: number;
   /** Percentage of the Git tool's body given to the changes list; the graph takes the rest. */
   gitSplit: number;
+  /**
+   * Whether a diff is drawn side by side rather than as one interleaved column.
+   *
+   * A layout preference like the column width, so it is remembered and shared by every tab — how you
+   * *read* a diff does not change between repositories, unlike WHAT you are reading, which is why the
+   * panel's content belongs to a tab and this does not.
+   */
+  diffSplit: boolean;
   /** Whether the HUD About dialog is open (transient — not persisted). */
   aboutOpen: boolean;
-  /** What the Git detail panel shows, or `null` when it is closed (transient). */
-  gitDetail: GitDetail | null;
 
   setView: (v: ViewId) => void;
   /** Show a tool. Choosing the one already shown collapses the column — the rail button is a toggle. */
   toggleTool: (t: ToolId) => void;
   setToolWidth: (px: number) => void;
   setGitSplit: (percent: number) => void;
+  setDiffSplit: (split: boolean) => void;
   setAboutOpen: (v: boolean) => void;
-  /** Show something in the detail panel over the terminal; `null` closes it. */
-  showGitDetail: (detail: GitDetail | null) => void;
 }
 
 const clampWidth = (px: number) =>
@@ -90,15 +96,17 @@ export const useUiStore = create<UiState>()(
       activeTool: null,
       toolWidth: TOOL_WIDTH_DEFAULT,
       gitSplit: GIT_SPLIT_DEFAULT,
+      // Side by side is the default: it is what makes a reindent or a rename readable, and the
+      // interleaved form is the one to fall back to in a narrow window.
+      diffSplit: true,
       aboutOpen: false,
-      gitDetail: null,
 
       setView: (view) => set({ view }),
       toggleTool: (tool) => set((s) => ({ activeTool: s.activeTool === tool ? null : tool })),
       setToolWidth: (px) => set({ toolWidth: clampWidth(px) }),
       setGitSplit: (percent) => set({ gitSplit: clampSplit(percent) }),
+      setDiffSplit: (diffSplit) => set({ diffSplit }),
       setAboutOpen: (aboutOpen) => set({ aboutOpen }),
-      showGitDetail: (gitDetail) => set({ gitDetail }),
     }),
     {
       name: "app-ui",
@@ -108,13 +116,14 @@ export const useUiStore = create<UiState>()(
       // Adding a field is compatible — persist merges over the initial state, so a payload written by
       // an older build simply keeps the new field's default. Discarding it would throw away the user's
       // view for no reason.
-      // 1: { view }, then additively { activeTool, toolWidth, gitSplit }
+      // 1: { view }, then additively { activeTool, toolWidth, gitSplit, diffSplit }
       version: 1,
       partialize: (s) => ({
         view: s.view,
         activeTool: s.activeTool,
         toolWidth: s.toolWidth,
         gitSplit: s.gitSplit,
+        diffSplit: s.diffSplit,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -132,6 +141,8 @@ export const useUiStore = create<UiState>()(
         state.gitSplit = Number.isFinite(state.gitSplit)
           ? clampSplit(state.gitSplit)
           : GIT_SPLIT_DEFAULT;
+        // A payload from a build that predates the setting has no boolean at all.
+        if (typeof state.diffSplit !== "boolean") state.diffSplit = true;
       },
     },
   ),

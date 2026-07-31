@@ -59,6 +59,7 @@ const blank = (name: string): TerminalTheme => ({
   id: "",
   name,
   ansi: Array.from({ length: 16 }, () => null),
+  builtin: false,
   background: null,
   foreground: null,
   cursor: null,
@@ -134,7 +135,7 @@ export function ThemeControls() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5" role="group" aria-label="Terminal colour scheme">
         <span className="text-dim text-xs">Colour scheme</span>
         <div className="flex flex-wrap gap-1">
           <Button
@@ -157,9 +158,27 @@ export function ThemeControls() {
         </div>
         <span className="text-dim text-xs">
           Applies to every open terminal at once — the emulator is repainted, not restarted, so
-          nothing running is disturbed.
+          nothing running is disturbed. A tab can be given its own scheme from its right-click menu.
         </span>
       </div>
+
+      <SchemeChoice
+        label="Diffs"
+        chosen={settings.data?.diff_theme ?? ""}
+        themes={themes.data ?? []}
+        followsLabel="Same as the terminal"
+        onChoose={(id) => update.mutate({ diffTheme: id })}
+        hint="Left empty, a diff is drawn in whatever scheme its own tab's terminal uses."
+      />
+
+      <SchemeChoice
+        label="Commits"
+        chosen={settings.data?.commit_theme ?? ""}
+        themes={themes.data ?? []}
+        followsLabel="Same as diffs"
+        onChoose={(id) => update.mutate({ commitTheme: id })}
+        hint="Left empty, a commit follows the diff setting — and through it, the terminal."
+      />
 
       <div
         // The drop target is the whole window (Tauri reports drops there), so this is a hint rather
@@ -211,6 +230,53 @@ export function ThemeControls() {
   );
 }
 
+/**
+ * One "which scheme" choice, with an explicit "follow the one above" option.
+ *
+ * Empty means *inherit*, and it has a button of its own rather than being the absence of a choice:
+ * a chain nobody can see is a chain nobody can predict, and "same as the terminal" is the answer most
+ * people want to leave in place.
+ */
+function SchemeChoice({
+  label,
+  chosen,
+  themes,
+  followsLabel,
+  onChoose,
+  hint,
+}: {
+  label: string;
+  chosen: string;
+  themes: readonly TerminalTheme[];
+  followsLabel: string;
+  onChoose: (id: string) => void;
+  hint: string;
+}) {
+  return (
+    // A named group so each of these is a place rather than a run of buttons — three sets of the same
+    // scheme names side by side are ambiguous to anyone not looking at the headings.
+    <div className="flex flex-col gap-1.5" role="group" aria-label={`${label} colour scheme`}>
+      <span className="text-dim text-xs">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        <Button aria-pressed={chosen === ""} active={chosen === ""} onClick={() => onChoose("")}>
+          {followsLabel}
+        </Button>
+        {themes.map((theme) => (
+          <Button
+            key={theme.id}
+            aria-pressed={chosen === theme.id}
+            active={chosen === theme.id}
+            onClick={() => onChoose(theme.id)}
+          >
+            {theme.name}
+          </Button>
+        ))}
+      </div>
+      <span className="text-dim text-xs">{hint}</span>
+    </div>
+  );
+}
+
 /** Editing one scheme: its name, its six named colours, its sixteen ANSI slots, and a live preview. */
 function ThemeEditor({
   theme,
@@ -243,7 +309,7 @@ function ThemeEditor({
           className="max-w-xs font-mono"
           onChange={(e) => onEdited({ ...theme, name: e.target.value })}
         />
-        {theme.id === "" ? null : (
+        {theme.id === "" || theme.builtin ? null : (
           <IconButton
             label="Delete this scheme"
             variant="ghost"

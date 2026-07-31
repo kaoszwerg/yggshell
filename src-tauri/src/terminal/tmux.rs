@@ -50,9 +50,11 @@ impl Launch {
 
 /// Decide what a new terminal runs.
 ///
-/// `shell` is the program that would have been started without tmux, and it is what every failure
-/// path returns.
-pub fn launch(mode: TmuxMode, session: &str, shell: &str) -> Launch {
+/// `taken` is the set of tmux sessions this app's other tabs are already attached to. It is the whole
+/// reason this function needs a fourth argument: two tabs sharing one tmux session share one *view*
+/// of it — same window, same scrollback, same everything — so opening a second tab appeared to do
+/// nothing at all. A tab is a terminal; it gets a session of its own.
+pub fn launch(mode: TmuxMode, session: &str, shell: &str, taken: &[String]) -> Launch {
     if mode == TmuxMode::Off {
         return Launch::shell(shell);
     }
@@ -79,6 +81,16 @@ pub fn launch(mode: TmuxMode, session: &str, shell: &str) -> Launch {
         // first: letting `attach-session` fail would leave the user looking at a terminal that has
         // already exited, which is a worse answer than the shell they would otherwise have had.
         TmuxMode::Attach => {
+            if !session.is_empty() && taken.iter().any(|t| t == session) {
+                // Another tab is already showing this session, and a second client would show the
+                // same window — not a second terminal. "Attach to X" names one X; when it is taken,
+                // a plain shell is the honest answer rather than a duplicate view.
+                tracing::info!(
+                    session,
+                    "that tmux session is already open in another tab — starting a plain shell"
+                );
+                return Launch::shell(shell);
+            }
             if !has_session(&tmux, session) {
                 tracing::info!(
                     session = if session.is_empty() { "<any>" } else { session },
@@ -97,33 +109,57 @@ pub fn launch(mode: TmuxMode, session: &str, shell: &str) -> Launch {
             Launch::tmux(tmux, args, session.to_string())
         }
 
-        // `new-session -A` is attach-or-create in one call, which is why the session gets a name even
-        // when the user did not give one: without `-s` there is nothing for `-A` to match, and every
-        // terminal would start its own detached session instead of joining the last.
+        // `new-session -A` is attach-or-create in one call. The FIRST tab gets the configured name,
+        // so a session the user already has is the one they land in; every tab after that gets its
+        // own suffixed session, because sharing one would mean sharing one view of it.
         TmuxMode::AttachOrCreate => {
-            let name = if session.is_empty() {
+            let base = if session.is_empty() {
                 DEFAULT_SESSION
             } else {
                 session
             };
-            tracing::info!(session = name, "attaching to or creating a tmux session");
+            let name = first_free(base, taken);
+            tracing::info!(session = %name, "attaching to or creating a tmux session");
             Launch::tmux(
                 tmux,
                 vec![
                     "new-session".to_string(),
                     "-A".to_string(),
                     "-s".to_string(),
-                    name.to_string(),
+                    name.clone(),
                 ],
-                name.to_string(),
+                name,
             )
         }
     }
 }
 
-/// Used when the user asked for attach-or-create without naming a session. Named rather than
-/// anonymous so every terminal joins the same one.
+/// Used when the user asked for attach-or-create without naming a session.
 const DEFAULT_SESSION: &str = "yggshell";
+
+/// How many suffixed sessions we will look through before giving up on finding a free name.
+///
+/// A bound rather than a loop: `taken` comes from the number of open tabs, so it cannot realistically
+/// be long — but an unbounded search over a list someone else controls is a habit worth not having.
+const MAX_SESSIONS: usize = 64;
+
+/// The first session name in the `base`, `base-2`, `base-3`, … series that no other tab holds.
+///
+/// Falls back to the base when every candidate is taken; at that point sixty-four terminals are open
+/// and a shared view is a smaller problem than refusing to open one.
+fn first_free(base: &str, taken: &[String]) -> String {
+    if !taken.iter().any(|t| t == base) {
+        return base.to_string();
+    }
+    for n in 2..=MAX_SESSIONS {
+        let candidate = format!("{base}-{n}");
+        if !taken.contains(&candidate) {
+            return candidate;
+        }
+    }
+    tracing::warn!(base, "every tmux session name in the series is taken");
+    base.to_string()
+}
 
 /// tmux treats `:` and `.` as target separators (`session:window.pane`), so a name containing them
 /// addresses something other than itself. Control characters would be worse still.
@@ -196,8 +232,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_first_tab_gets_the_configured_session_and_the_next_gets_its_own() {
+        // Two tabs on one tmux session share ONE view of it — same window, same scrollback — so a
+        // second tab appeared to do nothing at all. A tab is a terminal; it gets a session of its own.
+        assert_eq!(first_free("work", &[]), "work");
+        assert_eq!(first_free("work", &["work".to_string()]), "work-2");
+        assert_eq!(
+            first_free("work", &["work".to_string(), "work-2".to_string()]),
+            "work-3"
+        );
+    }
+
+    #[test]
+    fn a_gap_in_the_series_is_reused_rather_than_skipped() {
+        // Closing the second of three tabs must not leave a hole that never fills.
+        assert_eq!(
+            first_free("work", &["work".to_string(), "work-3".to_string()]),
+            "work-2"
+        );
+    }
+
+    #[test]
+    fn a_session_another_tab_already_shows_is_never_attached_to_twice() {
+        // "Attach to X" names one X. A second client on it is a duplicate view, not a second
+        // terminal, so a plain shell is the honest answer.
+        let launch = launch(TmuxMode::Attach, "work", "/bin/zsh", &["work".to_string()]);
+        assert_eq!(launch.kind, SessionKind::Shell);
+        assert_eq!(launch.program, "/bin/zsh");
+        assert!(launch.tmux_session.is_none());
+    }
+
+    #[test]
     fn off_starts_the_plain_shell() {
-        let launch = launch(TmuxMode::Off, "work", "/bin/zsh");
+        let launch = launch(TmuxMode::Off, "work", "/bin/zsh", &[]);
         assert_eq!(launch, Launch::shell("/bin/zsh"));
     }
 
@@ -223,7 +290,7 @@ mod tests {
     fn an_unusable_name_costs_tmux_not_the_terminal() {
         // The session name comes from settings, so it can be anything the user typed. Refusing to
         // open a terminal over it would be the wrong trade.
-        let launch = launch(TmuxMode::AttachOrCreate, "work:1", "/bin/zsh");
+        let launch = launch(TmuxMode::AttachOrCreate, "work:1", "/bin/zsh", &[]);
         assert_eq!(launch, Launch::shell("/bin/zsh"));
     }
 
@@ -232,7 +299,7 @@ mod tests {
         // Skipped where tmux is absent: the point of this test is the arguments, and without the
         // binary the function correctly returns the shell instead.
         let Some(_) = find_tmux() else { return };
-        let launch = launch(TmuxMode::AttachOrCreate, "  ", "/bin/zsh");
+        let launch = launch(TmuxMode::AttachOrCreate, "  ", "/bin/zsh", &[]);
         assert_eq!(
             launch.args,
             vec!["new-session", "-A", "-s", DEFAULT_SESSION],
@@ -243,7 +310,7 @@ mod tests {
     #[test]
     fn attach_or_create_uses_the_name_it_was_given() {
         let Some(_) = find_tmux() else { return };
-        let launch = launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh");
+        let launch = launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh", &[]);
         assert_eq!(launch.args, vec!["new-session", "-A", "-s", "work"]);
     }
 
@@ -253,10 +320,13 @@ mod tests {
         // survive the launch — a hook cannot answer for a shell that was already running.
         let Some(_) = find_tmux() else { return };
         assert_eq!(
-            launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh").tmux_session,
+            launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh", &[]).tmux_session,
             Some("work".to_string())
         );
-        assert_eq!(launch(TmuxMode::Off, "work", "/bin/zsh").tmux_session, None);
+        assert_eq!(
+            launch(TmuxMode::Off, "work", "/bin/zsh", &[]).tmux_session,
+            None
+        );
     }
 
     #[test]
@@ -265,7 +335,7 @@ mod tests {
         // whose work dies with the window looking at it is worse than no multiplexer at all.
         let Some(_) = find_tmux() else { return };
         assert_eq!(
-            launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh").kind,
+            launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh", &[]).kind,
             SessionKind::TmuxClient
         );
     }
@@ -274,11 +344,11 @@ mod tests {
     fn every_fallback_is_marked_as_a_shell() {
         // A fallback really is a plain shell, so it must be ended like one — with its process group.
         assert_eq!(
-            launch(TmuxMode::Off, "", "/bin/zsh").kind,
+            launch(TmuxMode::Off, "", "/bin/zsh", &[]).kind,
             SessionKind::Shell
         );
         assert_eq!(
-            launch(TmuxMode::AttachOrCreate, "bad:name", "/bin/zsh").kind,
+            launch(TmuxMode::AttachOrCreate, "bad:name", "/bin/zsh", &[]).kind,
             SessionKind::Shell
         );
     }

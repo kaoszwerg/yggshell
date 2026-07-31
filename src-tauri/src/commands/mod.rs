@@ -122,6 +122,8 @@ pub fn update_settings(
     terminal_font_size: Option<f64>,
     terminal_shell: Option<String>,
     terminal_theme: Option<String>,
+    diff_theme: Option<String>,
+    commit_theme: Option<String>,
     tmux_mode: Option<TmuxMode>,
     tmux_session: Option<String>,
     minimize_to_tray: Option<bool>,
@@ -131,6 +133,8 @@ pub fn update_settings(
         ?terminal_font_size,
         ?terminal_shell,
         ?terminal_theme,
+        ?diff_theme,
+        ?commit_theme,
         ?tmux_mode,
         ?tmux_session,
         ?minimize_to_tray,
@@ -142,6 +146,8 @@ pub fn update_settings(
         terminal_font_size,
         terminal_shell,
         terminal_theme,
+        diff_theme,
+        commit_theme,
         tmux_mode,
         tmux_session,
         minimize_to_tray,
@@ -181,7 +187,16 @@ pub fn list_shells() -> Vec<ShellInfo> {
 /// (rule:theming). The frontend puts it in front of these.
 #[tauri::command]
 pub fn list_terminal_themes(state: State<'_, AppState>) -> Vec<TerminalTheme> {
-    let themes = crate::theme::list(&state.data_dir);
+    // Bundled first, then the user's. A saved theme with the same id shadows the bundled one, which
+    // is what makes "copy a shipped scheme and adjust it" work without a second mechanism.
+    let mut themes = crate::theme::bundled(&state.resource_dir);
+    for saved in crate::theme::list(&state.data_dir) {
+        match themes.iter().position(|t| t.id == saved.id) {
+            Some(at) => themes[at] = saved,
+            None => themes.push(saved),
+        }
+    }
+    themes.sort_by_key(|theme| theme.name.to_lowercase());
     tracing::debug!(count = themes.len(), "list_terminal_themes");
     themes
 }

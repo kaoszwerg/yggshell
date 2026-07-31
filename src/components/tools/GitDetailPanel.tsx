@@ -1,12 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, GitCommitHorizontal, X } from "lucide-react";
+import { ArrowLeft, Columns2, GitCommitHorizontal, X } from "lucide-react";
 import { gitApi } from "../../api/git";
 import { DiffView } from "../ui/DiffView";
 import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore, type GitDetail } from "../../store/ui";
+import { useSettings, useTerminalThemes } from "../../hooks/useSettings";
+import { detailThemeId, resolveTheme, themeById } from "../../lib/terminalTheme";
+import type { SyntaxScheme } from "../../lib/highlight";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitFileStat } from "../../bindings/GitFileStat";
 
@@ -21,10 +24,30 @@ import type { GitFileStat } from "../../bindings/GitFileStat";
  * focus trap that is deliberately absent. It does take focus on open, so a keystroke meant for the
  * panel cannot land in a terminal the user can no longer see.
  */
-export function GitDetailPanel() {
-  const detail = useUiStore((s) => s.gitDetail);
-  const show = useUiStore((s) => s.showGitDetail);
-  const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
+/** The scheme a detail view of `kind` is drawn in for this tab. See `detailThemeId` for the chain. */
+function useDetailScheme(paneKey: string, kind: "diff" | "commit"): SyntaxScheme | null {
+  const settings = useSettings();
+  const themes = useTerminalThemes();
+  const paneThemeId = useTerminalStore(
+    (s) => s.panes.find((p) => p.key === paneKey)?.themeId ?? null,
+  );
+  const id = detailThemeId(kind, settings.data, paneThemeId);
+  const theme = themeById(themes.data, id);
+  if (theme === null) return null;
+  return { id: theme.id, colours: resolveTheme(theme) };
+}
+
+export function GitDetailPanel({ paneKey }: { paneKey: string }) {
+  // Everything here is THIS tab's. A tabbed, multiplexed terminal has a repository per tab as often
+  // as not, and one panel for the whole window meant opening a diff in one tab and finding it laid
+  // over another.
+  const detail = useTerminalStore((s) => s.panes.find((p) => p.key === paneKey)?.detail ?? null);
+  const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === paneKey)?.cwd ?? null);
+  const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
+  const show = useCallback(
+    (next: GitDetail | null) => setPaneDetail(paneKey, next),
+    [paneKey, setPaneDetail],
+  );
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,14 +77,26 @@ export function GitDetailPanel() {
       // is the same chamfered border with `position` deliberately left to the caller.
       className="hud-popover hud-accent-cyan absolute inset-0 z-30 flex flex-col overflow-hidden outline-none"
     >
-      <Content detail={detail} cwd={cwd} />
+      <Content detail={detail} cwd={cwd} show={show} paneKey={paneKey} />
     </div>
   );
 }
 
-function Content({ detail, cwd }: { detail: GitDetail; cwd: string }) {
-  if (detail.kind === "commit") return <CommitContent rev={detail.rev} cwd={cwd} />;
-  return <DiffContent detail={detail} cwd={cwd} />;
+function Content({
+  detail,
+  cwd,
+  show,
+  paneKey,
+}: {
+  detail: GitDetail;
+  cwd: string;
+  show: (detail: GitDetail | null) => void;
+  paneKey: string;
+}) {
+  if (detail.kind === "commit") {
+    return <CommitContent rev={detail.rev} cwd={cwd} show={show} paneKey={paneKey} />;
+  }
+  return <DiffContent detail={detail} cwd={cwd} show={show} paneKey={paneKey} />;
 }
 
 /** Header shared by both views: what you are looking at, how to get out, and how to go back. */
@@ -71,12 +106,16 @@ function Header({
   heading,
   subtitle,
   onBack,
+  show,
+  extra,
 }: {
   heading: React.ReactNode;
   subtitle?: React.ReactNode;
   onBack?: () => void;
+  show: (detail: GitDetail | null) => void;
+  /** Controls that belong to this particular view, placed before the close button. */
+  extra?: React.ReactNode;
 }) {
-  const show = useUiStore((s) => s.showGitDetail);
   return (
     <header className="border-cyan/20 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
       {onBack ? (
@@ -90,6 +129,7 @@ function Header({
           <div className="text-dim truncate font-mono text-[0.62rem]">{subtitle}</div>
         )}
       </div>
+      {extra}
       <IconButton label="Close" variant="ghost" accent="danger" onClick={() => show(null)}>
         <X size={14} strokeWidth={2.5} />
       </IconButton>
@@ -100,11 +140,17 @@ function Header({
 function DiffContent({
   detail,
   cwd,
+  show,
+  paneKey,
 }: {
   detail: Extract<GitDetail, { kind: "file" | "commit-file" }>;
   cwd: string;
+  show: (detail: GitDetail | null) => void;
+  paneKey: string;
 }) {
-  const show = useUiStore((s) => s.showGitDetail);
+  const split = useUiStore((s) => s.diffSplit);
+  const setSplit = useUiStore((s) => s.setDiffSplit);
+  const scheme = useDetailScheme(paneKey, "diff");
   const inCommit = detail.kind === "commit-file";
 
   const query = useQuery({
@@ -127,6 +173,17 @@ function DiffContent({
               : "unstaged — the index vs. the file on disk"
         }
         onBack={inCommit ? () => show({ kind: "commit", rev: detail.rev }) : undefined}
+        show={show}
+        extra={
+          <IconButton
+            label={split ? "Show as one column" : "Show side by side"}
+            variant="ghost"
+            active={split}
+            onClick={() => setSplit(!split)}
+          >
+            <Columns2 size={14} strokeWidth={2.5} />
+          </IconButton>
+        }
       />
       <div className="min-h-0 flex-1 overflow-auto">
         {query.isPending ? (
@@ -138,14 +195,25 @@ function DiffContent({
             That file is no longer in the repository.
           </p>
         ) : (
-          <DiffView diff={query.data} />
+          <DiffView diff={query.data} split={split} scheme={scheme} />
         )}
       </div>
     </>
   );
 }
 
-function CommitContent({ rev, cwd }: { rev: string; cwd: string }) {
+function CommitContent({
+  rev,
+  cwd,
+  show,
+  paneKey,
+}: {
+  rev: string;
+  cwd: string;
+  show: (detail: GitDetail | null) => void;
+  paneKey: string;
+}) {
+  const scheme = useDetailScheme(paneKey, "commit");
   const query = useQuery({
     queryKey: ["git-commit", cwd, rev],
     queryFn: () => gitApi.commit(cwd, rev),
@@ -166,8 +234,18 @@ function CommitContent({ rev, cwd }: { rev: string; cwd: string }) {
           </span>
         }
         subtitle={query.data === null || query.data === undefined ? rev : commitLine(query.data)}
+        show={show}
       />
-      <div className="min-h-0 flex-1 overflow-auto p-3">
+      <div
+        className="min-h-0 flex-1 overflow-auto p-3"
+        // The commit view is prose and a file list rather than code, so the scheme reaches it as its
+        // surface colours instead of as syntax colouring.
+        style={
+          scheme
+            ? { backgroundColor: scheme.colours.background, color: scheme.colours.foreground }
+            : undefined
+        }
+      >
         {query.isPending ? (
           <p className="text-dim font-mono text-xs">Reading the commit…</p>
         ) : query.isError ? (
@@ -175,7 +253,7 @@ function CommitContent({ rev, cwd }: { rev: string; cwd: string }) {
         ) : query.data === null || query.data === undefined ? (
           <p className="text-dim font-mono text-xs">That commit is not in this repository.</p>
         ) : (
-          <CommitBody rev={rev} detail={query.data} />
+          <CommitBody rev={rev} detail={query.data} show={show} />
         )}
       </div>
     </>
@@ -190,9 +268,15 @@ function commitLine(detail: GitCommitDetail): string {
   return `${detail.author_name} · ${date}${parents === "" ? "" : ` · parent ${parents}`}`;
 }
 
-function CommitBody({ rev, detail }: { rev: string; detail: GitCommitDetail }) {
-  const show = useUiStore((s) => s.showGitDetail);
-
+function CommitBody({
+  rev,
+  detail,
+  show,
+}: {
+  rev: string;
+  detail: GitCommitDetail;
+  show: (detail: GitDetail | null) => void;
+}) {
   return (
     <div className="flex flex-col gap-4">
       {detail.refs.length === 0 ? null : (

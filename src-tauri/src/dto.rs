@@ -44,6 +44,13 @@ pub struct SettingsDto {
     /// The colour scheme a terminal uses, by id. Empty means the built-in HUD palette.
     #[serde(default)]
     pub terminal_theme: String,
+    /// The scheme a DIFF is drawn in. Empty means "whatever the tab's terminal uses" — the common
+    /// case, and the one that needs no configuring at all.
+    #[serde(default)]
+    pub diff_theme: String,
+    /// The scheme a COMMIT is drawn in. Empty means "the same as a diff".
+    #[serde(default)]
+    pub commit_theme: String,
     /// Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
     ///
     /// Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.
@@ -181,6 +188,10 @@ pub struct TerminalTheme {
     pub name: String,
     /// The 16 ANSI colours, in order. Always 16 entries; an undefined one is `null`.
     pub ansi: Vec<Option<String>>,
+    /// True for a scheme shipped with the app. It can be copied and edited, never deleted — it is
+    /// part of the app rather than of the user's data.
+    #[serde(default)]
+    pub builtin: bool,
     pub background: Option<String>,
     pub foreground: Option<String>,
     pub cursor: Option<String>,
@@ -256,6 +267,8 @@ impl Default for SettingsDto {
             terminal_font_size: default_terminal_font_size(),
             terminal_shell: String::new(),
             terminal_theme: String::new(),
+            diff_theme: String::new(),
+            commit_theme: String::new(),
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             minimize_to_tray: false,
@@ -280,6 +293,8 @@ mod tests {
             terminal_font_size: 13.0,
             terminal_shell: "/bin/zsh".into(),
             terminal_theme: String::new(),
+            diff_theme: String::new(),
+            commit_theme: String::new(),
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             ui_scale: 1.25,
@@ -330,6 +345,12 @@ pub struct TerminalExit {
     pub id: u32,
     /// Its exit code, or `null` when the status could not be read at all.
     pub code: Option<u32>,
+    /// True when the session was a tmux CLIENT rather than a shell.
+    ///
+    /// The distinction is what tells a detach apart from a shell that exited. Detaching ends the
+    /// client, not the work: the tmux session is still there, and the user asked to be back in a
+    /// terminal — not to lose the tab.
+    pub tmux_client: bool,
 }
 
 /// One path the working tree or index disagrees with (ADR-PROJ-001, Git tool).

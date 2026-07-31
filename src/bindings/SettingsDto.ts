@@ -26,6 +26,15 @@ terminal_font_size: number,
  */
 terminal_theme: string, 
 /**
+ * The scheme a DIFF is drawn in. Empty means "whatever the tab's terminal uses" — the common
+ * case, and the one that needs no configuring at all.
+ */
+diff_theme: string, 
+/**
+ * The scheme a COMMIT is drawn in. Empty means "the same as a diff".
+ */
+commit_theme: string, 
+/**
  * Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
  *
  * Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.

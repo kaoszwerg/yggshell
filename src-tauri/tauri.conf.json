@@ -49,6 +49,7 @@
       "nsis": {
         "template": "windows/installer.nsi"
       }
-    }
+    },
+    "resources": ["resources/themes/*.yggtheme"]
   }
 }

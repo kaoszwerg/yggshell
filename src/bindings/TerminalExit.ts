@@ -13,4 +13,12 @@ id: number,
 /**
  * Its exit code, or `null` when the status could not be read at all.
  */
-code: number | null, };
+code: number | null, 
+/**
+ * True when the session was a tmux CLIENT rather than a shell.
+ *
+ * The distinction is what tells a detach apart from a shell that exited. Detaching ends the
+ * client, not the work: the tmux session is still there, and the user asked to be back in a
+ * terminal — not to lose the tab.
+ */
+tmux_client: boolean, };

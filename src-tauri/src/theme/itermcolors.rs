@@ -251,6 +251,84 @@ impl<'a> Scanner<'a> {
     }
 }
 
+/// Write a theme back out as an iTerm2 plist.
+///
+/// The output is a real `.itermcolors` document — iTerm2 reads it, and so does every other terminal
+/// that understands the format. **That is the entire point of `.yggtheme`**: our extension marks where
+/// a scheme came from, the bytes stay somebody else's to read. A private format would have bought
+/// nothing and cost interoperability.
+///
+/// Only colours the theme actually defines are written. A scheme that never mentioned a cursor colour
+/// must not gain one by being exported — it would silently stop following the HUD palette.
+pub fn write(theme: &crate::dto::TerminalTheme) -> String {
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+         <plist version=\"1.0\">\n<dict>\n",
+    );
+
+    // Sorted the way iTerm2 writes them, so a diff between an exported file and an original is about
+    // colours rather than about ordering.
+    let mut entries: Vec<(String, &str)> = Vec::new();
+    for (index, colour) in theme.ansi.iter().enumerate() {
+        if let Some(hex) = colour.as_deref() {
+            entries.push((format!("Ansi {index} Color"), hex));
+        }
+    }
+    for (key, colour) in [
+        ("Background Color", &theme.background),
+        ("Cursor Color", &theme.cursor),
+        ("Cursor Text Color", &theme.cursor_accent),
+        ("Foreground Color", &theme.foreground),
+        ("Selected Text Color", &theme.selection_foreground),
+        ("Selection Color", &theme.selection),
+    ] {
+        if let Some(hex) = colour.as_deref() {
+            entries.push((key.to_string(), hex));
+        }
+    }
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (key, hex) in entries {
+        let Some((red, green, blue)) = components(hex) else {
+            // A malformed colour is dropped rather than written as something else. It is the same
+            // choice the reader makes, and for the same reason: a wrong colour presented as a right
+            // one is worse than an absent one.
+            tracing::warn!(%key, %hex, "skipping a colour that is not #rrggbb");
+            continue;
+        };
+        out.push_str(&format!(
+            "\t<key>{key}</key>\n\
+             \t<dict>\n\
+             \t\t<key>Alpha Component</key>\n\t\t<real>1</real>\n\
+             \t\t<key>Blue Component</key>\n\t\t<real>{blue}</real>\n\
+             \t\t<key>Color Space</key>\n\t\t<string>sRGB</string>\n\
+             \t\t<key>Green Component</key>\n\t\t<real>{green}</real>\n\
+             \t\t<key>Red Component</key>\n\t\t<real>{red}</real>\n\
+             \t</dict>\n"
+        ));
+    }
+
+    out.push_str("</dict>\n</plist>\n");
+    out
+}
+
+/// `#rrggbb` (or `#rgb`) to the three 0–1 components the format stores.
+fn components(hex: &str) -> Option<(f64, f64, f64)> {
+    let raw = hex.trim().trim_start_matches('#');
+    let expanded = match raw.len() {
+        3 => raw.chars().flat_map(|c| [c, c]).collect::<String>(),
+        6 => raw.to_string(),
+        _ => return None,
+    };
+    let channel = |at: usize| {
+        u8::from_str_radix(expanded.get(at..at + 2)?, 16)
+            .ok()
+            .map(|v| f64::from(v) / 255.0)
+    };
+    Some((channel(0)?, channel(2)?, channel(4)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,6 +489,94 @@ mod tests {
             colours.get("Cursor Color").map(String::as_str),
             Some("#ffffff")
         );
+    }
+
+    #[test]
+    fn what_we_write_is_a_document_we_can_read_back_unchanged() {
+        // The promise `.yggtheme` rests on: our file IS an iTerm2 file. If this round trip ever
+        // stopped being exact, the extension would be a lie.
+        let theme = crate::dto::TerminalTheme {
+            id: "round".into(),
+            name: "Round".into(),
+            builtin: false,
+            ansi: (0..16)
+                .map(|i| Some(format!("#{:02x}{:02x}{:02x}", i * 16, 255 - i * 16, i * 8)))
+                .collect(),
+            background: Some("#0a0a0f".into()),
+            foreground: Some("#e0e0e0".into()),
+            cursor: Some("#00e5ff".into()),
+            cursor_accent: None,
+            selection: Some("#123456".into()),
+            selection_foreground: None,
+        };
+
+        let colours = parse(&write(&theme)).expect("our own output parses");
+        assert_eq!(
+            colours.get("Background Color").map(String::as_str),
+            Some("#0a0a0f")
+        );
+        assert_eq!(
+            colours.get("Ansi 5 Color").map(String::as_str),
+            theme.ansi.get(5).cloned().flatten().as_deref()
+        );
+        assert_eq!(
+            colours.get("Ansi 15 Color").map(String::as_str),
+            theme.ansi.get(15).cloned().flatten().as_deref()
+        );
+        // 16 ANSI + background + foreground + cursor + selection. The two that were `None`
+        // stay absent, which the next test is about.
+        assert_eq!(colours.len(), 20);
+    }
+
+    #[test]
+    fn an_undefined_colour_is_not_invented_on_the_way_out() {
+        // Exporting must not turn "follows the HUD palette" into a fixed colour.
+        let theme = crate::dto::TerminalTheme {
+            id: "sparse".into(),
+            name: "Sparse".into(),
+            builtin: false,
+            ansi: vec![None; 16],
+            background: Some("#101010".into()),
+            foreground: None,
+            cursor: None,
+            cursor_accent: None,
+            selection: None,
+            selection_foreground: None,
+        };
+        let written = write(&theme);
+        assert!(written.contains("Background Color"));
+        assert!(!written.contains("Cursor Color"));
+        assert_eq!(parse(&written).expect("parses").len(), 1);
+    }
+
+    #[test]
+    fn a_malformed_colour_is_dropped_rather_than_written_as_something_else() {
+        let theme = crate::dto::TerminalTheme {
+            id: "bad".into(),
+            name: "Bad".into(),
+            builtin: false,
+            ansi: vec![None; 16],
+            background: Some("not a colour".into()),
+            foreground: Some("#00ff00".into()),
+            cursor: None,
+            cursor_accent: None,
+            selection: None,
+            selection_foreground: None,
+        };
+        let colours = parse(&write(&theme)).expect("parses");
+        assert_eq!(colours.len(), 1);
+        assert_eq!(
+            colours.get("Foreground Color").map(String::as_str),
+            Some("#00ff00")
+        );
+    }
+
+    #[test]
+    fn the_three_digit_form_survives_the_trip() {
+        assert_eq!(components("#abc"), components("#aabbcc"));
+        assert_eq!(components("#000"), Some((0.0, 0.0, 0.0)));
+        assert!(components("#12345").is_none());
+        assert!(components("nope").is_none());
     }
 
     #[test]

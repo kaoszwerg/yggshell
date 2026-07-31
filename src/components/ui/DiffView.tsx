@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { languageFor, tokenize, type Token } from "../../lib/highlight";
+import { languageFor, tokenize, type SyntaxScheme, type Token } from "../../lib/highlight";
+import { sideBySide } from "../../lib/diffLayout";
 import type { GitDiff } from "../../bindings/GitDiff";
+import type { GitDiffLine } from "../../bindings/GitDiffLine";
 import type { GitHunk } from "../../bindings/GitHunk";
 
 /** A hunk's lines, already coloured — one token list per line, in the hunk's own order. */
@@ -14,17 +16,17 @@ type Coloured = Token[][];
  * hunk that begins in the middle of a block comment can be mis-coloured. That is the honest limit of
  * highlighting a diff at all, and it costs colour, never content.
  */
-function useColoured(diff: GitDiff): Coloured[] {
+function useColoured(diff: GitDiff, scheme: SyntaxScheme | null): Coloured[] {
   // Through the query layer rather than an effect that sets state: this is async work with a result
   // to cache, which is what TanStack Query owns here (rule:frontend-architecture) — and it means
   // scrolling back to a diff already read does not re-tokenise it.
   const query = useQuery({
-    queryKey: ["highlight", diff.path, diff.staged, diff.hunks],
+    queryKey: ["highlight", diff.path, diff.staged, diff.hunks, scheme?.id ?? "hud"],
     queryFn: () => {
       const language = languageFor(diff.path);
       return Promise.all(
         diff.hunks.map((hunk) =>
-          tokenize(hunk.lines.map((line) => line.text).join("\n"), language),
+          tokenize(hunk.lines.map((line) => line.text).join("\n"), language, scheme),
         ),
       );
     },
@@ -54,8 +56,17 @@ function lineStyle(kind: string): { row: string; mark: string } {
  * The code column does not wrap: a wrapped line of code stops lining up with its number and its
  * neighbours, which is precisely what makes a diff readable. It scrolls sideways instead.
  */
-export function DiffView({ diff }: { diff: GitDiff }) {
-  const coloured = useColoured(diff);
+export function DiffView({
+  diff,
+  split,
+  scheme,
+}: {
+  diff: GitDiff;
+  split: boolean;
+  /** The colour scheme to draw in, or `null`/absent for the HUD palette. */
+  scheme?: SyntaxScheme | null;
+}) {
+  const coloured = useColoured(diff, scheme ?? null);
 
   if (diff.binary) {
     return (
@@ -75,14 +86,97 @@ export function DiffView({ diff }: { diff: GitDiff }) {
 
   return (
     <div className="font-mono text-[0.7rem] leading-[1.5]">
-      {diff.hunks.map((hunk, index) => (
-        <Hunk
-          key={`${hunk.old_start}:${hunk.new_start}`}
-          hunk={hunk}
-          coloured={coloured.at(index)}
-        />
-      ))}
+      {diff.hunks.map((hunk, index) => {
+        const key = `${hunk.old_start}:${hunk.new_start}`;
+        return split ? (
+          <SplitHunk key={key} hunk={hunk} coloured={coloured.at(index)} />
+        ) : (
+          <Hunk key={key} hunk={hunk} coloured={coloured.at(index)} />
+        );
+      })}
     </div>
+  );
+}
+
+/** The tokens for one line of a hunk, or its plain text when highlighting has not arrived. */
+function Code({ line, tokens }: { line: GitDiffLine; tokens: Token[] | undefined }) {
+  if (tokens === undefined) return <>{line.text}</>;
+  return (
+    <>
+      {tokens.map((token, at) => (
+        <span key={at} style={token.color ? { color: token.color } : undefined}>
+          {token.content}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The same hunk, side by side.
+ *
+ * Old on the left with its numbers, new on the right with its own — which is what makes a rename or a
+ * reindent readable at all, because the eye compares two columns rather than reconstructing them from
+ * a single interleaved one. A row where one side is missing renders as a **gap**, deliberately
+ * unlike an empty line: a blank line is a line that exists.
+ */
+function SplitHunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | undefined }) {
+  // The colouring is indexed by position in the UNIFIED line list, which is what was tokenised.
+  const indexOf = new Map(hunk.lines.map((line, at) => [line, at]));
+  const rows = sideBySide(hunk);
+
+  return (
+    <section>
+      <div className="bg-elevated text-cyan/70 border-cyan/15 border-y px-2 py-0.5">
+        {hunk.header}
+      </div>
+      {rows.map((row, index) => (
+        <div key={`${hunk.old_start}:${index}`} className="flex items-start">
+          <Side
+            line={row.left}
+            side="left"
+            tokens={row.left ? coloured?.at(indexOf.get(row.left) ?? -1) : undefined}
+          />
+          <span aria-hidden className="bg-cyan/15 w-px shrink-0 self-stretch" />
+          <Side
+            line={row.right}
+            side="right"
+            tokens={row.right ? coloured?.at(indexOf.get(row.right) ?? -1) : undefined}
+          />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** One half of a side-by-side row. `null` is a gap, and it is drawn as one. */
+function Side({
+  line,
+  side,
+  tokens,
+}: {
+  line: GitDiffLine | null;
+  side: "left" | "right";
+  tokens: Token[] | undefined;
+}) {
+  if (line === null) {
+    return (
+      <span aria-hidden className="bg-dim/5 min-w-0 flex-1 basis-0 px-1">
+        &nbsp;
+      </span>
+    );
+  }
+  const changed = line.kind !== "context";
+  const tint = changed ? (side === "left" ? "bg-danger/8" : "bg-green/8") : "";
+  const number = side === "left" ? line.old_line : line.new_line;
+
+  return (
+    <span className={`flex min-w-0 flex-1 basis-0 items-start ${tint}`}>
+      <span className="text-dim/50 w-10 shrink-0 pr-1 text-right select-none">{number ?? ""}</span>
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre">
+        <Code line={line} tokens={tokens} />
+      </code>
+    </span>
   );
 }
 
