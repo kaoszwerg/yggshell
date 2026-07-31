@@ -31,16 +31,16 @@ pub fn terminal_open(
     cwd: Option<String>,
 ) -> Result<SessionId> {
     tracing::info!(rows, cols, ?cwd, "terminal_open");
-    // tmux is a persisted preference, not something the webview may choose per call — the same rule
-    // as the shell itself (ADR-PROJ-001 §5).
+    // tmux and the shell are persisted PREFERENCES, not something the webview may choose per call.
+    // Even the shell setting is only ever a pick from a list the backend produced, and the registry
+    // checks it again before it spawns anything (ADR-PROJ-001 §5, `terminal::shells`).
     let settings = state.settings.get();
     let id = registry.open(
         app,
         on_output,
         cwd.map(Into::into),
         Size { rows, cols },
-        settings.tmux_mode,
-        &settings.tmux_session,
+        &settings,
     )?;
     tracing::debug!(session = id, "terminal_open ok");
     Ok(id)

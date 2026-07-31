@@ -8,6 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Which shell a terminal starts is now a setting** (Settings → Terminal). Until now it was `$SHELL`
+  with no way to say otherwise.
+  - It is a **list, never a text field**, and that is the point rather than a nicety. `terminal_open`
+    deliberately takes no command line so the webview cannot name the program a terminal runs
+    (ADR-PROJ-001 §5); a free-text shell path would have handed that straight back. The backend
+    produces what this machine offers — `/etc/shells` plus the user's own `$SHELL` on Unix, the known
+    interpreter locations plus `COMSPEC` and a `pwsh.exe` on PATH on Windows — the frontend picks from
+    it, and anything else is refused when it is stored **and** again before a spawn, because a shell
+    can be uninstalled in between and `settings.json` is an ordinary file.
+  - Two shells with the same file name (`/bin/zsh` and `/opt/homebrew/bin/zsh` is a common macOS pair)
+    are shown by full path. Two buttons both reading `zsh` are not a choice.
+  - Changing it affects terminals opened from then on; the ones already running keep their shell.
 - **The terminal — YggShell's first running feature** (ADR-PROJ-001). A real PTY per tab, multiple
   independent tabs, and the emulator behind the primitive layer:
   - Backend: `src-tauri/src/terminal/` — a session registry the backend owns, `portable-pty` behind
@@ -67,6 +79,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- `SettingsStore::update` takes a `SettingsPatch` instead of a growing list of positional `Option`s.
+  At six fields, `update(None, None, Some(x), None, None, None)` said nothing about which setting `x`
+  was, and inserting a field in the middle would have silently re-targeted every existing call.
+- Looking an executable up on the login shell's `PATH` moved from `tmux.rs` into
+  `terminal::environment::which` — the shell list needs the same lookup, and a GUI app's `PATH` trap
+  (ADR: launchd hands it four directories) is not something to solve twice.
 - **Web Storage in tests now comes from an in-memory `Storage`, per upstream briefing `app-108`.**
   The previous shim re-pointed the globals at jsdom's Storage through `globalThis.jsdom` — a vitest
   internal — and probed the existing global first, which throws on Node ≤ 25 (a version `engines`

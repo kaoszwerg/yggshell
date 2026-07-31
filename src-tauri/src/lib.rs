@@ -54,6 +54,7 @@ pub fn run() {
             commands::get_recent_logs,
             commands::get_settings,
             commands::update_settings,
+            commands::list_shells,
             commands::open_external,
             commands::report_crash,
             commands::pending_crash,

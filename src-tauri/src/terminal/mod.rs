@@ -7,6 +7,7 @@
 pub mod environment;
 pub mod pty;
 pub mod shell_integration;
+pub mod shells;
 pub mod tmux;
 
 use crate::dto::TerminalExit;
@@ -105,21 +106,26 @@ impl TerminalRegistry {
     /// Start a session and stream its output into `output`.
     ///
     /// `cwd` is the only thing the caller may influence, and it is validated before it is used.
-    /// The program is resolved in [`pty::spawn`] and never crosses the IPC boundary.
+    /// Everything about *what runs* — the shell, whether tmux wraps it, which session — comes from
+    /// the persisted settings, never from the call: the webview may say that a terminal should start
+    /// and where, never what it should be (ADR-PROJ-001 §5).
     pub fn open(
         &self,
         app: AppHandle,
         output: Channel<InvokeResponseBody>,
         cwd: Option<PathBuf>,
         size: Size,
-        tmux_mode: crate::dto::TmuxMode,
-        tmux_session: &str,
+        settings: &crate::dto::SettingsDto,
     ) -> Result<SessionId> {
         let cwd = validate_cwd(cwd)?;
         // What actually runs: the shell, or tmux wrapping it. Decided here rather than in `pty`, so
         // that module stays about pseudo-terminals and nothing else.
-        let shell = pty::default_shell();
-        let launch = tmux::launch(tmux_mode, tmux_session, &shell);
+        //
+        // The preference is re-checked here and not merely when it was stored: a shell can be
+        // uninstalled between the two, and settings.json is an ordinary file (rule:security — the
+        // boundary validates, it does not trust that someone upstream did).
+        let shell = shells::resolve(&settings.terminal_shell);
+        let launch = tmux::launch(settings.tmux_mode, &settings.tmux_session, &shell);
         let kind = launch.kind;
         let spawned = pty::spawn(pty::Spawn {
             program: &launch.program,

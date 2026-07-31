@@ -4,7 +4,7 @@
 pub mod git;
 pub mod terminal;
 
-use crate::dto::{BuildInfo, CrashReport, SettingsDto, TmuxMode};
+use crate::dto::{BuildInfo, CrashReport, SettingsDto, ShellInfo, TmuxMode};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use tauri::State;
@@ -112,11 +112,13 @@ pub fn get_settings(state: State<'_, AppState>) -> SettingsDto {
 /// Update the persisted user settings. Omitted fields keep their current value. Toggling
 /// `minimize_to_tray` installs/removes the tray icon immediately (no restart).
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // The IPC shape: one named parameter per settable field.
 pub fn update_settings(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     ui_scale: Option<f64>,
     terminal_font_size: Option<f64>,
+    terminal_shell: Option<String>,
     tmux_mode: Option<TmuxMode>,
     tmux_session: Option<String>,
     minimize_to_tray: Option<bool>,
@@ -124,19 +126,21 @@ pub fn update_settings(
     tracing::info!(
         ?ui_scale,
         ?terminal_font_size,
+        ?terminal_shell,
         ?tmux_mode,
         ?tmux_session,
         ?minimize_to_tray,
         "update_settings"
     );
     let was_tray = state.settings.get().minimize_to_tray;
-    let next = state.settings.update(
+    let next = state.settings.update(crate::settings::SettingsPatch {
         ui_scale,
         terminal_font_size,
+        terminal_shell,
         tmux_mode,
         tmux_session,
         minimize_to_tray,
-    )?;
+    })?;
     if next.minimize_to_tray != was_tray {
         crate::tray::set_enabled(&app, next.minimize_to_tray);
     }
@@ -146,6 +150,24 @@ pub fn update_settings(
         "update_settings ok"
     );
     Ok(next)
+}
+
+/// The shells this machine offers, for Settings to choose from.
+///
+/// The list is the backend's, always — it is what makes "which shell to start" a *selection* rather
+/// than a path the webview composes and the backend then executes (ADR-PROJ-001 §5, rule:security).
+#[tauri::command]
+pub fn list_shells() -> Vec<ShellInfo> {
+    let offers = crate::terminal::shells::available();
+    tracing::debug!(count = offers.len(), "list_shells");
+    offers
+        .into_iter()
+        .map(|o| ShellInfo {
+            path: o.path,
+            name: o.name,
+            is_default: o.is_default,
+        })
+        .collect()
 }
 
 /// Open an external URL in the user's default browser. Routed through the backend so any failure

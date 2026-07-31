@@ -11,7 +11,7 @@
 
 use crate::dto::TmuxMode;
 use crate::terminal::pty::SessionKind;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 /// What to actually spawn on the PTY.
@@ -188,27 +188,7 @@ pub fn pane_cwd(session: &str) -> Option<String> {
 /// The spawn happens on a PTY, so its failure would be a message inside a terminal that then exits —
 /// which the user reads as "the terminal is broken". Knowing beforehand lets the plain shell start.
 fn find_tmux() -> Option<PathBuf> {
-    // The LOGIN shell's PATH, not this process's: a GUI app is launched by launchd with a minimal
-    // one, so `/opt/homebrew/bin/tmux` is invisible to it and the integration would report "tmux is
-    // not installed" on a machine where it plainly is.
-    let path = super::environment::path()?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join("tmux"))
-        .find(|candidate| is_executable(candidate))
-}
-
-#[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(path)
-        .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    // No permission bits to consult; existence is the available answer.
-    path.is_file()
+    super::environment::which("tmux")
 }
 
 #[cfg(test)]

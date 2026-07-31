@@ -22,6 +22,14 @@ ui_scale: number,
  */
 terminal_font_size: number, 
 /**
+ * Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
+ *
+ * Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.
+ * This is a *selection*, not a command line: the webview must not be able to name the program a
+ * terminal runs (ADR-PROJ-001 §5).
+ */
+terminal_shell: string, 
+/**
  * Whether a new terminal joins tmux, and whether it may create a session (ADR-PROJ-001).
  */
 tmux_mode: TmuxMode, 

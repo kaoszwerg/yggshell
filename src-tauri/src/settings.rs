@@ -17,6 +17,21 @@ pub const MAX_UI_SCALE: f64 = 1.6;
 pub const MIN_TERMINAL_FONT_SIZE: f64 = 8.0;
 pub const MAX_TERMINAL_FONT_SIZE: f64 = 32.0;
 
+/// A partial settings update: every field that is `Some` replaces the stored one.
+///
+/// A struct rather than a growing list of positional `Option`s — with six of them, `update(None,
+/// None, Some(x), None, None, None)` says nothing about which setting `x` is, and a field inserted in
+/// the middle would silently re-target every existing call.
+#[derive(Debug, Default, Clone)]
+pub struct SettingsPatch {
+    pub ui_scale: Option<f64>,
+    pub terminal_font_size: Option<f64>,
+    pub terminal_shell: Option<String>,
+    pub tmux_mode: Option<TmuxMode>,
+    pub tmux_session: Option<String>,
+    pub minimize_to_tray: Option<bool>,
+}
+
 /// Thread-safe settings store: in-memory state + the JSON file it is persisted to.
 pub struct SettingsStore {
     path: PathBuf,
@@ -64,36 +79,43 @@ impl SettingsStore {
         }
     }
 
-    /// Apply a partial update (every field optional), persist it, and return the new state.
-    pub fn update(
-        &self,
-        ui_scale: Option<f64>,
-        terminal_font_size: Option<f64>,
-        tmux_mode: Option<TmuxMode>,
-        tmux_session: Option<String>,
-        minimize_to_tray: Option<bool>,
-    ) -> Result<SettingsDto> {
+    /// Apply a partial update, persist it, and return the new state.
+    ///
+    /// Fails if the patch names a shell this machine does not offer — the one field here that is not
+    /// a scalar preference but a program that will later be executed (rule:security).
+    pub fn update(&self, patch: SettingsPatch) -> Result<SettingsDto> {
+        if let Some(shell) = patch.terminal_shell.as_deref() {
+            if !crate::terminal::shells::is_offered(shell) {
+                tracing::warn!(%shell, "refusing a shell this machine does not offer");
+                return Err(AppError::Other(format!(
+                    "not a shell this machine offers: {shell}"
+                )));
+            }
+        }
         let next = {
             let mut guard = self
                 .current
                 .write()
                 .map_err(|_| AppError::Other("settings lock poisoned".into()))?;
-            if let Some(scale) = ui_scale {
+            if let Some(scale) = patch.ui_scale {
                 guard.ui_scale = scale.clamp(MIN_UI_SCALE, MAX_UI_SCALE);
             }
-            if let Some(size) = terminal_font_size {
+            if let Some(size) = patch.terminal_font_size {
                 guard.terminal_font_size =
                     size.clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
             }
-            if let Some(mode) = tmux_mode {
+            if let Some(shell) = patch.terminal_shell {
+                guard.terminal_shell = shell.trim().to_string();
+            }
+            if let Some(mode) = patch.tmux_mode {
                 guard.tmux_mode = mode;
             }
-            if let Some(session) = tmux_session {
+            if let Some(session) = patch.tmux_session {
                 // Trimmed here so an accidental space cannot make a name silently different from the
                 // one the user believes they typed.
                 guard.tmux_session = session.trim().to_string();
             }
-            if let Some(tray) = minimize_to_tray {
+            if let Some(tray) = patch.minimize_to_tray {
                 guard.minimize_to_tray = tray;
             }
             guard.clone()
@@ -102,6 +124,7 @@ impl SettingsStore {
         tracing::info!(
             ui_scale = next.ui_scale,
             terminal_font_size = next.terminal_font_size,
+            terminal_shell = %if next.terminal_shell.is_empty() { "<default>" } else { &next.terminal_shell },
             tmux_mode = ?next.tmux_mode,
             tmux_session = %next.tmux_session,
             minimize_to_tray = next.minimize_to_tray,
@@ -155,11 +178,67 @@ mod tests {
     }
 
     #[test]
+    fn a_shell_the_machine_does_not_offer_is_refused_and_nothing_is_persisted() {
+        // The security property, at the boundary that stores it: a webview cannot smuggle a program
+        // into the terminal by way of a settings write (ADR-PROJ-001 §5).
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = SettingsStore::load(dir.path());
+        let refused = store.update(SettingsPatch {
+            terminal_shell: Some("/usr/bin/curl".into()),
+            ..Default::default()
+        });
+
+        assert!(refused.is_err(), "an unoffered shell must not be storable");
+        assert_eq!(store.get().terminal_shell, "");
+        assert!(
+            !dir.path().join("settings.json").exists(),
+            "a refused update must not have written anything"
+        );
+    }
+
+    #[test]
+    fn a_shell_the_machine_offers_is_stored_and_survives_a_reload() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = SettingsStore::load(dir.path());
+        let offered = crate::terminal::shells::available();
+        let pick = offered.first().expect("a machine always offers a shell");
+
+        let next = store
+            .update(SettingsPatch {
+                terminal_shell: Some(pick.path.clone()),
+                ..Default::default()
+            })
+            .expect("update");
+
+        assert_eq!(next.terminal_shell, pick.path);
+        assert_eq!(
+            SettingsStore::load(dir.path()).get().terminal_shell,
+            pick.path
+        );
+    }
+
+    #[test]
+    fn an_empty_shell_means_the_default_and_is_always_accepted() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = SettingsStore::load(dir.path());
+        let next = store
+            .update(SettingsPatch {
+                terminal_shell: Some("  ".into()),
+                ..Default::default()
+            })
+            .expect("update");
+        assert_eq!(next.terminal_shell, "");
+    }
+
+    #[test]
     fn update_persists_and_reloads() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
         let next = store
-            .update(Some(1.25), None, None, None, None)
+            .update(SettingsPatch {
+                ui_scale: Some(1.25),
+                ..Default::default()
+            })
             .expect("update");
         assert_eq!(next.ui_scale, 1.25);
 
@@ -173,11 +252,17 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
         let high = store
-            .update(Some(9.0), None, None, None, None)
+            .update(SettingsPatch {
+                ui_scale: Some(9.0),
+                ..Default::default()
+            })
             .expect("update");
         assert_eq!(high.ui_scale, MAX_UI_SCALE);
         let low = store
-            .update(Some(0.1), None, None, None, None)
+            .update(SettingsPatch {
+                ui_scale: Some(0.1),
+                ..Default::default()
+            })
             .expect("update");
         assert_eq!(low.ui_scale, MIN_UI_SCALE);
 
@@ -198,7 +283,10 @@ mod tests {
         let store = SettingsStore::load(dir.path());
         assert!(!store.get().minimize_to_tray);
         let next = store
-            .update(None, None, None, None, Some(true))
+            .update(SettingsPatch {
+                minimize_to_tray: Some(true),
+                ..Default::default()
+            })
             .expect("update");
         assert!(next.minimize_to_tray);
         assert!(SettingsStore::load(dir.path()).get().minimize_to_tray);
@@ -226,12 +314,18 @@ mod font_size_tests {
         let store = SettingsStore::load(dir.path());
 
         store
-            .update(Some(1.25), None, None, None, None)
+            .update(SettingsPatch {
+                ui_scale: Some(1.25),
+                ..Default::default()
+            })
             .expect("scale");
         assert_eq!(store.get().terminal_font_size, 13.0, "text size untouched");
 
         store
-            .update(None, Some(18.0), None, None, None)
+            .update(SettingsPatch {
+                terminal_font_size: Some(18.0),
+                ..Default::default()
+            })
             .expect("size");
         assert_eq!(store.get().ui_scale, 1.25, "ui scale untouched");
         assert_eq!(store.get().terminal_font_size, 18.0);
@@ -244,14 +338,20 @@ mod font_size_tests {
 
         assert_eq!(
             store
-                .update(None, Some(400.0), None, None, None)
+                .update(SettingsPatch {
+                    terminal_font_size: Some(400.0),
+                    ..Default::default()
+                })
                 .expect("high")
                 .terminal_font_size,
             MAX_TERMINAL_FONT_SIZE
         );
         assert_eq!(
             store
-                .update(None, Some(0.0), None, None, None)
+                .update(SettingsPatch {
+                    terminal_font_size: Some(0.0),
+                    ..Default::default()
+                })
                 .expect("low")
                 .terminal_font_size,
             MIN_TERMINAL_FONT_SIZE

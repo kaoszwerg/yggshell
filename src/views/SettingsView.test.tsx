@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SettingsView } from "./SettingsView";
 
@@ -7,6 +7,7 @@ const mutate = vi.fn();
 vi.mock("../hooks/useSettings", () => ({
   useSettings: vi.fn(),
   useUpdateSettings: vi.fn(),
+  useShells: vi.fn(),
 }));
 
 // The About section shows the build identity, which goes through react-query. This view is not the
@@ -24,11 +25,27 @@ vi.mock("../hooks/useBuildInfo", () => ({
   }),
 }));
 
-import { useSettings, useUpdateSettings } from "../hooks/useSettings";
+import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
 
-function mockSettings(overrides: { ui_scale?: number; minimize_to_tray?: boolean } = {}) {
+const OFFERED = [
+  { path: "/bin/zsh", name: "zsh", is_default: true },
+  { path: "/bin/bash", name: "bash", is_default: false },
+];
+
+function mockShells(state: { data?: typeof OFFERED; isPending?: boolean; isError?: boolean } = {}) {
+  vi.mocked(useShells).mockReturnValue({
+    data: state.data ?? OFFERED,
+    isPending: state.isPending ?? false,
+    isError: state.isError ?? false,
+  } as unknown as ReturnType<typeof useShells>);
+}
+
+function mockSettings(
+  overrides: { ui_scale?: number; minimize_to_tray?: boolean; terminal_shell?: string } = {},
+) {
+  mockShells();
   vi.mocked(useSettings).mockReturnValue({
-    data: { ui_scale: 1, minimize_to_tray: false, ...overrides },
+    data: { ui_scale: 1, minimize_to_tray: false, terminal_shell: "", ...overrides },
   } as unknown as ReturnType<typeof useSettings>);
   vi.mocked(useUpdateSettings).mockReturnValue({
     mutate,
@@ -37,6 +54,10 @@ function mockSettings(overrides: { ui_scale?: number; minimize_to_tray?: boolean
 
 /** The close-button preference lives in the Window section, so a test for it has to go there first —
  *  exactly as the user does. */
+function openTerminalSection() {
+  fireEvent.click(screen.getByRole("tab", { name: "Terminal" }));
+}
+
 function openWindowSection() {
   fireEvent.click(screen.getByRole("tab", { name: "Window" }));
 }
@@ -154,5 +175,69 @@ describe("SettingsView", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  describe("the shell a terminal starts", () => {
+    it("offers what the backend listed, plus the system default", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(screen.getByRole("button", { name: "System default" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "zsh" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "bash" })).toBeTruthy();
+    });
+
+    it("stores the PATH of the shell that was picked, never its label", () => {
+      // The backend only accepts a path it offered — a label would be refused, and rightly so.
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      fireEvent.click(screen.getByRole("button", { name: "bash" }));
+
+      expect(mutate).toHaveBeenCalledWith({ terminalShell: "/bin/bash" });
+    });
+
+    it("marks the current choice as pressed, and the default when nothing is chosen", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(
+        screen.getByRole("button", { name: "System default" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+
+      cleanup();
+      mockSettings({ terminal_shell: "/bin/bash" });
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(screen.getByRole("button", { name: "bash" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+      expect(
+        screen.getByRole("button", { name: "System default" }).getAttribute("aria-pressed"),
+      ).toBe("false");
+    });
+
+    it("says so while the list is still loading, instead of showing an empty choice", () => {
+      mockSettings();
+      mockShells({ isPending: true, data: [] });
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(screen.getByText(/Reading what this machine offers/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "System default" })).toBeNull();
+    });
+
+    it("says so when the list could not be read, and reassures that terminals still work", () => {
+      mockSettings();
+      mockShells({ isError: true, data: [] });
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(screen.getByText(/Could not read the available shells/)).toBeTruthy();
+    });
   });
 });

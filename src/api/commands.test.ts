@@ -69,6 +69,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 1.25,
         terminalFontSize: null,
+        terminalShell: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -87,6 +88,21 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: 18,
+        terminalShell: null,
+        tmuxMode: null,
+        tmuxSession: null,
+        minimizeToTray: null,
+      });
+    });
+
+    it("carries the chosen shell as the path the backend offered", async () => {
+      // A LABEL must never be what travels: the backend accepts only a path it listed itself
+      // (ADR-PROJ-001 §5), so sending `"bash"` would be refused — correctly, and confusingly.
+      await api.updateSettings({ terminalShell: "/bin/bash" });
+      expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
+        uiScale: null,
+        terminalFontSize: null,
+        terminalShell: "/bin/bash",
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -99,6 +115,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        terminalShell: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: true,
@@ -115,6 +132,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        terminalShell: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -129,6 +147,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        terminalShell: null,
         tmuxMode: "attach-or-create",
         tmuxSession: null,
         minimizeToTray: null,
@@ -141,10 +160,16 @@ describe("api", () => {
         terminal_font_size: 20,
         minimize_to_tray: true,
       });
-      await api.updateSettings({ uiScale: 0.8, terminalFontSize: 20, minimizeToTray: true });
+      await api.updateSettings({
+        uiScale: 0.8,
+        terminalFontSize: 20,
+        terminalShell: "/bin/zsh",
+        minimizeToTray: true,
+      });
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 0.8,
         terminalFontSize: 20,
+        terminalShell: "/bin/zsh",
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: true,

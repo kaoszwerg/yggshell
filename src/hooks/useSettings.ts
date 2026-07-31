@@ -18,10 +18,26 @@ export function useUpdateSettings() {
     mutationFn: (opts: {
       uiScale?: number;
       terminalFontSize?: number;
+      terminalShell?: string;
       tmuxMode?: TmuxMode;
       tmuxSession?: string;
       minimizeToTray?: boolean;
     }) => api.updateSettings(opts),
     onSuccess: (data) => qc.setQueryData(["settings"], data),
+  });
+}
+
+/**
+ * The shells this machine offers.
+ *
+ * Effectively static for the life of the process — the backend reads `/etc/shells` and `$SHELL` once
+ * per call and a shell is not installed while Settings is open — so this is cached for the session
+ * rather than refetched on every visit.
+ */
+export function useShells() {
+  return useQuery({
+    queryKey: ["shells"],
+    queryFn: api.listShells,
+    staleTime: Infinity,
   });
 }

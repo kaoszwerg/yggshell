@@ -23,6 +23,7 @@ function settings(ui_scale: number): SettingsDto {
   return {
     ui_scale,
     terminal_font_size: 13,
+    terminal_shell: "",
     tmux_mode: "off",
     tmux_session: "",
     minimize_to_tray: false,

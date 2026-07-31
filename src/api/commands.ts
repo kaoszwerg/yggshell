@@ -5,6 +5,7 @@ import type { BuildInfo } from "../bindings/BuildInfo";
 import type { CrashReport } from "../bindings/CrashReport";
 import type { LogRecord } from "../bindings/LogRecord";
 import type { SettingsDto } from "../bindings/SettingsDto";
+import type { ShellInfo } from "../bindings/ShellInfo";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 /**
@@ -22,12 +23,22 @@ export const api = {
   /** Read the persisted user settings. */
   getSettings: () => invoke<SettingsDto>("get_settings"),
   /**
+   * The shells this machine offers, produced by the backend.
+   *
+   * Settings picks *from* this list and stores a path that is on it; it never composes one. The
+   * backend refuses anything else, both when it is stored and again before it spawns — which is what
+   * keeps "which shell to start" from becoming a way for the webview to name a program
+   * (ADR-PROJ-001 §5).
+   */
+  listShells: () => invoke<ShellInfo[]>("list_shells"),
+  /**
    * Partial update — omitted fields keep their current value. Toggling `minimizeToTray` installs or
    * removes the system-tray icon immediately (no restart).
    */
   updateSettings: (opts: {
     uiScale?: number;
     terminalFontSize?: number;
+    terminalShell?: string;
     tmuxMode?: TmuxMode;
     tmuxSession?: string;
     minimizeToTray?: boolean;
@@ -35,6 +46,7 @@ export const api = {
     invoke<SettingsDto>("update_settings", {
       uiScale: opts.uiScale ?? null,
       terminalFontSize: opts.terminalFontSize ?? null,
+      terminalShell: opts.terminalShell ?? null,
       tmuxMode: opts.tmuxMode ?? null,
       tmuxSession: opts.tmuxSession ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,

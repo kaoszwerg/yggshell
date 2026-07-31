@@ -17,6 +17,7 @@
 //! every terminal, and the search path for anything the backend itself looks up.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
 use std::sync::OnceLock;
@@ -46,6 +47,32 @@ pub fn path() -> Option<String> {
         .get("PATH")
         .cloned()
         .or_else(|| std::env::var("PATH").ok())
+}
+
+/// Find an executable on the login shell's `PATH`.
+///
+/// The login shell's, never this process's: a GUI app is started by launchd with a minimal `PATH`, so
+/// `/opt/homebrew/bin/<anything>` is invisible to it and a perfectly installed program reads as
+/// missing. Every backend lookup for a program the *user* installed goes through here.
+pub fn which(program: &str) -> Option<PathBuf> {
+    let path = self::path()?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(program))
+        .find(|candidate| is_executable(candidate))
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    // No permission bits to consult; existence is the available answer.
+    path.is_file()
 }
 
 fn capture() -> HashMap<String, String> {

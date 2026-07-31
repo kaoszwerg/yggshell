@@ -5,7 +5,8 @@ import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
 import { Tabs } from "../components/ui/Tabs";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
-import { useSettings, useUpdateSettings } from "../hooks/useSettings";
+import { labelShells } from "../lib/shellLabels";
+import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 const UI_SCALES = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
@@ -127,6 +128,10 @@ function TerminalSection() {
         </p>
       }
     >
+      <ShellControls />
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
       <div className="flex flex-col gap-1.5">
         <span className="text-dim text-xs">Text size</span>
         <div className="flex flex-wrap gap-1">
@@ -150,6 +155,76 @@ function TerminalSection() {
 
       <TmuxControls />
     </HudPanel>
+  );
+}
+
+/**
+ * Which shell a new terminal starts.
+ *
+ * A list, never a text field. The backend produces what this machine offers and refuses anything
+ * else, which is what keeps this setting from becoming a way to name an arbitrary program for the
+ * terminal to run (ADR-PROJ-001 §5, `terminal::shells`).
+ */
+function ShellControls() {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const shells = useShells();
+  const chosen = settings.data?.terminal_shell ?? "";
+  const choices = labelShells(shells.data ?? []);
+  const defaultShell = shells.data?.find((s) => s.is_default);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-dim text-xs">Shell</span>
+      {shells.isPending ? (
+        <span className="text-dim font-mono text-xs">Reading what this machine offers…</span>
+      ) : shells.isError ? (
+        <span className="text-danger font-mono text-xs">
+          Could not read the available shells. New terminals still start your default shell.
+        </span>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              aria-pressed={chosen === ""}
+              active={chosen === ""}
+              onClick={() => update.mutate({ terminalShell: "" })}
+            >
+              System default
+            </Button>
+            {choices.map((choice) => (
+              <Button
+                key={choice.path}
+                aria-pressed={chosen === choice.path}
+                active={chosen === choice.path}
+                onClick={() => update.mutate({ terminalShell: choice.path })}
+              >
+                {choice.label}
+              </Button>
+            ))}
+          </div>
+          <span className="text-dim text-xs">
+            {chosen === "" ? (
+              <>
+                Your account&rsquo;s own shell
+                {defaultShell ? (
+                  <>
+                    {" — "}
+                    <code>{defaultShell.path}</code>
+                  </>
+                ) : null}
+                . Takes effect for terminals opened from now on.
+              </>
+            ) : (
+              <>
+                <code>{chosen}</code>. Takes effect for terminals opened from now on; the ones
+                already running keep the shell they started with.
+              </>
+            )}
+          </span>
+        </>
+      )}
+    </div>
   );
 }
 

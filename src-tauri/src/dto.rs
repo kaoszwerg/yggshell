@@ -41,6 +41,13 @@ pub struct SettingsDto {
     /// emulator, so the WebView zoom cannot drag it along.
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f64,
+    /// Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
+    ///
+    /// Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.
+    /// This is a *selection*, not a command line: the webview must not be able to name the program a
+    /// terminal runs (ADR-PROJ-001 §5).
+    #[serde(default)]
+    pub terminal_shell: String,
     /// Whether a new terminal joins tmux, and whether it may create a session (ADR-PROJ-001).
     #[serde(default)]
     pub tmux_mode: TmuxMode,
@@ -52,6 +59,22 @@ pub struct SettingsDto {
     /// keeps running in the background (ADR-APP-021). Default `false` — a fresh app is a normal window.
     #[serde(default)]
     pub minimize_to_tray: bool,
+}
+
+/// A shell this machine offers, as presented in Settings.
+///
+/// The list is produced by the backend from what the operating system declares (`/etc/shells`, the
+/// known Windows interpreters) plus the user's own `$SHELL`. The frontend picks *from* it; it never
+/// composes a path of its own, and a value that is not on the list is refused (`terminal::shells`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct ShellInfo {
+    /// Absolute path to the interpreter.
+    pub path: String,
+    /// What to call it — the file name, which is how people say it (`zsh`, `fish`).
+    pub name: String,
+    /// True for the shell the user's account is configured with.
+    pub is_default: bool,
 }
 
 /// What a new terminal does about tmux.
@@ -102,6 +125,7 @@ impl Default for SettingsDto {
         Self {
             ui_scale: default_ui_scale(),
             terminal_font_size: default_terminal_font_size(),
+            terminal_shell: String::new(),
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             minimize_to_tray: false,
@@ -124,6 +148,7 @@ mod tests {
     fn settings_roundtrip_through_json() {
         let s = SettingsDto {
             terminal_font_size: 13.0,
+            terminal_shell: "/bin/zsh".into(),
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             ui_scale: 1.25,
@@ -132,6 +157,7 @@ mod tests {
         let json = serde_json::to_string(&s).expect("serialize");
         let back: SettingsDto = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.ui_scale, 1.25);
+        assert_eq!(back.terminal_shell, "/bin/zsh");
         assert!(back.minimize_to_tray);
     }
 
@@ -140,6 +166,10 @@ mod tests {
         // A file written before `minimize_to_tray` existed must still load without data loss.
         let s: SettingsDto = serde_json::from_str(r#"{"ui_scale":1.25}"#).expect("deserialize");
         assert_eq!(s.ui_scale, 1.25);
+        assert_eq!(
+            s.terminal_shell, "",
+            "an older file means: the default shell"
+        );
         assert!(!s.minimize_to_tray);
     }
 
@@ -148,6 +178,10 @@ mod tests {
         // Pin the JSON keys the generated frontend binding depends on (rule:testing contract).
         let json = serde_json::to_value(SettingsDto::default()).expect("to_value");
         assert!(json.get("ui_scale").is_some(), "ui_scale key missing");
+        assert!(
+            json.get("terminal_shell").is_some(),
+            "terminal_shell key missing"
+        );
         assert!(
             json.get("minimize_to_tray").is_some(),
             "minimize_to_tray key missing"
