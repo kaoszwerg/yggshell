@@ -4,11 +4,13 @@
     "@fontsource/inter",
     "@fontsource/jetbrains-mono",
     "@fontsource/orbitron",
+    "@shikijs/langs",
     "@tanstack/react-query",
     "@tauri-apps/api",
     "lucide-react",
     "react",
     "react-dom",
+    "shiki",
     "zustand"
   ],
   "primitiveOnly": [
@@ -35,6 +37,8 @@
     "@xterm/addon-unicode11": "Correct East-Asian and emoji cell widths. Without it, 'full feature set' would not be true.",
     "@xterm/addon-web-links": "Detects URLs in the output. Opening goes through the existing open_external command, never the webview.",
     "_no_addon_canvas": "@xterm/addon-canvas is deliberately absent: 0.7.0 declares peer @xterm/xterm@^5, so it does not support xterm 6. It was never load-bearing — xterm's built-in DOM renderer is the fallback when WebGL is unavailable, and addon-canvas is a third option, not the safety net (ADR-PROJ-001 §1).",
-    "@xterm/addon-search": "Finds and highlights in the scrollback. The search bar itself is a HUD panel built from TextField/IconButton — the addon draws no chrome."
+    "@xterm/addon-search": "Finds and highlights in the scrollback. The search bar itself is a HUD panel built from TextField/IconButton — the addon draws no chrome.",
+    "shiki": "Syntax highlighting for the Git tool's diff and commit views. It renders NOTHING: `codeToTokens` returns `{ content, colour }` pairs and src/components/ui/DiffView.tsx turns them into React nodes, so there is no HTML string, no raw-HTML injection into the DOM over somebody else's repository, and no stylesheet of its own — the colours come from a theme built out of PALETTE (rule:theming). Run on the JavaScript regex engine, so no WASM ships. Grammars load on demand from an explicit map in src/lib/highlight.ts; a variable import path would bundle all 200 of them.",
+    "@shikijs/langs": "The TextMate grammars shiki tokenises with. Data — JSON grammar definitions — and a direct dependency rather than a transitive one because src/lib/highlight.ts imports individual grammars from it, so it has to be pinned like anything else we name."
   }
 }

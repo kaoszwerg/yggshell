@@ -8,6 +8,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The Git tool got its layout, and two things to click.**
+  - **Branch on top, fixed; changes and history below it, sharing a draggable divider.** The branch is
+    two lines whatever happens, so a share of a scroll area would only ever be wasted on it. The other
+    two genuinely compete — the file list is long while you work, the graph while you review — so the
+    balance is the user's, and it is remembered like the column width. Both scroll on their own, so
+    neither can push the other off screen. The divider is a share of the height rather than a pixel
+    count: a stored `240px` would be most of a short window and a sliver of a tall one.
+  - **Click a changed file to read its diff**, and **click a commit to read it in full** — the whole
+    message the graph could only show the first line of, its author and parents, and the files it
+    touched with `+n −m`. A file in that list opens its diff inside that commit, with a way back.
+  - Both open in a panel **over the terminal** — the widest surface in the window, which is what a diff
+    needs — while the shell underneath keeps running. Escape or × gives it straight back.
+  - **Syntax highlighting** via `shiki`, which earns its place on three counts: it returns *tokens*, so
+    there is no raw HTML injected over a repository somebody else wrote; its theme is ours, built from
+    `PALETTE` (rule:theming), so nothing arrives wearing a stock look; and it runs on the JavaScript
+    regex engine, so no WASM ships. Grammars load on demand from an explicit map — a variable import
+    path would have bundled all two hundred.
+  - `Row` and a horizontal `Splitter` are new HUD primitives, both tested. A list of forty native
+    `<button>`s in a panel that is meant to be ours is exactly what ADR-APP-026 exists to prevent.
 - **Which shell a terminal starts is now a setting** (Settings → Terminal). Until now it was `$SHELL`
   with no way to say otherwise.
   - It is a **list, never a text field**, and that is the point rather than a nicety. `terminal_open`
@@ -98,6 +117,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The Git tool no longer sits blank for a tick after a terminal opens.** Its working-directory poll
+  starts when the pane mounts, at which point there is no session yet — so its first ask hit a `null`
+  id and did nothing, and inside tmux (where the poll is the only source) the tool waited a full
+  interval for its first answer. It now waits for the session and asks immediately.
 - **The stray `%` at the top of a fresh terminal.** It was a race in this app, not the shell. zsh
   draws its end-of-line mark as `%` + (`COLUMNS`-1) spaces + CR + erase-line, which erases itself —
   *if* the shell and the emulator agree on the width. They did not always: the settings query

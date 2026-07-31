@@ -1,6 +1,6 @@
 //! The Git tool's IPC surface (ADR-PROJ-001). Read-only: nothing here writes to a repository.
 
-use crate::dto::GitSnapshot;
+use crate::dto::{GitCommitDetail, GitDiff, GitSnapshot};
 use crate::error::Result;
 use std::path::PathBuf;
 
@@ -20,4 +20,47 @@ pub fn git_snapshot(cwd: String) -> Result<Option<GitSnapshot>> {
         "git_snapshot ok"
     );
     Ok(snapshot)
+}
+
+/// What changed in one file of the working tree.
+///
+/// `staged` picks which side is meant: `true` compares `HEAD` with the index, `false` the index with
+/// the file on disk. A file can be both at once — which is why the tool lists it twice — and they are
+/// different diffs.
+///
+/// `path` is repository-relative and always one the tool itself listed, but it arrives from the
+/// webview and is therefore validated in `git::details`, not trusted (rule:security).
+#[tauri::command]
+pub fn git_file_diff(cwd: String, path: String, staged: bool) -> Result<Option<GitDiff>> {
+    tracing::debug!(%cwd, %path, staged, "git_file_diff");
+    let diff = crate::git::details::file_diff(&PathBuf::from(&cwd), &path, staged)?;
+    tracing::debug!(
+        %path,
+        hunks = diff.as_ref().map_or(0, |d| d.hunks.len()),
+        binary = diff.as_ref().is_some_and(|d| d.binary),
+        "git_file_diff ok"
+    );
+    Ok(diff)
+}
+
+/// Everything about one commit: the whole message, its author, and the files it touched.
+#[tauri::command]
+pub fn git_commit(cwd: String, rev: String) -> Result<Option<GitCommitDetail>> {
+    tracing::debug!(%cwd, %rev, "git_commit");
+    let detail = crate::git::details::commit_detail(&PathBuf::from(&cwd), &rev)?;
+    tracing::debug!(
+        %rev,
+        files = detail.as_ref().map_or(0, |d| d.files.len()),
+        "git_commit ok"
+    );
+    Ok(detail)
+}
+
+/// What one file looks like inside one commit, against its first parent.
+#[tauri::command]
+pub fn git_commit_file_diff(cwd: String, rev: String, path: String) -> Result<Option<GitDiff>> {
+    tracing::debug!(%cwd, %rev, %path, "git_commit_file_diff");
+    let diff = crate::git::details::commit_file_diff(&PathBuf::from(&cwd), &rev, &path)?;
+    tracing::debug!(%rev, %path, found = diff.is_some(), "git_commit_file_diff ok");
+    Ok(diff)
 }

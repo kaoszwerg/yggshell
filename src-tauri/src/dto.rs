@@ -61,6 +61,84 @@ pub struct SettingsDto {
     pub minimize_to_tray: bool,
 }
 
+/// One line of a diff, with both sides' line numbers already worked out.
+///
+/// `kind` is `context`, `added` or `removed`. A string rather than an enum because the frontend
+/// switches on it to pick a colour and nothing else — and a `#[serde(rename_all)]` enum would arrive
+/// as exactly this string anyway (the same shape `GitChange::status` already uses).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitDiffLine {
+    pub kind: String,
+    /// Line number on the old side, absent for an added line.
+    pub old_line: Option<u32>,
+    /// Line number on the new side, absent for a removed line.
+    pub new_line: Option<u32>,
+    /// The line itself, without its trailing newline.
+    pub text: String,
+}
+
+/// A run of changed lines with its surrounding context.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitHunk {
+    /// The familiar `@@ -a,b +c,d @@`, produced here so the UI does not have to assemble one.
+    pub header: String,
+    pub old_start: u32,
+    pub new_start: u32,
+    pub lines: Vec<GitDiffLine>,
+}
+
+/// What changed in one file, ready to draw.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitDiff {
+    pub path: String,
+    /// Where the file was before a rename, when it was renamed.
+    pub old_path: Option<String>,
+    /// Same vocabulary as `GitChange::status`.
+    pub status: String,
+    /// True when this is the staged side of the change rather than the working-tree side.
+    pub staged: bool,
+    /// No hunks are produced for a binary blob — there is nothing a reader could do with them.
+    pub binary: bool,
+    pub hunks: Vec<GitHunk>,
+    pub added: u32,
+    pub removed: u32,
+}
+
+/// One file's line counts inside a commit, for the file list under a commit message.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitFileStat {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: String,
+    pub added: u32,
+    pub removed: u32,
+    pub binary: bool,
+}
+
+/// Everything about one commit — the whole message, not the summary the graph shows.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitCommitDetail {
+    pub sha: String,
+    pub short_sha: String,
+    /// First line of the message.
+    pub summary: String,
+    /// Everything after the first line, with the blank separator removed. Empty when there is none.
+    pub body: String,
+    pub author_name: String,
+    pub author_email: String,
+    /// RFC 3339, so the frontend formats it in the user's own locale rather than being handed a
+    /// pre-formatted string it cannot re-render.
+    pub authored_at: String,
+    pub parents: Vec<String>,
+    pub refs: Vec<String>,
+    pub files: Vec<GitFileStat>,
+}
+
 /// A shell this machine offers, as presented in Settings.
 ///
 /// The list is produced by the backend from what the operating system declares (`/etc/shells`, the

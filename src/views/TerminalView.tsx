@@ -152,6 +152,10 @@ function Pane({
   const uiScale = settings.data?.ui_scale ?? 1;
   const fontSize = (settings.data?.terminal_font_size ?? 13) / (uiScale > 0 ? uiScale : 1);
   const [hasSelection, setHasSelection] = useState(false);
+  // Flipped once the PTY exists. The working-directory poll below waits for it: mounting starts that
+  // effect immediately, when `sessionId` is still null, so without this its first ask does nothing and
+  // the Git tool sits blank for a whole tick before the first real answer.
+  const [sessionOpen, setSessionOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
   const setCwd = useTerminalStore((s) => s.setCwd);
@@ -188,6 +192,7 @@ function Pane({
         })
         .then((id) => {
           sessionId.current = id;
+          setSessionOpen(true);
           onSession(paneKey, id);
           setTitle(paneKey, `Terminal ${id + 1}`);
           handle.current?.focus();
@@ -250,7 +255,7 @@ function Pane({
   // instead, and only for the tab in front. It answers `null` for an ordinary shell, where the hook
   // has already said so instantly and this poll costs nothing but the call.
   useEffect(() => {
-    if (!active) return;
+    if (!active || !sessionOpen) return;
     let stopped = false;
     const ask = () => {
       const id = sessionId.current;
@@ -268,7 +273,7 @@ function Pane({
       stopped = true;
       clearInterval(timer);
     };
-  }, [active, paneKey, setCwd]);
+  }, [active, sessionOpen, paneKey, setCwd]);
 
   // ⌘F / Ctrl+Shift+F on the WINDOW, not on the emulator: xterm's key handler only fires while the
   // terminal holds focus, so binding it there made the search unreachable the moment the caret was

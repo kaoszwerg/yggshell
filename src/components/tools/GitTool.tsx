@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { GitBranch, RefreshCw } from "lucide-react";
 import { gitApi } from "../../api/git";
@@ -5,9 +6,13 @@ import { IconButton } from "../ui/IconButton";
 import { Tooltip } from "../ui/Tooltip";
 import { PALETTE } from "../../styles/palette";
 import { layoutHistory, type GraphRow } from "../../lib/gitGraph";
+import { Row } from "../ui/Row";
+import { Splitter } from "../ui/Splitter";
 import { useTerminalStore } from "../../store/terminal";
+import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore } from "../../store/ui";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
+import type { GitSnapshot } from "../../bindings/GitSnapshot";
 
 /** How often the snapshot is re-read while the tool is open. A harness editing files should show up
  *  without the user asking, but reading a repository is not free — this is the compromise, and the
@@ -76,47 +81,96 @@ export function GitTool() {
   const snapshot = query.data;
   if (!snapshot) return <Empty>Not a git repository.</Empty>;
 
+  return <Body snapshot={snapshot} onRefresh={() => void query.refetch()} />;
+}
+
+/**
+ * The three regions, and why they are laid out the way they are.
+ *
+ * The branch is a fixed header: it is two lines whatever happens, so giving it a share of a scroll
+ * area would only ever waste it. Changes and history are the two that genuinely compete — one is long
+ * while you are working, the other while you are reviewing — so the user sets the balance and it is
+ * remembered. Both scroll on their own, so neither can push the other off screen.
+ */
+function Body({ snapshot, onRefresh }: { snapshot: GitSnapshot; onRefresh: () => void }) {
+  const split = useUiStore((s) => s.gitSplit);
+  const setSplit = useUiStore((s) => s.setGitSplit);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // The drag reports a share of this element's height, not a pixel offset — see `gitSplit`.
+  const toShare = (clientY: number) => {
+    const box = bodyRef.current?.getBoundingClientRect();
+    if (!box || box.height === 0) return split;
+    return ((clientY - box.top) / box.height) * 100;
+  };
+
   return (
-    <div className="flex flex-col gap-4 p-2 font-mono text-[0.66rem]">
-      <Section
-        label="BRANCH"
-        action={
-          <IconButton
-            label="Refresh"
-            variant="ghost"
-            tooltip={null}
-            className="h-4 w-4"
-            onClick={() => void query.refetch()}
-          >
-            <RefreshCw size={11} strokeWidth={2.5} />
-          </IconButton>
-        }
-      >
-        <div className="flex items-center gap-1.5">
-          <GitBranch size={12} strokeWidth={2} className="text-green shrink-0" aria-hidden />
-          <span className="text-green truncate">
-            {snapshot.branch ?? `${snapshot.head ?? "?"} (detached)`}
-          </span>
-          {snapshot.ahead > 0 ? (
-            <span className="text-gold shrink-0">↑{snapshot.ahead}</span>
-          ) : null}
-          {snapshot.behind > 0 ? (
-            <span className="text-cyan shrink-0">↓{snapshot.behind}</span>
-          ) : null}
+    <div className="flex h-full flex-col font-mono text-[0.66rem]">
+      <div className="border-cyan/15 shrink-0 border-b p-2">
+        <Section
+          label="BRANCH"
+          action={
+            <IconButton
+              label="Refresh"
+              variant="ghost"
+              tooltip={null}
+              className="h-4 w-4"
+              onClick={onRefresh}
+            >
+              <RefreshCw size={11} strokeWidth={2.5} />
+            </IconButton>
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            <GitBranch size={12} strokeWidth={2} className="text-green shrink-0" aria-hidden />
+            <span className="text-green truncate">
+              {snapshot.branch ?? `${snapshot.head ?? "?"} (detached)`}
+            </span>
+            {snapshot.ahead > 0 ? (
+              <span className="text-gold shrink-0">↑{snapshot.ahead}</span>
+            ) : null}
+            {snapshot.behind > 0 ? (
+              <span className="text-cyan shrink-0">↓{snapshot.behind}</span>
+            ) : null}
+          </div>
+        </Section>
+      </div>
+
+      {/* `min-h-0` on the flex parent AND on each region: without it a flex child refuses to shrink
+          below its content, the scroll never engages, and the whole column grows instead. */}
+      <div ref={bodyRef} data-region="body" className="flex min-h-0 flex-1 flex-col">
+        <div
+          className="min-h-0 overflow-y-auto p-2"
+          style={{ flex: `0 0 ${split}%` }}
+          aria-label="Changed files"
+        >
+          <Section label={`CHANGED · ${snapshot.changes.length}`}>
+            {snapshot.changes.length === 0 ? (
+              <span className="text-dim/60">Working tree clean.</span>
+            ) : (
+              snapshot.changes.map((change) => (
+                <ChangeRow key={changeKey(change)} change={change} />
+              ))
+            )}
+          </Section>
         </div>
-      </Section>
 
-      <Section label={`CHANGED · ${snapshot.changes.length}`}>
-        {snapshot.changes.length === 0 ? (
-          <span className="text-dim/60">Working tree clean.</span>
-        ) : (
-          snapshot.changes.map((change) => <ChangeRow key={changeKey(change)} change={change} />)
-        )}
-      </Section>
+        <Splitter
+          label="Changes and history"
+          orientation="horizontal"
+          value={split}
+          min={GIT_SPLIT_MIN}
+          max={GIT_SPLIT_MAX}
+          onChange={setSplit}
+          toValue={toShare}
+        />
 
-      <Section label="HISTORY">
-        <History commits={snapshot.commits} />
-      </Section>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2" aria-label="Commit history">
+          <Section label="HISTORY">
+            <History commits={snapshot.commits} />
+          </Section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -126,11 +180,23 @@ const changeKey = (c: GitChange) => `${c.staged ? "s" : "w"}:${c.path}`;
 
 function ChangeRow({ change }: { change: GitChange }) {
   const { mark, className } = changeMark(change.status);
+  const show = useUiStore((s) => s.showGitDetail);
+  const shown = useUiStore(
+    (s) =>
+      s.gitDetail?.kind === "file" &&
+      s.gitDetail.path === change.path &&
+      s.gitDetail.staged === change.staged,
+  );
+
   return (
     // The full path in a HUD tooltip, because the column is narrow and the interesting part of a
     // path is usually the end that got truncated.
     <Tooltip content={change.path}>
-      <div className="flex items-baseline gap-1.5">
+      <Row
+        label={`${change.path} — ${change.status}${change.staged ? ", staged" : ""}`}
+        selected={shown}
+        onActivate={() => show({ kind: "file", path: change.path, staged: change.staged })}
+      >
         <span className={`w-3 shrink-0 ${className}`} aria-hidden>
           {mark}
         </span>
@@ -138,7 +204,7 @@ function ChangeRow({ change }: { change: GitChange }) {
         {change.staged ? (
           <span className="text-green/60 shrink-0 text-[0.55rem]">staged</span>
         ) : null}
-      </div>
+      </Row>
     </Tooltip>
   );
 }
@@ -171,24 +237,42 @@ function History({ commits }: { commits: GitCommit[] }) {
   return (
     <div className="flex flex-col">
       {rows.map((row, index) => (
-        <div key={row.commit.sha} className="flex items-center gap-1.5">
-          <Lane row={row} width={width} last={index === rows.length - 1} />
-          <span className="shrink-0" style={{ color: `${laneColour(row.lane)}99` }}>
-            {row.commit.short_sha}
-          </span>
-          <span className="text-dim truncate">{row.commit.summary}</span>
-          {row.commit.refs.map((ref) => (
-            <span
-              key={ref}
-              className="hud-clip-sm bg-elevated shrink-0 px-1 text-[0.55rem]"
-              style={{ color: laneColour(row.lane) }}
-            >
-              {ref}
-            </span>
-          ))}
-        </div>
+        <CommitRow key={row.commit.sha} row={row} width={width} last={index === rows.length - 1} />
       ))}
     </div>
+  );
+}
+
+/** One commit in the graph. Clicking it opens the commit — the whole message and its files — in the
+ *  detail panel over the terminal. */
+function CommitRow({ row, width, last }: { row: GraphRow; width: number; last: boolean }) {
+  const show = useUiStore((s) => s.showGitDetail);
+  const shown = useUiStore(
+    (s) => s.gitDetail?.kind !== "file" && s.gitDetail?.rev === row.commit.sha,
+  );
+
+  return (
+    <Row
+      label={`${row.commit.short_sha} ${row.commit.summary}`}
+      selected={shown}
+      onActivate={() => show({ kind: "commit", rev: row.commit.sha })}
+      className="items-center px-0"
+    >
+      <Lane row={row} width={width} last={last} />
+      <span className="shrink-0" style={{ color: `${laneColour(row.lane)}99` }}>
+        {row.commit.short_sha}
+      </span>
+      <span className="text-dim truncate">{row.commit.summary}</span>
+      {row.commit.refs.map((ref) => (
+        <span
+          key={ref}
+          className="hud-clip-sm bg-elevated shrink-0 px-1 text-[0.55rem]"
+          style={{ color: laneColour(row.lane) }}
+        >
+          {ref}
+        </span>
+      ))}
+    </Row>
   );
 }
 

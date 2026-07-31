@@ -9,6 +9,9 @@
 //! exists to show you what the harness in the terminal is doing to your repository; a button that
 //! rewrites history sitting next to an agent that edits files is a combination nobody asked for.
 
+pub mod details;
+pub mod diff;
+
 use crate::dto::{GitChange, GitCommit, GitSnapshot};
 use crate::error::{AppError, Result};
 use std::collections::HashMap;

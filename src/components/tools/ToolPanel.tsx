@@ -43,7 +43,12 @@ export function ToolPanel() {
         <header className="border-cyan/20 text-cyan flex h-6 shrink-0 items-center border-b px-2 font-mono text-[0.58rem] tracking-[0.18em]">
           {label.toUpperCase()}
         </header>
-        <div className="flex-1 overflow-auto">{activeTool === "git" ? <GitTool /> : null}</div>
+        {/* `min-h-0` and no scrolling of its own: a tool owns the scrolling inside it — the Git tool
+            has two independently scrollable regions — and a scroll container wrapped around that
+            would give the column a second scrollbar that moves both at once. */}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {activeTool === "git" ? <GitTool /> : null}
+        </div>
       </aside>
 
       <Splitter
@@ -54,7 +59,7 @@ export function ToolPanel() {
         onChange={setToolWidth}
         // Measured from the column's own left edge, so the value is its width and not a screen
         // coordinate that shifts when the window moves.
-        originX={() => columnRef.current?.getBoundingClientRect().left ?? 0}
+        toValue={(x) => x - (columnRef.current?.getBoundingClientRect().left ?? 0)}
       />
     </>
   );
