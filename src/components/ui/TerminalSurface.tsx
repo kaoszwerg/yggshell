@@ -174,11 +174,17 @@ export function TerminalSurface({
       console.warn("terminal: WebGL renderer unavailable, falling back to the DOM renderer", error);
     }
 
+    // Last geometry actually reported. Dragging the tool column's splitter fires the observer every
+    // frame, but rows and columns only change every whole cell — reporting each frame would be a
+    // hundred IPC calls and a hundred SIGWINCHs for a terminal that did not change size.
+    let reported = { rows: 0, cols: 0 };
     const measure = () => {
       // A hidden pane measures 0×0. Fitting it would tell the backend the window has no screen, and
       // the child would reformat its output for one.
       if (host.clientWidth === 0 || host.clientHeight === 0) return;
       fit.fit();
+      if (term.rows === reported.rows && term.cols === reported.cols) return;
+      reported = { rows: term.rows, cols: term.cols };
       handlers.current.onResize(term.rows, term.cols);
     };
 

@@ -3,7 +3,7 @@ import { useUiStore } from "./ui";
 
 describe("useUiStore", () => {
   beforeEach(() => {
-    useUiStore.setState({ view: "terminal", aboutOpen: false });
+    useUiStore.setState({ view: "terminal", aboutOpen: false, activeTool: null, toolWidth: 280 });
     window.localStorage.clear();
   });
 
@@ -55,5 +55,58 @@ describe("useUiStore", () => {
     await useUiStore.persist.rehydrate();
 
     expect(useUiStore.getState().view).toBe("settings");
+  });
+
+  it("starts with the tool column collapsed", () => {
+    // A fresh install earns the terminal all its width; the column appears once a tool is asked for.
+    expect(useUiStore.getState().activeTool).toBeNull();
+  });
+
+  it("toggles a tool open and closed from the same rail button", () => {
+    useUiStore.getState().toggleTool("git");
+    expect(useUiStore.getState().activeTool).toBe("git");
+
+    useUiStore.getState().toggleTool("git");
+    expect(useUiStore.getState().activeTool).toBeNull();
+  });
+
+  it("keeps the chosen width while the column is collapsed", () => {
+    useUiStore.getState().setToolWidth(340);
+    useUiStore.getState().toggleTool("git");
+    useUiStore.getState().toggleTool("git");
+
+    // Reopening must restore the size the user dragged to, not a default.
+    expect(useUiStore.getState().toolWidth).toBe(340);
+  });
+
+  it("clamps a width to the usable range", () => {
+    useUiStore.getState().setToolWidth(10);
+    expect(useUiStore.getState().toolWidth).toBe(180);
+
+    useUiStore.getState().setToolWidth(9999);
+    expect(useUiStore.getState().toolWidth).toBe(560);
+  });
+
+  it("collapses a persisted tool that no longer exists", async () => {
+    window.localStorage.setItem(
+      "app-ui",
+      JSON.stringify({ state: { view: "terminal", activeTool: "retired-tool" }, version: 1 }),
+    );
+
+    await useUiStore.persist.rehydrate();
+
+    // Better an honest collapse than a column taking up space and rendering nothing.
+    expect(useUiStore.getState().activeTool).toBeNull();
+  });
+
+  it("repairs a persisted width that is out of bounds", async () => {
+    window.localStorage.setItem(
+      "app-ui",
+      JSON.stringify({ state: { view: "terminal", toolWidth: 4 }, version: 1 }),
+    );
+
+    await useUiStore.persist.rehydrate();
+
+    expect(useUiStore.getState().toolWidth).toBe(180);
   });
 });

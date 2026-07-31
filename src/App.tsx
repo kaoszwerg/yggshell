@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { TitleBar } from "./components/layout/TitleBar";
 import { StatusBar } from "./components/layout/StatusBar";
 import { Sidebar } from "./components/sidebar/Sidebar";
+import { ToolPanel } from "./components/tools/ToolPanel";
 import { AboutDialog } from "./components/AboutDialog";
 import { CrashNotice } from "./components/CrashNotice";
 import { TerminalView } from "./views/TerminalView";
@@ -32,6 +33,9 @@ export default function App() {
         <CrashNotice />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
+          {/* The tool column sits between the rail and the view: the rail navigates, the tool renders
+              here, and the view keeps whatever width is left rather than being covered. */}
+          <ToolPanel />
           <main ref={mainRef} className="flex-1 overflow-hidden">
             {view === "terminal" ? <TerminalView /> : null}
             {view === "logs" ? <LogsView /> : null}

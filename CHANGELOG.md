@@ -80,6 +80,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The terminal now reports geometry only when the row/column count actually **changed**. Dragging the
+  tool column fires the resize observer every frame, but a terminal's size only moves every whole
+  cell — without the filter one drag would have been a hundred IPC calls and a hundred `SIGWINCH`s
+  for a terminal that had not resized.
 - **Middle-click did not paste at all.** It listened for `auxclick`, but xterm's selection service
   calls `preventDefault` on `mousedown` and WebKit then never dispatches the auxclick — so the
   handler simply never ran. It listens on `mousedown` in the *capture* phase now, which runs before

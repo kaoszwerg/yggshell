@@ -54,6 +54,12 @@ The substrate. A genuine terminal, not a reduced emulation.
 
 The reason the product exists: enriching an AI development harness.
 
+- [x] **The tool column.** The rail navigates and nothing renders in it; a tool opens its own
+      resizable, collapsible column beside it, and the terminal keeps the rest of the width instead of
+      being replaced. Width and choice are remembered; a fresh install starts collapsed. Logs and
+      Settings stay full views — a view replaces, a tool accompanies.
+- [ ] **How the app learns which repository to show.** OPEN, and it blocks everything below: OSC 7
+      shell integration, an OS-level query of the child's cwd, or an explicitly chosen folder.
 - [ ] Current branch, visualised the way VS Code shows it.
 - [ ] List of changed files in the working tree.
 - [ ] Branch history below it: where each branch stands, and the divergence between branches drawn out.
