@@ -51,6 +51,12 @@ pub struct SettingsDto {
     /// The scheme a COMMIT is drawn in. Empty means "the same as a diff".
     #[serde(default)]
     pub commit_theme: String,
+    /// Copy to the clipboard as soon as something is selected, the way many terminals do.
+    ///
+    /// Off by default, and deliberately so: it silently replaces whatever the user had copied, which
+    /// is a surprise the first time it costs someone a paste they were about to make.
+    #[serde(default)]
+    pub copy_on_select: bool,
     /// Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
     ///
     /// Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.
@@ -269,6 +275,7 @@ impl Default for SettingsDto {
             terminal_theme: String::new(),
             diff_theme: String::new(),
             commit_theme: String::new(),
+            copy_on_select: false,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             minimize_to_tray: false,
@@ -295,6 +302,7 @@ mod tests {
             terminal_theme: String::new(),
             diff_theme: String::new(),
             commit_theme: String::new(),
+            copy_on_select: true,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             ui_scale: 1.25,

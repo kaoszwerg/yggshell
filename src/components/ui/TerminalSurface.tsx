@@ -62,6 +62,13 @@ export interface TerminalSurfaceProps {
    * repaint it would take the scrollback and the running process with it.
    */
   theme?: TerminalTheme | null;
+  /**
+   * Copy to the clipboard the moment something is selected.
+   *
+   * Off unless the user asks for it: it replaces whatever they had copied, silently, which is only
+   * welcome when it was expected.
+   */
+  copyOnSelect?: boolean;
   /** The shell's current working directory, as it reports it (OSC 7). Never fires for a shell that
    *  does not emit the sequence — see the backend's shell integration. */
   onCwd?: (path: string) => void;
@@ -91,6 +98,7 @@ export function TerminalSurface({
   onCwd,
   fontSize,
   theme,
+  copyOnSelect,
   className = "",
 }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -110,6 +118,7 @@ export function TerminalSurface({
     onCwd,
     fontSize,
     theme,
+    copyOnSelect,
   });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
@@ -124,8 +133,9 @@ export function TerminalSurface({
       onCwd,
       fontSize,
       theme,
+      copyOnSelect,
     };
-  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize, theme]);
+  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize, theme, copyOnSelect]);
 
   useImperativeHandle(
     ref,
@@ -192,7 +202,13 @@ export function TerminalSurface({
     const search = new SearchAddon();
     term.loadAddon(search);
     term.loadAddon(
-      new WebLinksAddon((_event, uri) => {
+      new WebLinksAddon((event, uri) => {
+        // ⌘-click on macOS, Ctrl-click elsewhere — the convention every editor and terminal shares.
+        // A plain click in a terminal is a selection or a cursor move, and opening a browser because
+        // somebody clicked a line of log output is exactly the surprise this modifier prevents.
+        // (Ctrl-click is a right-click on macOS, hence the split.)
+        const wanted = isMac() ? event.metaKey : event.ctrlKey;
+        if (!wanted) return;
         handlers.current.onLink(uri);
       }),
     );
@@ -229,6 +245,23 @@ export function TerminalSurface({
       setPrimarySelection(term.getSelection());
       handlers.current.onSelectionChange?.(term.hasSelection());
     });
+
+    // …and, when asked for, the real clipboard too. Bound to the END of a selection rather than to
+    // every change: `onSelectionChange` fires for every cell the pointer crosses, and writing the
+    // clipboard a hundred times during one drag is both wasteful and, on a slow write, wrong — the
+    // last value to land would not be the last one selected.
+    const copySelection = () => {
+      if (handlers.current.copyOnSelect !== true) return;
+      const selection = term.getSelection();
+      if (selection === "") return;
+      navigator.clipboard.writeText(selection).catch((error: unknown) => {
+        // The clipboard can refuse — permissions, a webview without focus. Never fatal, never silent.
+        console.warn("terminal: copy on select failed —", error);
+      });
+    };
+    host.addEventListener("mouseup", copySelection);
+    // Shift+arrows select without the mouse ever being involved.
+    host.addEventListener("keyup", copySelection);
     const titleSub = term.onTitleChange((title) => {
       if (title.trim() !== "") handlers.current.onTitle?.(title);
     });
@@ -312,6 +345,8 @@ export function TerminalSurface({
 
     return () => {
       observer.disconnect();
+      host.removeEventListener("mouseup", copySelection);
+      host.removeEventListener("keyup", copySelection);
       host.removeEventListener("mousedown", onMiddleDown, true);
       selectionSub.dispose();
       titleSub.dispose();

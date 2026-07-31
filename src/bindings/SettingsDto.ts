@@ -35,6 +35,13 @@ diff_theme: string,
  */
 commit_theme: string, 
 /**
+ * Copy to the clipboard as soon as something is selected, the way many terminals do.
+ *
+ * Off by default, and deliberately so: it silently replaces whatever the user had copied, which
+ * is a surprise the first time it costs someone a paste they were about to make.
+ */
+copy_on_select: boolean, 
+/**
  * Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
  *
  * Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.

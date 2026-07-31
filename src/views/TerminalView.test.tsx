@@ -10,9 +10,12 @@ import { useTerminalStore } from "../store/terminal";
  */
 let measure: ((rows: number, cols: number) => void) | undefined;
 
+let surfaceProps: Record<string, unknown> = {};
+
 vi.mock("../components/ui/TerminalSurface", () => ({
   TerminalSurface: (props: { onResize: (rows: number, cols: number) => void }) => {
     measure = props.onResize;
+    surfaceProps = props as unknown as Record<string, unknown>;
     return <div data-testid="surface" />;
   },
 }));
@@ -23,7 +26,9 @@ const THEMES = [
 ];
 
 vi.mock("../hooks/useSettings", () => ({
-  useSettings: () => ({ data: { ui_scale: 1, terminal_font_size: 13, terminal_theme: "" } }),
+  useSettings: () => ({
+    data: { ui_scale: 1, terminal_font_size: 13, terminal_theme: "", copy_on_select: true },
+  }),
   useTerminalThemes: () => ({ data: THEMES }),
   useTerminalProfiles: () => ({ data: [] }),
 }));
@@ -39,7 +44,12 @@ vi.mock("../api/terminal", () => ({
   },
 }));
 
+vi.mock("../api/commands", () => ({
+  api: { openExternal: vi.fn(() => Promise.resolve()) },
+}));
+
 import { terminalApi } from "../api/terminal";
+import { api } from "../api/commands";
 
 /** Hands back the `open` promise's resolver, so a test decides exactly when the session exists. */
 function deferOpen(id: number, tmuxSession: string | null = null) {
@@ -396,5 +406,27 @@ describe("TerminalView", () => {
 
       expect(useTerminalStore.getState().panes).toHaveLength(0);
     });
+  });
+
+  it("passes the copy-on-select preference down to the emulator", async () => {
+    // The emulator owns the selection; the setting has to reach it or it is decoration.
+    const opened = deferOpen(40);
+    render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    expect(surfaceProps.copyOnSelect).toBe(true);
+  });
+
+  it("routes a clicked link through the backend, never the webview", async () => {
+    // ADR-PROJ-001: the webview does not get to navigate. `open_external` also refuses anything that
+    // is not http(s), which is the check that matters for a URL out of somebody else's log output.
+    const opened = deferOpen(41);
+    render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    (surfaceProps.onLink as (url: string) => void)("https://example.com");
+    expect(api.openExternal).toHaveBeenCalledWith("https://example.com");
   });
 });

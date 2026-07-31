@@ -30,6 +30,7 @@ pub struct SettingsPatch {
     pub terminal_theme: Option<String>,
     pub diff_theme: Option<String>,
     pub commit_theme: Option<String>,
+    pub copy_on_select: Option<bool>,
     pub tmux_mode: Option<TmuxMode>,
     pub tmux_session: Option<String>,
     pub minimize_to_tray: Option<bool>,
@@ -128,6 +129,9 @@ impl SettingsStore {
                 // Trimmed here so an accidental space cannot make a name silently different from the
                 // one the user believes they typed.
                 guard.tmux_session = session.trim().to_string();
+            }
+            if let Some(copy) = patch.copy_on_select {
+                guard.copy_on_select = copy;
             }
             if let Some(tray) = patch.minimize_to_tray {
                 guard.minimize_to_tray = tray;

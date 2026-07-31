@@ -471,6 +471,7 @@ function Pane({
             onCwd={onCwd}
             fontSize={fontSize}
             theme={theme}
+            copyOnSelect={settings.data?.copy_on_select ?? false}
           />
         </div>
       </ContextMenu>

@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **URLs in the terminal open with ⌘-click** (Ctrl-click elsewhere), in the default browser. The
+  modifier is the point: a plain click in a terminal is a selection or a cursor move, and opening a
+  browser because somebody clicked a line of log output is the surprise it prevents. The URL goes
+  through the backend, which still refuses anything that is not `http(s)` — it came out of somebody
+  else's output.
+- **Copy on select**, off by default (Settings → Terminal). Off because it silently replaces whatever
+  you had copied, which is only welcome when it was expected. Bound to the *end* of a selection rather
+  than to every change: `onSelectionChange` fires for every cell the pointer crosses, and a hundred
+  clipboard writes during one drag is both wasteful and, on a slow write, wrong. A middle-click still
+  pastes the last selection either way.
 - **Your tabs come back after a close or a crash.** Which tabs were open, where each one was, its
   profile and its colour scheme — restored, with the tab that was in front still in front.
   - **Two different things are restored, and the difference is the design.** A PTY does not survive
