@@ -17,6 +17,7 @@ export function pane(over: Partial<TerminalPane> & { key: string }): TerminalPan
     plain: false,
     generation: 0,
     detail: null,
+    tmuxSession: null,
     ...over,
   };
 }

@@ -60,11 +60,19 @@ export function DiffView({
   diff,
   split,
   scheme,
+  fontSize,
 }: {
   diff: GitDiff;
   split: boolean;
   /** The colour scheme to draw in, or `null`/absent for the HUD palette. */
   scheme?: SyntaxScheme | null;
+  /**
+   * Text size in CSS pixels — the terminal's own setting.
+   *
+   * Not divided by the UI scale, unlike the emulator's: this is ordinary DOM, so the WebView zoom
+   * already applies to it. Dividing would make a diff shrink as the rest of the interface grew.
+   */
+  fontSize: number;
 }) {
   const coloured = useColoured(diff, scheme ?? null);
 
@@ -85,7 +93,7 @@ export function DiffView({
   }
 
   return (
-    <div className="font-mono text-[0.7rem] leading-[1.5]">
+    <div className="font-mono leading-[1.5]" style={{ fontSize: `${fontSize}px` }}>
       {diff.hunks.map((hunk, index) => {
         const key = `${hunk.old_start}:${hunk.new_start}`;
         return split ? (

@@ -130,7 +130,7 @@ impl TerminalRegistry {
         app: AppHandle,
         output: Channel<InvokeResponseBody>,
         request: Open<'_>,
-    ) -> Result<SessionId> {
+    ) -> Result<crate::dto::TerminalOpened> {
         let Open {
             cwd,
             size,
@@ -138,27 +138,30 @@ impl TerminalRegistry {
             profile,
             plain,
         } = request;
-        // Two different kinds of directory, and they fail differently on purpose.
+        // Both kinds of starting directory are PREFERENCES, and a stale one is never a reason to
+        // refuse a terminal.
         //
-        // The one on the CALL is a request: if it is not a directory, that is an error, because the
-        // caller asked for something specific and got it wrong. The one in a PROFILE is a stored
-        // preference, and a preference that has gone stale — the directory was moved, the project was
-        // deleted — must not be the reason a user cannot open a terminal. It is logged and dropped,
-        // and the shell starts where it otherwise would have. Same reasoning as a profile that no
-        // longer exists at all.
-        let cwd = match profile.and_then(|p| p.cwd.as_deref()) {
-            Some(preferred) => match validate_cwd(Some(PathBuf::from(preferred))) {
+        // The profile's is obviously that. The one on the call is too, now that the caller who sends
+        // it is a restored tab: a project moved or deleted between two runs must not leave the user
+        // staring at an error instead of a shell. Both are validated, and a failure is logged and
+        // dropped rather than propagated — same as a profile that no longer exists.
+        let preferred = profile
+            .and_then(|p| p.cwd.clone())
+            .map(PathBuf::from)
+            .or(cwd);
+        let cwd = match preferred {
+            None => None,
+            Some(path) => match validate_cwd(Some(path.clone())) {
                 Ok(valid) => valid,
                 Err(error) => {
                     tracing::warn!(
-                        %preferred,
+                        path = %path.display(),
                         %error,
-                        "the profile's starting directory is not usable — starting where the shell would"
+                        "the requested starting directory is not usable — starting where the shell would"
                     );
-                    validate_cwd(cwd)?
+                    None
                 }
             },
-            None => validate_cwd(cwd)?,
         };
         // What actually runs: the shell, or tmux wrapping it. Decided here rather than in `pty`, so
         // that module stays about pseudo-terminals and nothing else.
@@ -316,6 +319,7 @@ impl TerminalRegistry {
             }
         });
 
+        let tmux_session = launch.tmux_session.clone();
         self.sessions.lock().map_err(poisoned)?.insert(
             id,
             Session {
@@ -323,7 +327,10 @@ impl TerminalRegistry {
                 tmux_session: launch.tmux_session,
             },
         );
-        Ok(id)
+        // The tmux session travels back with the id: a tab that knows which session it landed on can
+        // return to the same work after a restart, which is the only kind of session this app can
+        // truly restore.
+        Ok(crate::dto::TerminalOpened { id, tmux_session })
     }
 
     /// Send input to a session.

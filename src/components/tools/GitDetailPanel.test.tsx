@@ -8,6 +8,13 @@ import type { GitDetail } from "../../store/ui";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitDiff } from "../../bindings/GitDiff";
 
+vi.mock("../../hooks/useSettings", () => ({
+  useSettings: () => ({
+    data: { terminal_font_size: 17, terminal_theme: "", diff_theme: "", commit_theme: "" },
+  }),
+  useTerminalThemes: () => ({ data: [] }),
+}));
+
 vi.mock("../../api/git", () => ({
   gitApi: { fileDiff: vi.fn(), commit: vi.fn(), commitFileDiff: vi.fn() },
 }));
@@ -192,5 +199,25 @@ describe("GitDetailPanel", () => {
     renderPanel();
 
     expect(await screen.findByText(/no longer in the repository/)).toBeTruthy();
+  });
+
+  it("draws a diff at the terminal's own text size", async () => {
+    // Code is code: the size chosen to read a terminal at is the size a diff should be read at.
+    showDetail({ kind: "file", path: "src/lib/highlight.ts", staged: false });
+    renderPanel();
+
+    const line = await screen.findByText("const b = 3;");
+    const grid = line.closest("[style*='font-size']");
+    expect(grid).not.toBeNull();
+    expect((grid as HTMLElement).style.fontSize).toBe("17px");
+  });
+
+  it("draws a commit at that size too", async () => {
+    showDetail({ kind: "commit", rev: COMMIT.sha });
+    renderPanel();
+
+    const body = await screen.findByText(/The gap was small/);
+    const sized = body.closest("[style*='font-size']");
+    expect((sized as HTMLElement | null)?.style.fontSize).toBe("17px");
   });
 });

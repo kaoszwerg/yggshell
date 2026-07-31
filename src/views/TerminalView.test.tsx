@@ -42,10 +42,10 @@ vi.mock("../api/terminal", () => ({
 import { terminalApi } from "../api/terminal";
 
 /** Hands back the `open` promise's resolver, so a test decides exactly when the session exists. */
-function deferOpen(id: number) {
+function deferOpen(id: number, tmuxSession: string | null = null) {
   let settle: () => void = () => {};
-  const promise = new Promise<number>((resolve) => {
-    settle = () => resolve(id);
+  const promise = new Promise<{ id: number; tmux_session: string | null }>((resolve) => {
+    settle = () => resolve({ id, tmux_session: tmuxSession });
   });
   vi.mocked(terminalApi.open).mockReturnValue(promise);
   return async () => {
@@ -61,7 +61,7 @@ describe("TerminalView", () => {
     vi.clearAllMocks();
     measure = undefined;
     useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: false });
-    vi.mocked(terminalApi.open).mockResolvedValue(1);
+    vi.mocked(terminalApi.open).mockResolvedValue({ id: 1, tmux_session: null });
   });
 
   afterEach(() => {
@@ -135,7 +135,7 @@ describe("TerminalView", () => {
     await act(async () => {
       measure?.(30, 100);
     });
-    vi.mocked(terminalApi.open).mockResolvedValue(2);
+    vi.mocked(terminalApi.open).mockResolvedValue({ id: 2, tmux_session: null });
     await act(async () => {
       measure?.(30, 100);
     });
@@ -348,7 +348,7 @@ describe("TerminalView", () => {
       act(() => measure?.(30, 100));
       await opened();
       const key = useTerminalStore.getState().panes[0]?.key;
-      vi.mocked(terminalApi.open).mockResolvedValue(31);
+      vi.mocked(terminalApi.open).mockResolvedValue({ id: 31, tmux_session: null });
 
       exit({ id: 30, code: 0, tmux_client: true });
 
@@ -363,7 +363,7 @@ describe("TerminalView", () => {
       render(<TerminalView />);
       act(() => measure?.(30, 100));
       await opened();
-      vi.mocked(terminalApi.open).mockResolvedValue(33);
+      vi.mocked(terminalApi.open).mockResolvedValue({ id: 33, tmux_session: null });
 
       await act(async () => {
         exit({ id: 32, code: 0, tmux_client: true });

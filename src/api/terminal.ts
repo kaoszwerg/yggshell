@@ -3,6 +3,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
+import type { TerminalOpened } from "../bindings/TerminalOpened";
 
 /** Backend session id. Allocated by the registry; meaningless outside this process. */
 export type SessionId = number;
@@ -37,10 +38,10 @@ export const terminalApi = {
      */
     plain?: boolean;
     onOutput: (bytes: Uint8Array) => void;
-  }): Promise<SessionId> => {
+  }): Promise<TerminalOpened> => {
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = (buffer) => opts.onOutput(new Uint8Array(buffer));
-    return invoke<SessionId>("terminal_open", {
+    return invoke<TerminalOpened>("terminal_open", {
       onOutput: channel,
       rows: opts.rows,
       cols: opts.cols,

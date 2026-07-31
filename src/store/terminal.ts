@@ -1,10 +1,22 @@
 // Terminal tabs as the UI sees them (Zustand — client state only, rule:frontend-architecture).
 //
 // The backend owns the sessions (ADR-PROJ-001 §4). What lives here is the *view* of them: which tabs
-// exist, their order, their titles, which one is in front. Deliberately not persisted — restoring
-// sessions across a restart is its own milestone, and a tab list that outlived the processes it names
-// would be a lie.
+// exist, their order, their titles, which one is in front.
+//
+// **What "restore" honestly means here.** A PTY does not survive the app: when the process ends the
+// shell gets its SIGHUP and dies, and no amount of bookkeeping brings it back. So two different things
+// are restored, and conflating them would be the lie this file used to avoid by persisting nothing:
+//
+//  - the WORKSPACE — which tabs were open, where each one was, which profile and scheme it had. Those
+//    come back as fresh shells in the same places. This is what every terminal calls "restore", and
+//    it is what the persisted state below carries.
+//  - the PROCESS — only ever through tmux, which is a session that outlives us by design. A tab that
+//    was attached to one attaches to it again and finds its work exactly where it was.
+//
+// Anything that would be false after a restart is deliberately NOT persisted: a title the shell set
+// (`cargo watch` is not running any more), a backend session id, an open diff.
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { GitDetail } from "./ui";
 
 /** One tab. `key` is the frontend's identity for it and is stable for the pane's whole life; the
@@ -52,6 +64,14 @@ export interface TerminalPane {
    * meant opening a diff in one tab and finding it laid over another.
    */
   detail: GitDetail | null;
+  /**
+   * The tmux session this tab was attached to, when it was.
+   *
+   * The one piece of state that restores a *process* rather than a place: tmux outlives the app, so a
+   * tab that names its session finds its work still running. `null` for a plain shell, where there is
+   * nothing to come back to.
+   */
+  tmuxSession: string | null;
 }
 
 export interface TerminalState {
@@ -84,6 +104,8 @@ export interface TerminalState {
   detachToShell: (key: string) => void;
   /** Show something in this tab's detail panel; `null` closes it. */
   setPaneDetail: (key: string, detail: GitDetail | null) => void;
+  /** Record which tmux session a tab ended up attached to, so a restart can return to it. */
+  setPaneTmuxSession: (key: string, session: string | null) => void;
 }
 
 /** Monotonic, process-local. Never shown to the user; the title is. */
@@ -103,70 +125,139 @@ function neighbourOf(panes: TerminalPane[], closing: string): string | null {
   return index > 0 ? (panes.at(index - 1)?.key ?? null) : null;
 }
 
-export const useTerminalStore = create<TerminalState>()((set, get) => ({
-  panes: [],
-  activeKey: null,
-  bootstrapped: false,
+export const useTerminalStore = create<TerminalState>()(
+  persist(
+    (set, get) => ({
+      panes: [],
+      activeKey: null,
+      bootstrapped: false,
 
-  bootstrap: () => {
-    if (get().bootstrapped) return;
-    set({ bootstrapped: true });
-    get().openPane();
-  },
+      bootstrap: () => {
+        if (get().bootstrapped) return;
+        set({ bootstrapped: true });
+        get().openPane();
+      },
 
-  openPane: (profileId = null) => {
-    const key = `term-${nextKey++}`;
-    set((s) => ({
-      panes: [
-        ...s.panes,
-        {
-          key,
-          title: "Terminal",
-          cwd: null,
-          profileId,
-          themeId: null,
-          plain: false,
-          generation: 0,
-          detail: null,
-        },
-      ],
-      activeKey: key,
-    }));
-    return key;
-  },
+      openPane: (profileId = null) => {
+        const key = `term-${nextKey++}`;
+        set((s) => ({
+          panes: [
+            ...s.panes,
+            {
+              key,
+              title: "Terminal",
+              cwd: null,
+              profileId,
+              themeId: null,
+              plain: false,
+              generation: 0,
+              detail: null,
+              tmuxSession: null,
+            },
+          ],
+          activeKey: key,
+        }));
+        return key;
+      },
 
-  closePane: (key) =>
-    set((s) => ({
-      panes: s.panes.filter((p) => p.key !== key),
-      activeKey: s.activeKey === key ? neighbourOf(s.panes, key) : s.activeKey,
-    })),
+      closePane: (key) =>
+        set((s) => ({
+          panes: s.panes.filter((p) => p.key !== key),
+          activeKey: s.activeKey === key ? neighbourOf(s.panes, key) : s.activeKey,
+        })),
 
-  setActive: (activeKey) => set({ activeKey }),
+      setActive: (activeKey) => set({ activeKey }),
 
-  setTitle: (key, title) =>
-    set((s) => ({
-      panes: s.panes.map((p) => (p.key === key ? { ...p, title } : p)),
-    })),
+      setTitle: (key, title) =>
+        set((s) => ({
+          panes: s.panes.map((p) => (p.key === key ? { ...p, title } : p)),
+        })),
 
-  setCwd: (key, cwd) =>
-    set((s) => ({
-      panes: s.panes.map((p) => (p.key === key && p.cwd !== cwd ? { ...p, cwd } : p)),
-    })),
+      setCwd: (key, cwd) =>
+        set((s) => ({
+          panes: s.panes.map((p) => (p.key === key && p.cwd !== cwd ? { ...p, cwd } : p)),
+        })),
 
-  setPaneTheme: (key, themeId) =>
-    set((s) => ({
-      panes: s.panes.map((p) => (p.key === key && p.themeId !== themeId ? { ...p, themeId } : p)),
-    })),
+      setPaneTheme: (key, themeId) =>
+        set((s) => ({
+          panes: s.panes.map((p) =>
+            p.key === key && p.themeId !== themeId ? { ...p, themeId } : p,
+          ),
+        })),
 
-  detachToShell: (key) =>
-    set((s) => ({
-      panes: s.panes.map((p) =>
-        p.key === key ? { ...p, plain: true, generation: p.generation + 1 } : p,
-      ),
-    })),
+      detachToShell: (key) =>
+        set((s) => ({
+          panes: s.panes.map((p) =>
+            p.key === key ? { ...p, plain: true, generation: p.generation + 1 } : p,
+          ),
+        })),
 
-  setPaneDetail: (key, detail) =>
-    set((s) => ({
-      panes: s.panes.map((p) => (p.key === key ? { ...p, detail } : p)),
-    })),
-}));
+      setPaneDetail: (key, detail) =>
+        set((s) => ({
+          panes: s.panes.map((p) => (p.key === key ? { ...p, detail } : p)),
+        })),
+
+      setPaneTmuxSession: (key, tmuxSession) =>
+        set((s) => ({
+          panes: s.panes.map((p) =>
+            p.key === key && p.tmuxSession !== tmuxSession ? { ...p, tmuxSession } : p,
+          ),
+        })),
+    }),
+    {
+      name: "app-terminals",
+      // Schema version for the persist middleware, NOT the app version. Bump when the stored shape
+      // changes incompatibly, so an old payload is discarded rather than half-read.
+      // 1: { panes: [key, title, cwd, profileId, themeId, tmuxSession], activeKey }
+      version: 1,
+      // Only what is still TRUE after a restart. A title the shell set names a process that is gone;
+      // a session id names a PTY that is gone; an open diff is a view of a moment that has passed.
+      // Persisting any of them would be the lie this store used to avoid by persisting nothing.
+      partialize: (s) => ({
+        panes: s.panes.map((p) => ({
+          key: p.key,
+          cwd: p.cwd,
+          profileId: p.profileId,
+          themeId: p.themeId,
+          tmuxSession: p.tmuxSession,
+        })),
+        activeKey: s.activeKey,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // Rebuild each tab from what survived, with everything else at its starting value. `plain` is
+        // deliberately false: a tab that had detached out of tmux is starting over, and its profile
+        // decides again.
+        state.panes = (state.panes ?? [])
+          .filter((p): p is TerminalPane => typeof p?.key === "string")
+          .map((p) => ({
+            key: p.key,
+            title: "Terminal",
+            cwd: typeof p.cwd === "string" ? p.cwd : null,
+            profileId: typeof p.profileId === "string" ? p.profileId : null,
+            themeId: typeof p.themeId === "string" ? p.themeId : null,
+            tmuxSession: typeof p.tmuxSession === "string" ? p.tmuxSession : null,
+            plain: false,
+            generation: 0,
+            detail: null,
+          }));
+
+        // Keys come from a counter that restarts at zero every run, so restored keys are renumbered
+        // rather than trusted. Without it a restored `term-0` and a newly opened one would be the same
+        // tab to everything else — including the map that decides which session to close.
+        const wasActiveAt = state.panes.findIndex((p) => p.key === state.activeKey);
+        state.panes = state.panes.map((p, at) => ({ ...p, key: `term-${at}` }));
+        nextKey = state.panes.length;
+        // The tab that was in front stays in front; if that record is gone, the first one is.
+        state.activeKey =
+          (wasActiveAt >= 0 ? state.panes.at(wasActiveAt)?.key : undefined) ??
+          state.panes.at(0)?.key ??
+          null;
+
+        // Restored tabs ARE the bootstrap: opening another on top of them would greet the user with a
+        // terminal they did not ask for, every time.
+        state.bootstrapped = state.panes.length > 0;
+      },
+    },
+  ),
+);

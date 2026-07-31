@@ -8,6 +8,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Your tabs come back after a close or a crash.** Which tabs were open, where each one was, its
+  profile and its colour scheme — restored, with the tab that was in front still in front.
+  - **Two different things are restored, and the difference is the design.** A PTY does not survive
+    the app: the shell gets its `SIGHUP` and dies, and no bookkeeping brings it back. So the
+    *workspace* comes back as fresh shells in the same places — which is what every terminal means by
+    "restore" — while the *process* comes back only through **tmux**, which outlives us by design: a
+    tab records the session it attached to and returns to it, finding the work exactly where it was.
+  - **What is deliberately not restored**, because it would be false the moment it appeared: a title
+    the shell set (`cargo watch` is not running any more), a backend session id, an open diff, and a
+    tab's detached-from-tmux state — its profile decides again. Each has a test that says so, and each
+    of those tests was run against a version that kept it, to confirm it fails there.
+  - A restored directory that has since gone is not an error. The backend logs it and the shell starts
+    where it otherwise would have; a project moved between two runs must not leave someone staring at
+    a message instead of a terminal.
+  - Restored tabs count as the bootstrap, so none is opened on top of them.
+- **Diffs and commits now follow the terminal's text size.** Code is code: the size chosen to read a
+  terminal at is the size a diff should be read at, and having one follow the setting while the other
+  stayed fixed was an oversight. It is not divided by the UI scale like the emulator's, because the
+  panel is ordinary DOM and the WebView zoom already applies to it.
 - **The Git tool's header names the repository**, beside the column's own name: `GIT · yggshell`. A
   branch on its own does not say where you are — `main` is `main` in every checkout, and this app is
   built to have several open at once. The full path is in a tooltip, because two checkouts of the same

@@ -194,6 +194,14 @@ function Pane({
   /** The last geometry this pane reported, so a new session can be started without waiting for the
    *  emulator to be resized into reporting one again. */
   const lastGeometry = useRef<{ rows: number; cols: number } | null>(null);
+  /**
+   * The directory this tab had when the app last closed, used once.
+   *
+   * Captured at mount rather than read live: `cwd` is updated by the shell the moment it reports where
+   * it is, so by the time a second session opened in this tab it would no longer be the restored
+   * value — and a tab that detached out of tmux would jump back to where it started.
+   */
+  const restoreCwd = useRef<string | null>(null);
   const settings = useSettings();
   // UI scale and text size are separate questions: how big the chrome is, and how much output fits.
   // The WebView zoom multiplies EVERYTHING, so the emulator is handed a size divided by that zoom —
@@ -219,6 +227,7 @@ function Pane({
   const [schemeOpen, setSchemeOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
   const setCwd = useTerminalStore((s) => s.setCwd);
+  const setPaneTmuxSession = useTerminalStore((s) => s.setPaneTmuxSession);
   const closePane = useTerminalStore((s) => s.closePane);
 
   // The session is opened from the FIRST measurement, never before it: the shell must be told the
@@ -249,15 +258,22 @@ function Pane({
         .open({
           rows,
           cols,
+          // Where this tab was when the app last closed. A directory that has since gone is not an
+          // error: the backend logs it and the shell starts where it otherwise would have.
+          cwd: restoreCwd.current ?? undefined,
           profile: profileId,
           plain,
           onOutput: (bytes) => handle.current?.write(bytes),
         })
-        .then((id) => {
+        .then((opened) => {
+          const id = opened.id;
           sessionId.current = id;
           setSessionOpen(true);
           onSession(paneKey, id);
           setTitle(paneKey, `Terminal ${id + 1}`);
+          // Recorded so a restart can return this tab to the same tmux session — the one kind of
+          // session that genuinely survives us.
+          setPaneTmuxSession(paneKey, opened.tmux_session);
           handle.current?.focus();
 
           const latest = pending.current;
@@ -273,8 +289,13 @@ function Pane({
           handle.current?.write(notice(`could not start a terminal: ${String(error)}`));
         });
     },
-    [onSession, paneKey, plain, profileId, setTitle],
+    [onSession, paneKey, plain, profileId, setPaneTmuxSession, setTitle],
   );
+
+  // Only the FIRST session of a tab starts in the restored directory; after that the shell decides.
+  useEffect(() => {
+    restoreCwd.current = null;
+  }, [sessionOpen]);
 
   // A bumped generation means "this tab wants a new session" — today, that the user detached out of
   // tmux. The emulator, the scrollback and the tab all stay; only the process behind them is new.

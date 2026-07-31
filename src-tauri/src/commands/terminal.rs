@@ -42,7 +42,7 @@ pub fn terminal_open(
     cwd: Option<String>,
     profile: Option<String>,
     plain: Option<bool>,
-) -> Result<SessionId> {
+) -> Result<crate::dto::TerminalOpened> {
     let plain = plain.unwrap_or(false);
     tracing::info!(rows, cols, ?cwd, ?profile, plain, "terminal_open");
     // tmux and the shell are persisted PREFERENCES, not something the webview may choose per call.
@@ -55,7 +55,7 @@ pub fn terminal_open(
     let profile = profile
         .as_deref()
         .and_then(|id| crate::profile::get(&state.data_dir, id));
-    let id = registry.open(
+    let opened = registry.open(
         app,
         on_output,
         crate::terminal::Open {
@@ -66,8 +66,8 @@ pub fn terminal_open(
             plain,
         },
     )?;
-    tracing::debug!(session = id, "terminal_open ok");
-    Ok(id)
+    tracing::debug!(session = opened.id, tmux = ?opened.tmux_session, "terminal_open ok");
+    Ok(opened)
 }
 
 /// Send input to a session — keystrokes, a paste, a control sequence.

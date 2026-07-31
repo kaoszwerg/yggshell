@@ -335,6 +335,18 @@ mod tests {
     }
 }
 
+/// What a freshly opened session turned out to be.
+///
+/// The id alone was enough while every terminal was a shell. It is not any more: a tab needs to know
+/// which tmux session it landed on, or a restart cannot return it to the same work.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TerminalOpened {
+    pub id: u32,
+    /// The tmux session this attached to, or `null` for a plain shell.
+    pub tmux_session: Option<String>,
+}
+
 /// A terminal session ended by itself — the user typed `exit`, or the shell died (ADR-PROJ-001).
 ///
 /// Closing a tab is the other direction and needs no event: the frontend already knows.

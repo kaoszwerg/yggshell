@@ -24,6 +24,20 @@ import type { GitFileStat } from "../../bindings/GitFileStat";
  * focus trap that is deliberately absent. It does take focus on open, so a keystroke meant for the
  * panel cannot land in a terminal the user can no longer see.
  */
+/**
+ * The text size a detail view is drawn at — the terminal's own setting.
+ *
+ * Code is code: the size you chose to read a terminal at is the size you want to read a diff at, and
+ * having one follow the other while the other stayed fixed was simply an oversight.
+ *
+ * Undivided by the UI scale, unlike the emulator's: this is ordinary DOM and the WebView zoom already
+ * applies. Dividing would shrink a diff as the rest of the interface grew.
+ */
+function useDetailFontSize(): number {
+  const settings = useSettings();
+  return settings.data?.terminal_font_size ?? 13;
+}
+
 /** The scheme a detail view of `kind` is drawn in for this tab. See `detailThemeId` for the chain. */
 function useDetailScheme(paneKey: string, kind: "diff" | "commit"): SyntaxScheme | null {
   const settings = useSettings();
@@ -151,6 +165,7 @@ function DiffContent({
   const split = useUiStore((s) => s.diffSplit);
   const setSplit = useUiStore((s) => s.setDiffSplit);
   const scheme = useDetailScheme(paneKey, "diff");
+  const fontSize = useDetailFontSize();
   const inCommit = detail.kind === "commit-file";
 
   const query = useQuery({
@@ -195,7 +210,7 @@ function DiffContent({
             That file is no longer in the repository.
           </p>
         ) : (
-          <DiffView diff={query.data} split={split} scheme={scheme} />
+          <DiffView diff={query.data} split={split} scheme={scheme} fontSize={fontSize} />
         )}
       </div>
     </>
@@ -214,6 +229,7 @@ function CommitContent({
   paneKey: string;
 }) {
   const scheme = useDetailScheme(paneKey, "commit");
+  const fontSize = useDetailFontSize();
   const query = useQuery({
     queryKey: ["git-commit", cwd, rev],
     queryFn: () => gitApi.commit(cwd, rev),
@@ -253,7 +269,7 @@ function CommitContent({
         ) : query.data === null || query.data === undefined ? (
           <p className="text-dim font-mono text-xs">That commit is not in this repository.</p>
         ) : (
-          <CommitBody rev={rev} detail={query.data} show={show} />
+          <CommitBody rev={rev} detail={query.data} show={show} fontSize={fontSize} />
         )}
       </div>
     </>
@@ -272,13 +288,15 @@ function CommitBody({
   rev,
   detail,
   show,
+  fontSize,
 }: {
   rev: string;
   detail: GitCommitDetail;
   show: (detail: GitDetail | null) => void;
+  fontSize: number;
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" style={{ fontSize: `${fontSize}px` }}>
       {detail.refs.length === 0 ? null : (
         <div className="flex flex-wrap gap-1">
           {detail.refs.map((ref) => (
@@ -294,7 +312,7 @@ function CommitBody({
 
       {/* The whole message, wrapped — prose, unlike the code below it, and a commit body that is cut
           off is the one part of a commit nobody can reconstruct from anywhere else. */}
-      <div className="font-mono text-xs leading-relaxed whitespace-pre-wrap">
+      <div className="font-mono leading-relaxed whitespace-pre-wrap">
         <span className="text-fg">{detail.summary}</span>
         {detail.body === "" ? null : <span className="text-dim">{`\n\n${detail.body}`}</span>}
       </div>
@@ -317,11 +335,7 @@ function CommitBody({
 
 function FileRow({ file, onOpen }: { file: GitFileStat; onOpen: () => void }) {
   return (
-    <Row
-      label={`${file.path} — ${file.status}`}
-      onActivate={onOpen}
-      className="gap-2 font-mono text-[0.68rem]"
-    >
+    <Row label={`${file.path} — ${file.status}`} onActivate={onOpen} className="gap-2 font-mono">
       <span className={`w-3 shrink-0 ${statusColour(file.status)}`} aria-hidden>
         {statusMark(file.status)}
       </span>
