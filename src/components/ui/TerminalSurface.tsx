@@ -7,7 +7,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
-import { isMac } from "../../lib/platform";
+import { isLinux, isMac } from "../../lib/platform";
 import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
 import { PALETTE } from "../../styles/palette";
 
@@ -193,16 +193,29 @@ export function TerminalSurface({
     const dataSub = term.onData((data) => handlers.current.onData(data));
 
     // Middle-click pastes the primary selection, the way it does in every terminal on X11.
-    // Deliberately unconditional: a program that has taken over the mouse (tmux, vim) would receive
-    // the click instead in some terminals, but the paste people reach for far more often than they
-    // middle-click inside a mouse-reporting app, and losing it there is the more surprising break.
-    const onAuxClick = (event: MouseEvent) => {
+    //
+    // Two things this went wrong on before:
+    //
+    // 1. It listened for `auxclick`. xterm's SelectionService calls preventDefault on `mousedown`,
+    //    and WebKit then never dispatches the auxclick — so the handler simply never ran. Listening
+    //    on `mousedown` in the CAPTURE phase runs before any descendant listener, so nothing xterm
+    //    does can swallow it.
+    // 2. It ran on Linux too. There, xterm already moves the textarea under the cursor on auxclick
+    //    so the WebView performs a NATIVE paste of the real X11 PRIMARY — text selected in any other
+    //    application included. Ours is an app-scoped stand-in and strictly worse, so on Linux we stay
+    //    out of the way and let the desktop do it properly.
+    //
+    // Deliberately unconditional otherwise: a program that has taken over the mouse (tmux, vim) would
+    // receive the click instead in some terminals, but losing the paste is the more surprising break.
+    const onMiddleDown = (event: globalThis.MouseEvent) => {
       if (event.button !== 1) return;
-      event.preventDefault();
       const text = readPrimarySelection();
-      if (text !== "") term.paste(text);
+      if (text === "") return;
+      event.preventDefault();
+      event.stopPropagation();
+      term.paste(text);
     };
-    host.addEventListener("auxclick", onAuxClick);
+    if (!isLinux()) host.addEventListener("mousedown", onMiddleDown, true);
 
     // Copy and paste on NON-macOS only.
     //
@@ -248,7 +261,7 @@ export function TerminalSurface({
 
     return () => {
       observer.disconnect();
-      host.removeEventListener("auxclick", onAuxClick);
+      host.removeEventListener("mousedown", onMiddleDown, true);
       selectionSub.dispose();
       titleSub.dispose();
       dataSub.dispose();

@@ -5,6 +5,13 @@
 // between two key combinations, and that is not worth a dependency and an async call on a path that
 // runs inside a keydown handler.
 
+/** True on Linux, where the desktop itself owns the X11 PRIMARY selection. */
+export function isLinux(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform = navigator.platform || "";
+  return /linux|x11|bsd/i.test(platform) || /linux|x11|bsd/i.test(navigator.userAgent);
+}
+
 /** True on macOS, where the modifier is ⌘ rather than Ctrl+Shift. */
 export function isMac(): boolean {
   if (typeof navigator === "undefined") return false;

@@ -80,6 +80,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Middle-click did not paste at all.** It listened for `auxclick`, but xterm's selection service
+  calls `preventDefault` on `mousedown` and WebKit then never dispatches the auxclick — so the
+  handler simply never ran. It listens on `mousedown` in the *capture* phase now, which runs before
+  any descendant listener. On Linux it deliberately does nothing: xterm already moves the textarea
+  under the cursor there so the WebView performs a **native** paste of the real X11 PRIMARY — text
+  selected in any other application included — and the app-scoped stand-in would be strictly worse.
 - **Paste inserted everything twice on macOS.** ⌘V is handled natively by the WebView — Tauri's
   default Edit menu supplies the key equivalent and xterm listens for the resulting `paste` event —
   so the custom handler was a second paste on top of it. `return false` from xterm's key handler
