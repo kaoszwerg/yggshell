@@ -34,6 +34,13 @@ pub struct SettingsDto {
     /// WebView zoom factor applied to the whole UI (ADR-APP-021). Clamped to [0.7, 1.6].
     #[serde(default = "default_ui_scale")]
     pub ui_scale: f64,
+    /// Terminal text size in CSS pixels, **independent of `ui_scale`**.
+    ///
+    /// Its own setting because the two are different questions: how big the chrome is, and how much
+    /// output fits on screen. The frontend divides this by `ui_scale` before handing it to the
+    /// emulator, so the WebView zoom cannot drag it along.
+    #[serde(default = "default_terminal_font_size")]
+    pub terminal_font_size: f64,
     /// When true, closing the window hides the app to a system-tray icon instead of quitting, so it
     /// keeps running in the background (ADR-APP-021). Default `false` — a fresh app is a normal window.
     #[serde(default)]
@@ -61,10 +68,15 @@ fn default_ui_scale() -> f64 {
     1.0
 }
 
+fn default_terminal_font_size() -> f64 {
+    13.0
+}
+
 impl Default for SettingsDto {
     fn default() -> Self {
         Self {
             ui_scale: default_ui_scale(),
+            terminal_font_size: default_terminal_font_size(),
             minimize_to_tray: false,
         }
     }
@@ -84,6 +96,7 @@ mod tests {
     #[test]
     fn settings_roundtrip_through_json() {
         let s = SettingsDto {
+            terminal_font_size: 13.0,
             ui_scale: 1.25,
             minimize_to_tray: true,
         };

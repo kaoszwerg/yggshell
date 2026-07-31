@@ -12,6 +12,10 @@ use std::sync::RwLock;
 
 pub const MIN_UI_SCALE: f64 = 0.7;
 pub const MAX_UI_SCALE: f64 = 1.6;
+/// Terminal text bounds, in CSS pixels. Below the minimum a monospace grid stops being readable at
+/// all; above the maximum an 80-column line no longer fits in a sensible window.
+pub const MIN_TERMINAL_FONT_SIZE: f64 = 8.0;
+pub const MAX_TERMINAL_FONT_SIZE: f64 = 32.0;
 
 /// Thread-safe settings store: in-memory state + the JSON file it is persisted to.
 pub struct SettingsStore {
@@ -64,6 +68,7 @@ impl SettingsStore {
     pub fn update(
         &self,
         ui_scale: Option<f64>,
+        terminal_font_size: Option<f64>,
         minimize_to_tray: Option<bool>,
     ) -> Result<SettingsDto> {
         let next = {
@@ -74,6 +79,10 @@ impl SettingsStore {
             if let Some(scale) = ui_scale {
                 guard.ui_scale = scale.clamp(MIN_UI_SCALE, MAX_UI_SCALE);
             }
+            if let Some(size) = terminal_font_size {
+                guard.terminal_font_size =
+                    size.clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
+            }
             if let Some(tray) = minimize_to_tray {
                 guard.minimize_to_tray = tray;
             }
@@ -82,6 +91,7 @@ impl SettingsStore {
         self.persist(&next)?;
         tracing::info!(
             ui_scale = next.ui_scale,
+            terminal_font_size = next.terminal_font_size,
             minimize_to_tray = next.minimize_to_tray,
             "settings updated"
         );
@@ -111,6 +121,12 @@ fn sanitize(mut s: SettingsDto) -> SettingsDto {
         s.ui_scale = 1.0;
     }
     s.ui_scale = s.ui_scale.clamp(MIN_UI_SCALE, MAX_UI_SCALE);
+    if !s.terminal_font_size.is_finite() {
+        s.terminal_font_size = 13.0;
+    }
+    s.terminal_font_size = s
+        .terminal_font_size
+        .clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
     s
 }
 
@@ -130,7 +146,7 @@ mod tests {
     fn update_persists_and_reloads() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
-        let next = store.update(Some(1.25), None).expect("update");
+        let next = store.update(Some(1.25), None, None).expect("update");
         assert_eq!(next.ui_scale, 1.25);
 
         let reloaded = SettingsStore::load(dir.path());
@@ -142,9 +158,9 @@ mod tests {
     fn ui_scale_is_clamped_on_write_and_read() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
-        let high = store.update(Some(9.0), None).expect("update");
+        let high = store.update(Some(9.0), None, None).expect("update");
         assert_eq!(high.ui_scale, MAX_UI_SCALE);
-        let low = store.update(Some(0.1), None).expect("update");
+        let low = store.update(Some(0.1), None, None).expect("update");
         assert_eq!(low.ui_scale, MIN_UI_SCALE);
 
         std::fs::write(dir.path().join("settings.json"), r#"{"ui_scale":42.0}"#).expect("write");
@@ -163,7 +179,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = SettingsStore::load(dir.path());
         assert!(!store.get().minimize_to_tray);
-        let next = store.update(None, Some(true)).expect("update");
+        let next = store.update(None, None, Some(true)).expect("update");
         assert!(next.minimize_to_tray);
         assert!(SettingsStore::load(dir.path()).get().minimize_to_tray);
     }
@@ -175,5 +191,59 @@ mod tests {
         let s = SettingsStore::load(dir.path()).get();
         assert_eq!(s.ui_scale, 1.25);
         assert!(!s.minimize_to_tray);
+    }
+}
+
+#[cfg(test)]
+mod font_size_tests {
+    use super::*;
+
+    #[test]
+    fn the_terminal_font_size_is_its_own_setting() {
+        // The whole point: changing one must not move the other. If these ever share a value, the
+        // "independent" in the settings copy becomes a lie.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = SettingsStore::load(dir.path());
+
+        store.update(Some(1.25), None, None).expect("scale");
+        assert_eq!(store.get().terminal_font_size, 13.0, "text size untouched");
+
+        store.update(None, Some(18.0), None).expect("size");
+        assert_eq!(store.get().ui_scale, 1.25, "ui scale untouched");
+        assert_eq!(store.get().terminal_font_size, 18.0);
+    }
+
+    #[test]
+    fn an_unusable_font_size_is_clamped_not_stored() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = SettingsStore::load(dir.path());
+
+        assert_eq!(
+            store
+                .update(None, Some(400.0), None)
+                .expect("high")
+                .terminal_font_size,
+            MAX_TERMINAL_FONT_SIZE
+        );
+        assert_eq!(
+            store
+                .update(None, Some(0.0), None)
+                .expect("low")
+                .terminal_font_size,
+            MIN_TERMINAL_FONT_SIZE
+        );
+    }
+
+    #[test]
+    fn a_hand_edited_file_cannot_make_the_terminal_unreadable() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("settings.json"),
+            br#"{"ui_scale":1.0,"terminal_font_size":9999,"minimize_to_tray":false}"#,
+        )
+        .expect("write");
+
+        let store = SettingsStore::load(dir.path());
+        assert_eq!(store.get().terminal_font_size, MAX_TERMINAL_FONT_SIZE);
     }
 }

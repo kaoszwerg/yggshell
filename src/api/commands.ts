@@ -24,9 +24,14 @@ export const api = {
    * Partial update — omitted fields keep their current value. Toggling `minimizeToTray` installs or
    * removes the system-tray icon immediately (no restart).
    */
-  updateSettings: (opts: { uiScale?: number; minimizeToTray?: boolean }) =>
+  updateSettings: (opts: {
+    uiScale?: number;
+    terminalFontSize?: number;
+    minimizeToTray?: boolean;
+  }) =>
     invoke<SettingsDto>("update_settings", {
       uiScale: opts.uiScale ?? null,
+      terminalFontSize: opts.terminalFontSize ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,
     }),
   /** Open an http(s) URL in the default browser (routed through the backend so it is logged). */

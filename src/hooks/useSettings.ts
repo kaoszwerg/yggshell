@@ -14,7 +14,8 @@ export function useSettings() {
 export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (opts: { uiScale?: number; minimizeToTray?: boolean }) => api.updateSettings(opts),
+    mutationFn: (opts: { uiScale?: number; terminalFontSize?: number; minimizeToTray?: boolean }) =>
+      api.updateSettings(opts),
     onSuccess: (data) => qc.setQueryData(["settings"], data),
   });
 }

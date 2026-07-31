@@ -20,7 +20,7 @@ vi.mock("../api/commands", () => ({
 import { api } from "../api/commands";
 
 function settings(ui_scale: number): SettingsDto {
-  return { ui_scale, minimize_to_tray: false };
+  return { ui_scale, terminal_font_size: 13, minimize_to_tray: false };
 }
 
 function makeWrapper(qc: QueryClient) {

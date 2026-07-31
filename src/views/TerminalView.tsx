@@ -14,6 +14,7 @@ import {
 import { isMac } from "../lib/platform";
 import { readPrimarySelection } from "../lib/primarySelection";
 import { registerPasteTarget } from "../lib/terminalHandles";
+import { useSettings } from "../hooks/useSettings";
 import { useTerminalStore } from "../store/terminal";
 
 /** Written into the terminal itself when something goes wrong. A failure the user cannot see is a
@@ -119,6 +120,12 @@ function Pane({
   const handle = useRef<TerminalHandle>(null);
   const sessionId = useRef<SessionId | null>(null);
   const opening = useRef(false);
+  const settings = useSettings();
+  // UI scale and text size are separate questions: how big the chrome is, and how much output fits.
+  // The WebView zoom multiplies EVERYTHING, so the emulator is handed a size divided by that zoom —
+  // after which the two really are independent, which is the point of having both.
+  const uiScale = settings.data?.ui_scale ?? 1;
+  const fontSize = (settings.data?.terminal_font_size ?? 13) / (uiScale > 0 ? uiScale : 1);
   const [hasSelection, setHasSelection] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
@@ -292,6 +299,7 @@ function Pane({
             onTitle={onTitle}
             onSelectionChange={setHasSelection}
             onCwd={onCwd}
+            fontSize={fontSize}
           />
         </div>
       </ContextMenu>

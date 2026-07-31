@@ -47,6 +47,13 @@ export interface TerminalSurfaceProps {
   onTitle?: (title: string) => void;
   /** Whether anything is selected right now — so a caller can disable "Copy" honestly. */
   onSelectionChange?: (hasSelection: boolean) => void;
+  /**
+   * Text size in the emulator, in CSS pixels — already divided by the UI scale by the caller.
+   *
+   * Applied to the live terminal rather than by rebuilding it: recreating the emulator would throw
+   * away the scrollback and the running process every time the slider moved.
+   */
+  fontSize: number;
   /** The shell's current working directory, as it reports it (OSC 7). Never fires for a shell that
    *  does not emit the sequence — see the backend's shell integration. */
   onCwd?: (path: string) => void;
@@ -74,6 +81,7 @@ export function TerminalSurface({
   onTitle,
   onSelectionChange,
   onCwd,
+  fontSize,
   className = "",
 }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -84,13 +92,21 @@ export function TerminalSurface({
   // The callbacks are read through refs so a parent re-render never tears down the emulator: xterm
   // owns a canvas, a WebGL context and the scrollback, and re-creating it would wipe the session's
   // history on every keystroke that changed a title somewhere.
-  const handlers = useRef({ onData, onResize, onLink, onTitle, onSelectionChange, onCwd });
+  const handlers = useRef({
+    onData,
+    onResize,
+    onLink,
+    onTitle,
+    onSelectionChange,
+    onCwd,
+    fontSize,
+  });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
   // possibly fire already see the current values.
   useEffect(() => {
-    handlers.current = { onData, onResize, onLink, onTitle, onSelectionChange, onCwd };
-  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd]);
+    handlers.current = { onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize };
+  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize]);
 
   useImperativeHandle(
     ref,
@@ -109,6 +125,17 @@ export function TerminalSurface({
     [],
   );
 
+  // Size changes reach the LIVE terminal. The mount effect below deliberately does not depend on
+  // `fontSize`, or every step would dispose the emulator and take the scrollback with it.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || term.options.fontSize === fontSize) return;
+    term.options.fontSize = fontSize;
+    // The cell grid changed, so the geometry did too: refit and let the backend hear about it.
+    fitRef.current?.fit();
+    handlers.current.onResize(term.rows, term.cols);
+  }, [fontSize]);
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -118,7 +145,9 @@ export function TerminalSurface({
       cursorBlink: true,
       cursorStyle: "bar",
       fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-      fontSize: 13,
+      // Read through the ref so the mount effect below does not depend on the prop: depending on it
+      // would rebuild the emulator on every size step and take the scrollback with it.
+      fontSize: handlers.current.fontSize,
       lineHeight: 1.25,
       scrollback: 10_000,
       // Ctrl+C must stay SIGINT, so copy is never bound to it. The selection is still cleared on

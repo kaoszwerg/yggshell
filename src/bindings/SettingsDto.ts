@@ -13,6 +13,14 @@ export type SettingsDto = {
  */
 ui_scale: number, 
 /**
+ * Terminal text size in CSS pixels, **independent of `ui_scale`**.
+ *
+ * Its own setting because the two are different questions: how big the chrome is, and how much
+ * output fits on screen. The frontend divides this by `ui_scale` before handing it to the
+ * emulator, so the WebView zoom cannot drag it along.
+ */
+terminal_font_size: number, 
+/**
  * When true, closing the window hides the app to a system-tray icon instead of quitting, so it
  * keeps running in the background (ADR-APP-021). Default `false` — a fresh app is a normal window.
  */

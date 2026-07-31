@@ -47,38 +47,73 @@ describe("api", () => {
   });
 
   describe("updateSettings", () => {
-    it("pins the payload shape: uiScale sent, minimizeToTray defaults to null", async () => {
-      mockInvoke.mockResolvedValue({ ui_scale: 1.25, minimize_to_tray: false });
+    // Every field travels on every call, absent ones as null: the backend treats null as "leave it
+    // alone", so a payload that simply omits a key would be indistinguishable from one that never
+    // knew about it (rule:testing — the contract is pinned on the side that produces it).
+    it("pins the payload shape: uiScale sent, the rest default to null", async () => {
+      mockInvoke.mockResolvedValue({
+        ui_scale: 1.25,
+        terminal_font_size: 13,
+        minimize_to_tray: false,
+      });
       await api.updateSettings({ uiScale: 1.25 });
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 1.25,
+        terminalFontSize: null,
         minimizeToTray: null,
       });
     });
 
-    it("pins the payload shape: minimizeToTray sent, uiScale defaults to null", async () => {
-      mockInvoke.mockResolvedValue({ ui_scale: 1, minimize_to_tray: true });
+    it("carries the terminal text size without touching the UI scale", async () => {
+      // The two are independent settings; a call that changed one must not carry a value for the
+      // other, or "independent" would only be true in the settings copy.
+      mockInvoke.mockResolvedValue({
+        ui_scale: 1,
+        terminal_font_size: 18,
+        minimize_to_tray: false,
+      });
+      await api.updateSettings({ terminalFontSize: 18 });
+      expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
+        uiScale: null,
+        terminalFontSize: 18,
+        minimizeToTray: null,
+      });
+    });
+
+    it("pins the payload shape: minimizeToTray sent, the rest default to null", async () => {
+      mockInvoke.mockResolvedValue({ ui_scale: 1, terminal_font_size: 13, minimize_to_tray: true });
       await api.updateSettings({ minimizeToTray: true });
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
+        terminalFontSize: null,
         minimizeToTray: true,
       });
     });
 
-    it("sends both fields as null when no options are given", async () => {
-      mockInvoke.mockResolvedValue({ ui_scale: 1, minimize_to_tray: false });
+    it("sends every field as null when no options are given", async () => {
+      mockInvoke.mockResolvedValue({
+        ui_scale: 1,
+        terminal_font_size: 13,
+        minimize_to_tray: false,
+      });
       await api.updateSettings({});
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
+        terminalFontSize: null,
         minimizeToTray: null,
       });
     });
 
-    it("sends both fields when both are given", async () => {
-      mockInvoke.mockResolvedValue({ ui_scale: 0.8, minimize_to_tray: true });
-      await api.updateSettings({ uiScale: 0.8, minimizeToTray: true });
+    it("sends every field when all are given", async () => {
+      mockInvoke.mockResolvedValue({
+        ui_scale: 0.8,
+        terminal_font_size: 20,
+        minimize_to_tray: true,
+      });
+      await api.updateSettings({ uiScale: 0.8, terminalFontSize: 20, minimizeToTray: true });
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 0.8,
+        terminalFontSize: 20,
         minimizeToTray: true,
       });
     });

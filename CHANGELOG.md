@@ -80,6 +80,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Window size and position are written when the window closes**, not only on a clean process exit.
+  The window-state plugin keeps everything in memory until `RunEvent::Exit`, so any other ending — a
+  signal, a crash, a `tauri dev` restart — lost the geometry silently. The tray's Quit already had to
+  save explicitly for the same reason; the × button and hide-to-tray now do too, from one place.
 - **Your shell history was empty, and completion was degraded.** The shell integration points
   `ZDOTDIR` at a generated directory so its rc files are found — but macOS' `/etc/zshrc` runs
   *between* those two files and contains `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`, so every terminal

@@ -27,6 +27,14 @@ pub fn install_close_handler(app: &AppHandle) {
     let handle = app.clone();
     window.clone().on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            // Geometry is written HERE, not left to the plugin's own exit hook. That hook only runs
+            // on a clean `RunEvent::Exit`; the plugin keeps everything in memory until then, so a
+            // process that ends any other way — a signal, a crash, a `tauri dev` restart — loses the
+            // window's size and position silently. The tray's Quit already had to do this for the
+            // same reason; doing it once more here means the × button and hide-to-tray are durable
+            // too, and the worst case is that the same state is written twice.
+            save_geometry(&handle);
+
             let minimize = handle
                 .try_state::<AppState>()
                 .map(|s| s.settings.get().minimize_to_tray)
@@ -41,6 +49,19 @@ pub fn install_close_handler(app: &AppHandle) {
             // else: allow the close to proceed → the app exits (normal windowed behaviour).
         }
     });
+}
+
+/// Write the window's size and position to disk now.
+///
+/// One place, because there are three ways out of this app — the × button, the tray's Quit, and
+/// hiding to tray — and the plugin's own hook covers only a clean process exit. Failure is logged,
+/// never propagated: losing the geometry must not stop the app from closing.
+fn save_geometry(app: &AppHandle) {
+    use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+    match app.save_window_state(StateFlags::all()) {
+        Ok(()) => tracing::debug!("window geometry saved"),
+        Err(e) => tracing::warn!(error = %e, "could not save the window geometry"),
+    }
 }
 
 /// Install or remove the tray icon to match `minimize_to_tray`. Idempotent: enabling when the tray
@@ -73,12 +94,8 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             MENU_OPEN => show_main_window(app),
             MENU_QUIT => {
-                // Save window geometry before exit — Quit goes straight to process exit and
-                // doesn't wait for the plugin's own CloseRequested handler.
-                use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-                if let Err(e) = app.save_window_state(StateFlags::all()) {
-                    tracing::warn!(error = %e, "save_window_state on quit failed");
-                }
+                // Same reason as in the close handler: `app.exit` goes straight to process exit.
+                save_geometry(app);
                 tracing::info!("quit from tray");
                 app.exit(0);
             }

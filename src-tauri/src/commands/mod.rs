@@ -116,11 +116,19 @@ pub fn update_settings(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     ui_scale: Option<f64>,
+    terminal_font_size: Option<f64>,
     minimize_to_tray: Option<bool>,
 ) -> Result<SettingsDto> {
-    tracing::info!(?ui_scale, ?minimize_to_tray, "update_settings");
+    tracing::info!(
+        ?ui_scale,
+        ?terminal_font_size,
+        ?minimize_to_tray,
+        "update_settings"
+    );
     let was_tray = state.settings.get().minimize_to_tray;
-    let next = state.settings.update(ui_scale, minimize_to_tray)?;
+    let next = state
+        .settings
+        .update(ui_scale, terminal_font_size, minimize_to_tray)?;
     if next.minimize_to_tray != was_tray {
         crate::tray::set_enabled(&app, next.minimize_to_tray);
     }

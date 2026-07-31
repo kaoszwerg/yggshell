@@ -7,16 +7,18 @@ import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
 import { useSettings, useUpdateSettings } from "../hooks/useSettings";
 
 const UI_SCALES = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
+const TERMINAL_FONT_SIZES = [11, 12, 13, 14, 16, 18, 20] as const;
 
 /**
  * The sections, in the order they are read down the left-hand side.
  *
- * Grouped by *area* rather than by widget, because this list is going to grow: terminal defaults,
- * iTerm2 themes, the theme editor and per-terminal configuration all land here. One scrolling page
- * would have made each of those a worse neighbour than the last.
+ * Grouped by *area* rather than by widget, because this list is going to grow: iTerm2 themes, the
+ * theme editor and per-terminal configuration all land here. One scrolling page would have made each
+ * of those a worse neighbour than the last.
  */
 const SECTIONS = [
   { id: "appearance", label: "Appearance" },
+  { id: "terminal", label: "Terminal" },
   { id: "window", label: "Window" },
   { id: "about", label: "About" },
 ] as const;
@@ -49,6 +51,7 @@ export function SettingsView() {
         className="h-full flex-1 overflow-auto p-6"
       >
         {section === "appearance" ? <AppearanceSection /> : null}
+        {section === "terminal" ? <TerminalSection /> : null}
         {section === "window" ? <WindowSection /> : null}
         {section === "about" ? <AboutSection /> : null}
       </div>
@@ -67,8 +70,8 @@ function AppearanceSection() {
       label="Appearance"
       info={
         <p>
-          Settings are persisted as JSON under the OS app-data directory and applied to the native
-          WebView zoom, so they survive restarts.
+          The UI scale sizes the chrome — rail, tabs, panels. Terminal text has its own size, under
+          Terminal, so the two can be set independently.
         </p>
       }
     >
@@ -87,6 +90,45 @@ function AppearanceSection() {
             </Button>
           ))}
         </div>
+      </div>
+    </HudPanel>
+  );
+}
+
+function TerminalSection() {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const size = settings.data?.terminal_font_size ?? 13;
+
+  return (
+    <HudPanel
+      accent="cyan"
+      label="Terminal"
+      info={
+        <p>
+          Terminal text size is independent of the UI scale: the emulator is handed a size divided
+          by the WebView zoom, so changing one never drags the other along.
+        </p>
+      }
+    >
+      <div className="flex flex-col gap-1.5">
+        <span className="text-dim text-xs">Text size</span>
+        <div className="flex flex-wrap gap-1">
+          {TERMINAL_FONT_SIZES.map((s) => (
+            <Button
+              key={s}
+              aria-pressed={Math.abs(size - s) < 0.001}
+              active={Math.abs(size - s) < 0.001}
+              onClick={() => update.mutate({ terminalFontSize: s })}
+              className="px-3 py-1 text-xs"
+            >
+              {s}px
+            </Button>
+          ))}
+        </div>
+        <span className="text-dim text-xs">
+          How much output fits on screen. The UI scale under Appearance sizes the chrome around it.
+        </span>
       </div>
     </HudPanel>
   );
