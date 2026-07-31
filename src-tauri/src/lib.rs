@@ -74,6 +74,7 @@ pub fn run() {
             commands::terminal::terminal_close,
             commands::terminal::terminal_status,
             commands::git::git_snapshot,
+            commands::git::git_fetch,
             commands::git::git_file_diff,
             commands::git::git_commit,
             commands::git::git_commit_file_diff,

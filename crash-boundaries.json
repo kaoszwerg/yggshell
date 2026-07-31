@@ -26,6 +26,10 @@
     "src-tauri/src/terminal/environment.rs": {
       "spawns": 1,
       "why": "One short-lived thread, once per process, that asks a login shell what environment it would set. It ends when the shell exits — normally in milliseconds. If it takes longer than CAPTURE_TIMEOUT the CALLER stops waiting and continues with a short PATH; the thread itself is deliberately left to finish into a dropped channel rather than killed, because it is blocked on a child process that cannot be torn down safely from here. It cannot end silently: the success path logs the captured variable count and PATH at info, every failure path (non-zero status, spawn error, timeout) logs a warning naming what was lost, and the consequence — commands the user has installed appearing 'not found' — is visible in their own terminal."
+    },
+    "src-tauri/src/git/fetch.rs": {
+      "spawns": 1,
+      "why": "The fetch itself. `Command` has no timeout, so the child runs on a thread the caller waits on with a deadline (20s). HOW IT DIES: it sends the process result down a channel and returns. If the deadline passes first the caller has already moved on and the receiver is gone — the send fails, the result is discarded, and the thread ends. That is deliberate: the child cannot be killed safely from here, so the thread is allowed to finish into nothing rather than be abandoned mid-write. Nothing is lost, because the caller has already reported the timeout to the user (ADR-PROJ-002)."
     }
   }
 }

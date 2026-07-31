@@ -44,6 +44,14 @@ commit_theme: string,
  */
 terminal_font: string, 
 /**
+ * Refresh the ahead/behind counts against the remote while the Git tool is open.
+ *
+ * The one outbound connection this app makes (ADR-PROJ-002), and switchable because of that: it
+ * goes to a remote the user configured, carries nothing of ours, and cannot touch the working
+ * tree — but it is still traffic nobody asked for on the day they opened the app.
+ */
+git_auto_fetch: boolean, 
+/**
  * Copy to the clipboard as soon as something is selected, the way many terminals do.
  *
  * Off by default, and deliberately so: it silently replaces whatever the user had copied, which

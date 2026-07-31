@@ -15,6 +15,15 @@ export const gitApi = {
   snapshot: (cwd: string) => invoke<GitSnapshot | null>("git_snapshot", { cwd }),
 
   /**
+   * Ask the remote what it has, so the ahead/behind counts are current (ADR-PROJ-002).
+   *
+   * Resolves to an empty string on success, or to a short reason it could not — no remote, no `git`,
+   * offline, a credential we do not have. Refreshing a display is not worth an error dialog, so this
+   * never rejects for those.
+   */
+  fetch: (cwd: string) => invoke<string>("git_fetch", { cwd }),
+
+  /**
    * What changed in one file of the working tree.
    *
    * `staged` picks the side: `true` compares HEAD with the index, `false` the index with the file on

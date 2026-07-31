@@ -59,6 +59,13 @@ pub struct SettingsDto {
     /// what the CSS font stack does anyway.
     #[serde(default)]
     pub terminal_font: String,
+    /// Refresh the ahead/behind counts against the remote while the Git tool is open.
+    ///
+    /// The one outbound connection this app makes (ADR-PROJ-002), and switchable because of that: it
+    /// goes to a remote the user configured, carries nothing of ours, and cannot touch the working
+    /// tree — but it is still traffic nobody asked for on the day they opened the app.
+    #[serde(default = "default_auto_fetch")]
+    pub git_auto_fetch: bool,
     /// Copy to the clipboard as soon as something is selected, the way many terminals do.
     ///
     /// Off by default, and deliberately so: it silently replaces whatever the user had copied, which
@@ -186,6 +193,11 @@ pub struct TerminalProfile {
     pub theme: Option<String>,
 }
 
+/// On by default: a Git tool that reports `↓0` because it never asked is worse than one that asks.
+fn default_auto_fetch() -> bool {
+    true
+}
+
 /// A terminal colour scheme — imported from iTerm2, or edited here.
 ///
 /// **Every colour is optional, on purpose.** Colour has one home in this project and it is the
@@ -284,6 +296,7 @@ impl Default for SettingsDto {
             diff_theme: String::new(),
             commit_theme: String::new(),
             terminal_font: String::new(),
+            git_auto_fetch: default_auto_fetch(),
             copy_on_select: false,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
@@ -312,6 +325,7 @@ mod tests {
             diff_theme: String::new(),
             commit_theme: String::new(),
             terminal_font: "MesloLGS NF".into(),
+            git_auto_fetch: true,
             copy_on_select: true,
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),

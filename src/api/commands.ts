@@ -79,6 +79,7 @@ export const api = {
     diffTheme?: string;
     commitTheme?: string;
     terminalFont?: string;
+    gitAutoFetch?: boolean;
     copyOnSelect?: boolean;
     tmuxMode?: TmuxMode;
     tmuxSession?: string;
@@ -92,6 +93,7 @@ export const api = {
       diffTheme: opts.diffTheme ?? null,
       commitTheme: opts.commitTheme ?? null,
       terminalFont: opts.terminalFont ?? null,
+      gitAutoFetch: opts.gitAutoFetch ?? null,
       copyOnSelect: opts.copyOnSelect ?? null,
       tmuxMode: opts.tmuxMode ?? null,
       tmuxSession: opts.tmuxSession ?? null,

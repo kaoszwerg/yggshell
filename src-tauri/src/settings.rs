@@ -31,6 +31,7 @@ pub struct SettingsPatch {
     pub diff_theme: Option<String>,
     pub commit_theme: Option<String>,
     pub terminal_font: Option<String>,
+    pub git_auto_fetch: Option<bool>,
     pub copy_on_select: Option<bool>,
     pub tmux_mode: Option<TmuxMode>,
     pub tmux_session: Option<String>,
@@ -133,6 +134,9 @@ impl SettingsStore {
             }
             if let Some(font) = patch.terminal_font {
                 guard.terminal_font = font.trim().to_string();
+            }
+            if let Some(auto) = patch.git_auto_fetch {
+                guard.git_auto_fetch = auto;
             }
             if let Some(copy) = patch.copy_on_select {
                 guard.copy_on_select = copy;

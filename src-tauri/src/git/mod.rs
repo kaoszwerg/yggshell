@@ -11,6 +11,7 @@
 
 pub mod details;
 pub mod diff;
+pub mod fetch;
 
 use crate::dto::{GitChange, GitCommit, GitSnapshot};
 use crate::error::{AppError, Result};

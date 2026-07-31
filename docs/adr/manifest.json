@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "count": 31,
+  "count": 32,
   "adrs": [
     {
       "id": "ADR-APP-001",
@@ -910,6 +910,36 @@
       "supersededBy": null,
       "path": "docs/adr/project/proj-001-terminal-architecture.md",
       "hash": "84fc8626485e4ece"
+    },
+    {
+      "id": "ADR-PROJ-002",
+      "layer": "proj",
+      "title": "The Git tool may fetch, and nothing else may reach the network",
+      "tldr": "The one outbound connection this app makes: git fetch, to refresh ahead/behind. Switchable, non-interactive, bounded, and it cannot touch the working tree.",
+      "scope": "project",
+      "load": "conditional",
+      "status": "accepted",
+      "triggers": [
+        "git",
+        "fetch",
+        "remote",
+        "network",
+        "egress",
+        "ahead",
+        "behind",
+        "upstream",
+        "privacy",
+        "offline",
+        "credentials"
+      ],
+      "applies-to": [
+        "src-tauri/src/git/**",
+        "src/components/tools/**",
+        "src/hooks/useGitSnapshot.ts"
+      ],
+      "supersededBy": null,
+      "path": "docs/adr/project/proj-002-git-auto-fetch.md",
+      "hash": "89b12a3a6a5a9f92"
     }
   ]
 }

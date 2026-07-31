@@ -64,3 +64,23 @@ pub fn git_commit_file_diff(cwd: String, rev: String, path: String) -> Result<Op
     tracing::debug!(%rev, %path, found = diff.is_some(), "git_commit_file_diff ok");
     Ok(diff)
 }
+
+/// Ask the remote what it has, so the ahead/behind counts are current.
+///
+/// The counts come from the local remote-tracking ref, which only moves when something fetches —
+/// without this the tool reports `↓0` while upstream has moved on, which is a wrong number rather than
+/// a missing one.
+///
+/// Never fails the caller: no remote, no `git`, no network and a refused credential are all reported
+/// as an outcome rather than raised. Refreshing a display is not something worth an error dialog.
+#[tauri::command]
+pub fn git_fetch(cwd: String) -> Result<String> {
+    tracing::debug!(%cwd, "git_fetch");
+    let outcome = crate::git::fetch::fetch(&PathBuf::from(&cwd))?;
+    Ok(match outcome {
+        crate::git::fetch::Outcome::Fetched => String::new(),
+        crate::git::fetch::Outcome::NoRemote => "no remote".into(),
+        crate::git::fetch::Outcome::Unavailable => "git is not available".into(),
+        crate::git::fetch::Outcome::Failed(reason) => reason,
+    })
+}

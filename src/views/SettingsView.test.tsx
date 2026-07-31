@@ -68,6 +68,7 @@ function mockSettings(
       terminal_shell: "",
       terminal_font: "",
       copy_on_select: false,
+      git_auto_fetch: true,
       ...overrides,
     },
   } as unknown as ReturnType<typeof useSettings>);
@@ -309,6 +310,19 @@ describe("SettingsView", () => {
       ).toBe("true");
       fireEvent.click(screen.getByRole("button", { name: "Select only" }));
       expect(mutate).toHaveBeenCalledWith({ copyOnSelect: false });
+    });
+
+    it("lets the remote check be turned off", () => {
+      // The one outbound connection the app makes, so it must be refusable (ADR-PROJ-002).
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(
+        screen.getByRole("button", { name: "Check the remote" }).getAttribute("aria-pressed"),
+      ).toBe("true");
+      fireEvent.click(screen.getByRole("button", { name: "Stay offline" }));
+      expect(mutate).toHaveBeenCalledWith({ gitAutoFetch: false });
     });
   });
 });

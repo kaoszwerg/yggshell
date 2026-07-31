@@ -43,7 +43,7 @@ function changeMark(status: string): { mark: string; className: string } {
  * OSC 7 — so it follows a `cd` instead of being pinned to wherever the app happened to start.
  */
 export function GitTool() {
-  const { cwd, query } = useGitSnapshot();
+  const { cwd, query, refresh, remoteProblem } = useGitSnapshot();
 
   if (cwd === null) {
     return (
@@ -68,7 +68,9 @@ export function GitTool() {
   const snapshot = query.data;
   if (!snapshot) return <Empty>Not a git repository.</Empty>;
 
-  return <Body snapshot={snapshot} onRefresh={() => void query.refetch()} />;
+  return (
+    <Body snapshot={snapshot} onRefresh={() => void refresh()} remoteProblem={remoteProblem} />
+  );
 }
 
 /**
@@ -79,7 +81,16 @@ export function GitTool() {
  * while you are working, the other while you are reviewing — so the user sets the balance and it is
  * remembered. Both scroll on their own, so neither can push the other off screen.
  */
-function Body({ snapshot, onRefresh }: { snapshot: GitSnapshot; onRefresh: () => void }) {
+function Body({
+  snapshot,
+  onRefresh,
+  remoteProblem,
+}: {
+  snapshot: GitSnapshot;
+  onRefresh: () => void;
+  /** Why the ahead/behind counts may be out of date, or `null` when they are current. */
+  remoteProblem: string | null;
+}) {
   const split = useUiStore((s) => s.gitSplit);
   const setSplit = useUiStore((s) => s.setGitSplit);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -119,6 +130,15 @@ function Body({ snapshot, onRefresh }: { snapshot: GitSnapshot; onRefresh: () =>
             {snapshot.behind > 0 ? (
               <span className="text-cyan shrink-0">↓{snapshot.behind}</span>
             ) : null}
+            {/* Said out loud rather than left to be assumed: without a fetch these counts are a
+                memory, and a number that is quietly wrong is worse than no number (ADR-PROJ-002). */}
+            {remoteProblem === null ? null : (
+              <Tooltip content={`The remote could not be reached: ${remoteProblem}`}>
+                <span className="text-gold shrink-0" aria-label="The counts may be out of date">
+                  ⚠
+                </span>
+              </Tooltip>
+            )}
           </div>
         </Section>
       </div>

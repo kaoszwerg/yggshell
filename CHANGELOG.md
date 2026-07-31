@@ -26,6 +26,27 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The Git tool checks the remote** (ADR-PROJ-002), so `↑2 ↓0` is a fact rather than a memory. Those
+  counts come from the local remote-tracking ref, which only moves when something fetches — and
+  nothing did. The tool was not showing a *stale* number, it was showing a **wrong** one: not
+  "unknown", but "zero behind" while upstream had moved on, with the error growing silently.
+  - `git fetch` every five minutes while the tool is open, and on the refresh button that was already
+    there. **Switchable** (Settings → Terminal), and a ⚠ appears beside the counts, with the reason,
+    whenever the remote could not be reached.
+  - **The one outbound connection this app makes**, and the ADR argues for it rather than assuming it:
+    the host is one the user configured, nothing of ours is sent, and `git fetch` writes
+    remote-tracking refs and objects — it cannot touch the working tree. That last point is exactly why
+    `fetch` is allowed and `pull` is not.
+  - **Never interactive**: `GIT_TERMINAL_PROMPT=0`, empty askpass, `ssh -o BatchMode=yes`, twenty-second
+    deadline. It runs on a timer with no terminal attached, so a credential prompt would hang with
+    nothing on screen to explain it.
+  - **Through the `git` binary, not a bundled network stack.** The hard part is authentication — an SSH
+    agent, a credential helper, a hardware key, an organisation's SSO — and `git` already has all of it
+    configured. Reimplementing that would be a lot of code whose best outcome is behaving like the tool
+    already installed.
+  - **Actions were considered and declined.** `commit`, `push`, `pull`: in a terminal each is one word,
+    and a second actor writing to a tree an agent is working in is the combination ADR-PROJ-001 exists
+    to prevent.
 - **The terminal font is configurable** (Settings → Terminal), through a list you can type into where
   **every row is set in its own font** — choosing a typeface from names printed in a different
   typeface is choosing blind, and the specific question people have here is whether the Powerline

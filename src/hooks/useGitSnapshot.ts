@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { gitApi } from "../api/git";
 import { useTerminalStore } from "../store/terminal";
+import { useSettings } from "./useSettings";
 
 /**
  * How often the snapshot is re-read while the tool is open.
@@ -9,6 +11,15 @@ import { useTerminalStore } from "../store/terminal";
  * free — this is the compromise, and the refresh control is there for the moment it feels too slow.
  */
 const REFRESH_MS = 4000;
+
+/**
+ * How often the remote is asked, while the tool is open.
+ *
+ * Far slower than the local read above, and for a different reason: reading the repository is cheap
+ * and local, while this is a network request to somebody else's server. Five minutes keeps the counts
+ * honest without being traffic anyone would notice (ADR-PROJ-002).
+ */
+const FETCH_MS = 5 * 60 * 1000;
 
 /**
  * The repository the tab in front is in.
@@ -22,6 +33,9 @@ const REFRESH_MS = 4000;
  */
 export function useGitSnapshot() {
   const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
+  const settings = useSettings();
+  const autoFetch = settings.data?.git_auto_fetch ?? true;
+  const client = useQueryClient();
 
   const query = useQuery({
     queryKey: ["git", cwd],
@@ -30,7 +44,39 @@ export function useGitSnapshot() {
     refetchInterval: REFRESH_MS,
   });
 
-  return { cwd, query };
+  // Asking the remote, so `↑2 ↓0` is a fact rather than a memory: the counts come from the local
+  // remote-tracking ref, which only moves when something fetches (ADR-PROJ-002).
+  //
+  // Its own query rather than part of the snapshot: the snapshot is a cheap local read on a four-second
+  // interval, and a network request has no business on that timer.
+  const fetched = useQuery({
+    queryKey: ["git-fetch", cwd],
+    queryFn: async () => {
+      if (cwd === null) return "";
+      const problem = await gitApi.fetch(cwd);
+      // The refs may have moved, so the counts have to be read again — the fetch itself returns none.
+      await client.invalidateQueries({ queryKey: ["git", cwd] });
+      return problem;
+    },
+    enabled: cwd !== null && autoFetch,
+    refetchInterval: FETCH_MS,
+    // Retrying a network call that just failed, on a display refresh, only multiplies the traffic.
+    retry: false,
+  });
+
+  /** Fetch now, then re-read — what the refresh button does. */
+  const refresh = useCallback(async () => {
+    if (cwd !== null && autoFetch) await fetched.refetch();
+    await query.refetch();
+  }, [autoFetch, cwd, fetched, query]);
+
+  return {
+    cwd,
+    query,
+    refresh,
+    /** Why the counts may be stale, or `null` when they are current. */
+    remoteProblem: fetched.data === undefined || fetched.data === "" ? null : fetched.data,
+  };
 }
 
 /**

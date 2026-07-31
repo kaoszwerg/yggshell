@@ -121,6 +121,7 @@ function TerminalSection() {
   const update = useUpdateSettings();
   const size = settings.data?.terminal_font_size ?? 13;
   const copyOnSelect = settings.data?.copy_on_select ?? false;
+  const autoFetch = settings.data?.git_auto_fetch ?? true;
 
   return (
     <HudPanel
@@ -138,6 +139,35 @@ function TerminalSection() {
       <div className="bg-cyan/15 my-4 h-px" aria-hidden />
 
       <FontChoice />
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-dim text-xs">Git remote</span>
+        <div className="flex flex-wrap gap-1">
+          <Button
+            aria-pressed={autoFetch}
+            active={autoFetch}
+            onClick={() => update.mutate({ gitAutoFetch: true })}
+          >
+            Check the remote
+          </Button>
+          <Button
+            aria-pressed={!autoFetch}
+            active={!autoFetch}
+            onClick={() => update.mutate({ gitAutoFetch: false })}
+          >
+            Stay offline
+          </Button>
+        </div>
+        <span className="text-dim text-xs">
+          The ahead/behind counts come from what was last fetched, so without this they go quietly
+          wrong — not <em>unknown</em>, but <strong className="text-fg">↓0</strong> while the remote
+          has moved on. This is the only outbound connection the app makes (ADR-PROJ-002): a{" "}
+          <code>git fetch</code> every five minutes while the Git tool is open, never interactive,
+          and it cannot touch your working tree.
+        </span>
+      </div>
 
       <div className="bg-cyan/15 my-4 h-px" aria-hidden />
 
