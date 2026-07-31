@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "count": 30,
+  "count": 31,
   "adrs": [
     {
       "id": "ADR-APP-001",
@@ -862,6 +862,54 @@
       "supersededBy": null,
       "path": "docs/adr/core-039-maximum-defensible-security-posture.md",
       "hash": "d154323a321f5328"
+    },
+    {
+      "id": "ADR-PROJ-001",
+      "layer": "proj",
+      "title": "Terminal architecture — emulator, PTY, transport and the session model",
+      "tldr": "xterm.js in the webview, portable-pty in Rust behind one module, a coalescing Tauri Channel between them; the backend chooses the shell, never the frontend.",
+      "scope": "fullstack",
+      "load": "conditional",
+      "status": "accepted",
+      "triggers": [
+        "terminal",
+        "pty",
+        "tty",
+        "shell",
+        "tab",
+        "tabs",
+        "xterm",
+        "emulator",
+        "conpty",
+        "session",
+        "channel",
+        "coalescing",
+        "backpressure",
+        "scrollback",
+        "vt",
+        "ansi",
+        "escape-sequence",
+        "killpg",
+        "process-group",
+        "sigwinch",
+        "spawn",
+        "iterm2",
+        "theme"
+      ],
+      "applies-to": [
+        "src-tauri/src/terminal/**",
+        "src-tauri/src/commands/terminal.rs",
+        "src/components/ui/Terminal*",
+        "src/components/ui/Tabs*",
+        "src/components/ui/ContextMenu*",
+        "src/views/TerminalView.tsx",
+        "src/api/terminal.ts",
+        "ui-boundary.json",
+        "crash-boundaries.json"
+      ],
+      "supersededBy": null,
+      "path": "docs/adr/project/proj-001-terminal-architecture.md",
+      "hash": "bfffbbb736c5c648"
     }
   ]
 }

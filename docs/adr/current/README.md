@@ -2,7 +2,7 @@
 
 # Current ADRs (accepted snapshot)
 
-29 accepted decisions. Superseded/deprecated ADRs are omitted here; see the full index
+30 accepted decisions. Superseded/deprecated ADRs are omitted here; see the full index
 in [../README.md](../README.md).
 
 | ADR | Layer | Title | Load |
@@ -36,3 +36,4 @@ in [../README.md](../README.md).
 | [ADR-CORE-037](../core-037-no-silent-death.md) | core | No silent death — every entry point has a last-resort handler | conditional |
 | [ADR-CORE-038](../core-038-layered-briefing-names.md) | core | The layer is part of the briefing filename — <layer>-NNN-<slug>.md, not a number range | conditional |
 | [ADR-CORE-039](../core-039-maximum-defensible-security-posture.md) | core | Maximum defensible security posture — the gate seeks the ceiling, not the floor | conditional |
+| [ADR-PROJ-001](../project/proj-001-terminal-architecture.md) | proj | Terminal architecture — emulator, PTY, transport and the session model | conditional |

@@ -29,9 +29,11 @@ The running, empty, reusable application shell.
 
 The substrate. A genuine terminal, not a reduced emulation.
 
-- [ ] ADR for the terminal architecture **before** any code: PTY ownership (Rust side), the byte
-      channel to the WebView, the emulator on the frontend, and the threat model of running arbitrary
-      shells (rule:security).
+- [x] **[ADR-PROJ-001](docs/adr/project/proj-001-terminal-architecture.md)** — emulator (`@xterm/xterm`),
+      PTY (`portable-pty`, behind one module, with three named tripwires), transport (Tauri Channel with
+      mandatory coalescing), session model, threat model, and what is explicitly outside milestone 1.
+- [ ] The three new HUD primitives the milestone needs, with tests: `Tabs`, `ContextMenu`,
+      `TerminalSurface` (`src/components/ui/`).
 - [ ] Backend: PTY spawn/resize/kill per tab, streamed output, process lifecycle, structured logging
       of every session's start/exit (rule:logging).
 - [ ] Frontend: a terminal view with multiple independent tabs — full keyboard handling, scrollback,

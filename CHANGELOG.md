@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **ADR-PROJ-001 — terminal architecture.** Emulator, PTY crate, transport, session model and threat
+  model decided before any code, each against a measurement: `@xterm/xterm` behind the primitive layer,
+  `portable-pty` behind a single module with three named re-evaluation tripwires, and a Tauri Channel
+  whose backend side *must* coalesce (66.7 MB of PTY output arrives as 68 267 reads of ~1 KB).
 - Bootstrapped `saga-rust-template` into **YggShell**: identity `YggShell` /
   `com.kaoszwerg.yggshell` in `app.identity.json`, propagated by `identity:sync` to all 8 derived
   locations; version reset to `0.1.0`; CHANGELOG reset.
