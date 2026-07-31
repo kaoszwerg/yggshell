@@ -5,6 +5,7 @@
 //! which tab is in front — and nothing else. A session outlives every render.
 
 pub mod pty;
+pub mod shell_integration;
 
 use crate::dto::TerminalExit;
 use crate::error::{AppError, Result};

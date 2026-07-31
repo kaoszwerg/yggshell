@@ -139,6 +139,16 @@ pub fn spawn(cwd: Option<&Path>, size: Size) -> Result<Spawned> {
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }
+    // Teach the shell to report its working directory (OSC 7), so the Git tool knows which
+    // repository it is looking at. Best-effort: an empty integration means the shell starts exactly
+    // as it otherwise would (see `shell_integration`).
+    let integration = crate::terminal::shell_integration::prepare(&program);
+    for arg in &integration.args {
+        cmd.arg(arg);
+    }
+    for (key, value) in &integration.env {
+        cmd.env(key, value);
+    }
     // What the child is talking to. Without TERM a great many programs fall back to a dumb terminal
     // and stop emitting the sequences the emulator exists to render.
     cmd.env("TERM", "xterm-256color");

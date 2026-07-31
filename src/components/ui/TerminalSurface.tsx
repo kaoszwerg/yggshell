@@ -7,6 +7,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { parseOsc7 } from "../../lib/osc7";
 import { isLinux, isMac } from "../../lib/platform";
 import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
 import { PALETTE } from "../../styles/palette";
@@ -46,6 +47,9 @@ export interface TerminalSurfaceProps {
   onTitle?: (title: string) => void;
   /** Whether anything is selected right now — so a caller can disable "Copy" honestly. */
   onSelectionChange?: (hasSelection: boolean) => void;
+  /** The shell's current working directory, as it reports it (OSC 7). Never fires for a shell that
+   *  does not emit the sequence — see the backend's shell integration. */
+  onCwd?: (path: string) => void;
   className?: string;
 }
 
@@ -69,6 +73,7 @@ export function TerminalSurface({
   onLink,
   onTitle,
   onSelectionChange,
+  onCwd,
   className = "",
 }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -79,13 +84,13 @@ export function TerminalSurface({
   // The callbacks are read through refs so a parent re-render never tears down the emulator: xterm
   // owns a canvas, a WebGL context and the scrollback, and re-creating it would wipe the session's
   // history on every keystroke that changed a title somewhere.
-  const handlers = useRef({ onData, onResize, onLink, onTitle, onSelectionChange });
+  const handlers = useRef({ onData, onResize, onLink, onTitle, onSelectionChange, onCwd });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
   // possibly fire already see the current values.
   useEffect(() => {
-    handlers.current = { onData, onResize, onLink, onTitle, onSelectionChange };
-  }, [onData, onResize, onLink, onTitle, onSelectionChange]);
+    handlers.current = { onData, onResize, onLink, onTitle, onSelectionChange, onCwd };
+  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd]);
 
   useImperativeHandle(
     ref,
@@ -197,6 +202,15 @@ export function TerminalSurface({
       if (title.trim() !== "") handlers.current.onTitle?.(title);
     });
     const dataSub = term.onData((data) => handlers.current.onData(data));
+
+    // OSC 7 — the shell announcing where it is: `ESC ] 7 ; file://<host><path> ST`. This is what lets
+    // the Git tool follow a `cd` without querying process internals per platform. Returning `true`
+    // marks the sequence handled so it is not echoed as text.
+    term.parser.registerOscHandler(7, (data) => {
+      const path = parseOsc7(data);
+      if (path !== null) handlers.current.onCwd?.(path);
+      return true;
+    });
 
     // Middle-click pastes the primary selection, the way it does in every terminal on X11.
     //

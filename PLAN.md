@@ -58,11 +58,17 @@ The reason the product exists: enriching an AI development harness.
       resizable, collapsible column beside it, and the terminal keeps the rest of the width instead of
       being replaced. Width and choice are remembered; a fresh install starts collapsed. Logs and
       Settings stay full views — a view replaces, a tool accompanies.
-- [ ] **How the app learns which repository to show.** OPEN, and it blocks everything below: OSC 7
-      shell integration, an OS-level query of the child's cwd, or an explicitly chosen folder.
-- [ ] Current branch, visualised the way VS Code shows it.
-- [ ] List of changed files in the working tree.
-- [ ] Branch history below it: where each branch stands, and the divergence between branches drawn out.
+- [x] **How the app learns which repository to show:** OSC 7. The shell reports its working directory
+      after every prompt, so the tool follows a `cd`. The hook is installed through a generated rc file
+      in the app's own data directory (`ZDOTDIR` for zsh, `--rcfile` for bash) which sources the user's
+      real configuration first — their files are never touched, and a failure costs the hook, not the
+      terminal.
+- [x] Current branch, with ahead/behind against its upstream.
+- [x] List of changed files, staged and unstaged, with status marks.
+- [x] Branch history, drawn: lanes assigned as the walk proceeds, merges given their own lane, refs
+      labelled on the commit they point at.
+- [ ] Still open here: fish and other shells get no hook (fish reports OSC 7 itself; the rest do not).
+      The history is HEAD's — branches that are not ancestors of HEAD do not appear yet.
 
 ## Later — discussed before it is built
 

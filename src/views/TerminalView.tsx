@@ -122,6 +122,7 @@ function Pane({
   const [hasSelection, setHasSelection] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
+  const setCwd = useTerminalStore((s) => s.setCwd);
   const closePane = useTerminalStore((s) => s.closePane);
 
   // The session is opened from the FIRST measurement, never before it: the shell must be told the
@@ -175,6 +176,14 @@ function Pane({
       setTitle(paneKey, title);
     },
     [paneKey, setTitle],
+  );
+
+  // Where the shell says it is (OSC 7). The Git tool reads this, which is how it follows a `cd`.
+  const onCwd = useCallback(
+    (path: string) => {
+      setCwd(paneKey, path);
+    },
+    [paneKey, setCwd],
   );
 
   const openSearch = useCallback(() => {
@@ -282,6 +291,7 @@ function Pane({
             onLink={onLink}
             onTitle={onTitle}
             onSelectionChange={setHasSelection}
+            onCwd={onCwd}
           />
         </div>
       </ContextMenu>

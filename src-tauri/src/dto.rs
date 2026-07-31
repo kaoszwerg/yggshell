@@ -124,3 +124,55 @@ pub struct TerminalExit {
     /// Its exit code, or `null` when the status could not be read at all.
     pub code: Option<u32>,
 }
+
+/// One path the working tree or index disagrees with (ADR-PROJ-001, Git tool).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitChange {
+    /// Path relative to the repository root, as git itself reports it.
+    pub path: String,
+    /// `modified` | `added` | `deleted` | `renamed` | `untracked` | `conflicted`.
+    pub status: String,
+    /// Whether the change is in the index (staged) rather than only in the working tree.
+    pub staged: bool,
+}
+
+/// One commit in the branch history.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitCommit {
+    pub sha: String,
+    /// Abbreviated sha, for display.
+    pub short_sha: String,
+    /// First line of the message.
+    pub summary: String,
+    pub author: String,
+    /// Commit time, ISO-8601.
+    pub when: String,
+    /// Parent shas. Two or more means a merge — which is what the lane drawing is derived from.
+    pub parents: Vec<String>,
+    /// Branch and tag names pointing at this commit, already shortened.
+    pub refs: Vec<String>,
+}
+
+/// Everything the Git tool shows for one repository, read in a single pass.
+///
+/// One DTO rather than four commands: the tool always renders all of it together, and four round
+/// trips would let the branch, the file list and the history disagree with each other on screen.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct GitSnapshot {
+    /// Absolute path of the repository's working-tree root.
+    pub root: String,
+    /// Current branch, or `null` when HEAD is detached or unborn.
+    pub branch: Option<String>,
+    /// Whether HEAD points at a commit rather than a branch.
+    pub detached: bool,
+    /// Abbreviated sha of HEAD, or `null` in a repository with no commits yet.
+    pub head: Option<String>,
+    /// Commits ahead of / behind the upstream branch. Both `0` when there is no upstream.
+    pub ahead: u32,
+    pub behind: u32,
+    pub changes: Vec<GitChange>,
+    pub commits: Vec<GitCommit>,
+}

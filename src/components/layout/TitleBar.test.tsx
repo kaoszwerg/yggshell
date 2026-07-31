@@ -98,7 +98,7 @@ describe("TitleBar", () => {
       // Screen space in a terminal belongs to the terminal (ADR-PROJ-001): the tabs cost no extra
       // height precisely because they take the room the tagline was using.
       useTerminalStore.setState({
-        panes: [{ key: "term-0", title: "zsh" }],
+        panes: [{ key: "term-0", title: "zsh", cwd: null }],
         activeKey: "term-0",
       });
       renderTitleBar(devBuild);
@@ -111,8 +111,8 @@ describe("TitleBar", () => {
     it("switches to the terminal view when a tab is clicked from elsewhere", () => {
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh" },
-          { key: "term-1", title: "cargo" },
+          { key: "term-0", title: "zsh", cwd: null },
+          { key: "term-1", title: "cargo", cwd: null },
         ],
         activeKey: "term-0",
       });
@@ -127,7 +127,10 @@ describe("TitleBar", () => {
     });
 
     it("opens a terminal from the add control and shows it", () => {
-      useTerminalStore.setState({ panes: [{ key: "term-0", title: "zsh" }], activeKey: "term-0" });
+      useTerminalStore.setState({
+        panes: [{ key: "term-0", title: "zsh", cwd: null }],
+        activeKey: "term-0",
+      });
       renderTitleBar(devBuild);
 
       fireEvent.click(screen.getByRole("button", { name: "New terminal" }));
@@ -139,8 +142,8 @@ describe("TitleBar", () => {
     it("closes a terminal from its tab without switching to it", () => {
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh" },
-          { key: "term-1", title: "cargo" },
+          { key: "term-0", title: "zsh", cwd: null },
+          { key: "term-1", title: "cargo", cwd: null },
         ],
         activeKey: "term-0",
       });
@@ -160,8 +163,8 @@ describe("TitleBar", () => {
       setPrimarySelection("cargo test --locked");
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh" },
-          { key: "term-1", title: "cargo" },
+          { key: "term-0", title: "zsh", cwd: null },
+          { key: "term-1", title: "cargo", cwd: null },
         ],
         activeKey: "term-0",
       });
@@ -184,8 +187,8 @@ describe("TitleBar", () => {
       registerPasteTarget("term-1", { paste });
       useTerminalStore.setState({
         panes: [
-          { key: "term-0", title: "zsh" },
-          { key: "term-1", title: "cargo" },
+          { key: "term-0", title: "zsh", cwd: null },
+          { key: "term-1", title: "cargo", cwd: null },
         ],
         activeKey: "term-0",
       });

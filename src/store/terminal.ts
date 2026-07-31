@@ -11,6 +11,9 @@ import { create } from "zustand";
 export interface TerminalPane {
   key: string;
   title: string;
+  /** Where the shell currently is, as it reported it (OSC 7). `null` until it says so — a shell
+   *  without the hook never does, and guessing would point the Git tool at the wrong repository. */
+  cwd: string | null;
 }
 
 export interface TerminalState {
@@ -35,6 +38,8 @@ export interface TerminalState {
   setActive: (key: string) => void;
   /** Rename a tab — the shell's own title sequence, or a fallback the pane supplies. */
   setTitle: (key: string, title: string) => void;
+  /** Record where a pane's shell moved to. */
+  setCwd: (key: string, cwd: string) => void;
 }
 
 /** Monotonic, process-local. Never shown to the user; the title is. */
@@ -67,7 +72,10 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
 
   openPane: () => {
     const key = `term-${nextKey++}`;
-    set((s) => ({ panes: [...s.panes, { key, title: "Terminal" }], activeKey: key }));
+    set((s) => ({
+      panes: [...s.panes, { key, title: "Terminal", cwd: null }],
+      activeKey: key,
+    }));
     return key;
   },
 
@@ -82,5 +90,10 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   setTitle: (key, title) =>
     set((s) => ({
       panes: s.panes.map((p) => (p.key === key ? { ...p, title } : p)),
+    })),
+
+  setCwd: (key, cwd) =>
+    set((s) => ({
+      panes: s.panes.map((p) => (p.key === key && p.cwd !== cwd ? { ...p, cwd } : p)),
     })),
 }));
