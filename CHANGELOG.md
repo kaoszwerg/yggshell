@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **The app name is drawn in small caps** — `Y` `GG` `S` `HELL`, following the name's own capitals.
+  Built by splitting the string rather than with `font-variant-caps`: that property needs the font to
+  carry small-cap glyphs or the engine to synthesise them, and the label style uppercases the text
+  before it, which would flatten the very casing it reads. Driven by `APP_NAME`, so renaming the app
+  in `app.identity.json` needs no change here. The accessible name stays the product's, not four
+  fragments of it.
 - **An active tool in the rail is purple, not green.** Not a matter of taste: purple is the one accent
   in the palette carrying no other meaning here — green already says "the view you are in", gold is
   the DEV badge and warnings, danger is destructive. A tool is a different *kind* of thing from a

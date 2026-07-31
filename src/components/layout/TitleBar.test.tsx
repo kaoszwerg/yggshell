@@ -64,7 +64,10 @@ describe("TitleBar", () => {
   it("shows the app name and a dev badge for a dev build", async () => {
     renderTitleBar(devBuild);
     expect(await screen.findByText("Dev")).toBeInTheDocument();
-    expect(screen.getAllByText(APP_NAME, { exact: false }).length).toBeGreaterThan(0);
+    // The name is rendered as small caps — several spans — so the accessible name is what carries
+    // it whole. A screen reader should hear the product, not four fragments of it.
+    expect(screen.getByLabelText(APP_NAME)).toBeInTheDocument();
+    expect(screen.getByLabelText(APP_NAME).textContent).toBe(APP_NAME.toUpperCase());
   });
 
   it("hides the dev badge for a release build", async () => {
@@ -256,5 +259,25 @@ describe("TitleBar", () => {
       expect(panes).toHaveLength(2);
       expect(panes.at(-1)?.profileId).toBe("work");
     });
+  });
+
+  it("draws the name in small caps, following its own casing", () => {
+    // `YggShell` → `Y` `GG` `S` `HELL`, with the two real capitals at full height. Driven by the
+    // name, so renaming the app in app.identity.json needs no change here.
+    renderTitleBar({
+      version: "0.1.0",
+      channel: "dev",
+      debug: true,
+      git_sha: "abc1234",
+      git_dirty: false,
+      commit_date: "2026-07-31T00:00:00Z",
+    });
+
+    const runs = Array.from(screen.getByLabelText(APP_NAME).children) as HTMLElement[];
+    expect(runs.length).toBeGreaterThan(1);
+    expect(runs.map((r) => r.textContent).join("")).toBe(APP_NAME.toUpperCase());
+    // The first letter is a capital in the name, so it is not shrunk; the run after it is.
+    expect(runs[0]?.style.fontSize).toBe("");
+    expect(runs[1]?.style.fontSize).not.toBe("");
   });
 });

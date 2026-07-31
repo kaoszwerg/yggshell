@@ -11,6 +11,7 @@ import { useTerminalProfiles } from "../../hooks/useSettings";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
+import { smallCaps } from "../../lib/smallCaps";
 import logoUrl from "../../../src-tauri/icons/icon.svg";
 
 /** Frameless custom HUD title bar (ADR-APP-021). The bar is the drag region; the window controls sit in
@@ -56,6 +57,9 @@ export function TitleBar() {
           aria-hidden
           className="pointer-events-none h-7 w-7 shrink-0 select-none"
         />
+        {/* Small caps, built by splitting rather than with `font-variant-caps`: that property needs
+            the font to carry small-cap glyphs or the engine to synthesise them, and `hud-label`
+            already uppercases the text, which would flatten the casing it reads. */}
         <span
           className="hud-label text-glow-cyan"
           style={
@@ -64,8 +68,14 @@ export function TitleBar() {
               "--hud-label-size": "0.8rem",
             } as React.CSSProperties
           }
+          // The runs are decorative; a screen reader should hear the name, not four fragments.
+          aria-label={APP_NAME}
         >
-          {APP_NAME}
+          {smallCaps(APP_NAME).map((run, at) => (
+            <span key={at} aria-hidden style={run.full ? undefined : { fontSize: "0.78em" }}>
+              {run.text}
+            </span>
+          ))}
         </span>
         <span aria-hidden className="bg-dim/40 mx-0.5 h-3.5 w-px shrink-0" />
         {panes.length === 0 ? (
