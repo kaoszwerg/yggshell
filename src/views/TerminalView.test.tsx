@@ -22,7 +22,7 @@ vi.mock("../components/ui/TerminalSurface", () => ({
 }));
 
 const THEMES = [
-  { id: "nord", name: "Nord", ansi: [], background: null },
+  { id: "nord", name: "Nord", ansi: [], background: "#2e3440" },
   { id: "ayu", name: "Ayu", ansi: [], background: null },
 ];
 
@@ -562,6 +562,36 @@ describe("TerminalView", () => {
       act(() => void vi.advanceTimersByTime(2500));
       expect(line.dataset.activity).toBe("idle");
       vi.useRealTimers();
+    });
+  });
+
+  // The scheme's background has to cover the whole pane, not just the character grid: xterm paints
+  // behind its cells and nothing beyond, so the padding and the sub-cell remainder showed the app's
+  // own grid — the terminal looked like a rectangle floating on a different surface.
+  describe("the terminal's own surface", () => {
+    it("paints the scheme's background across the whole pane", async () => {
+      useTerminalStore.setState({
+        panes: [pane({ key: "term-0", themeId: "nord" })],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(70);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      const panel = screen.getByRole("tabpanel", { name: "Terminal" });
+      expect(panel).toHaveStyle({ backgroundColor: "#2e3440" });
+    });
+
+    it("uses the HUD background when no scheme is chosen", async () => {
+      const opened = deferOpen(71);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      const panel = screen.getByRole("tabpanel", { name: "Terminal" });
+      expect(panel.style.backgroundColor).not.toBe("");
     });
   });
 });

@@ -17,7 +17,7 @@ import { isMac } from "../lib/platform";
 import { readPrimarySelection } from "../lib/primarySelection";
 import { registerPasteTarget } from "../lib/terminalHandles";
 import { useSettings, useTerminalProfiles, useTerminalThemes } from "../hooks/useSettings";
-import { themeById } from "../lib/terminalTheme";
+import { resolveTheme, themeById } from "../lib/terminalTheme";
 import type { Activity, ActivityState } from "../lib/osc133";
 import { useTerminalStore } from "../store/terminal";
 
@@ -467,6 +467,14 @@ function Pane({
   return (
     <div
       className={active ? "absolute inset-0 p-2" : "hidden"}
+      // The scheme's background covers the WHOLE pane, padding included.
+      //
+      // xterm paints its own background behind the character grid and nothing beyond it, so the
+      // padding — and the strip of leftover pixels that is narrower than one cell — showed the app's
+      // grid instead. The terminal then looked like a rectangle floating on a different surface
+      // rather than like the surface itself. Painting it here makes the inset read as a margin
+      // INSIDE the terminal, which is what it was always meant to be.
+      style={{ backgroundColor: resolveTheme(theme).background }}
       role="tabpanel"
       id={`terminal-panel-${paneKey}`}
       aria-label="Terminal"
