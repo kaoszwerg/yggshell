@@ -43,4 +43,24 @@ describe("HudPanel", () => {
     fireEvent.click(screen.getByRole("presentation"));
     expect(screen.queryByText("Explains the build panel")).toBeNull();
   });
+
+  it("shows a description under the label, so a section says what it is for", () => {
+    // The settings pages are lists of sections; a heading alone leaves the reader guessing which of
+    // seven blocks holds the thing they came for.
+    render(
+      <HudPanel label="Font" description="What the terminal renders in.">
+        <span>body</span>
+      </HudPanel>,
+    );
+    expect(screen.getByText("What the terminal renders in.")).toBeInTheDocument();
+  });
+
+  it("names the region by its label, so a screen reader can jump between sections", () => {
+    render(
+      <HudPanel label="Shell">
+        <span>body</span>
+      </HudPanel>,
+    );
+    expect(screen.getByRole("group", { name: "Shell" })).toBeInTheDocument();
+  });
 });

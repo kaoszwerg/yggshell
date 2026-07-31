@@ -18,6 +18,9 @@ export function pane(over: Partial<TerminalPane> & { key: string }): TerminalPan
     generation: 0,
     detail: null,
     tmuxSession: null,
+    activity: "idle",
+    command: null,
+    activitySince: null,
     ...over,
   };
 }

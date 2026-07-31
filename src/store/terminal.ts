@@ -17,6 +17,7 @@
 // (`cargo watch` is not running any more), a backend session id, an open diff.
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ActivityState } from "../lib/osc133";
 import type { GitDetail } from "./ui";
 
 /** One tab. `key` is the frontend's identity for it and is stable for the pane's whole life; the
@@ -72,6 +73,22 @@ export interface TerminalPane {
    * nothing to come back to.
    */
   tmuxSession: string | null;
+  /**
+   * Whether this tab is running something, and how the last thing ended.
+   *
+   * Per tab, like everything else here: two tabs are two shells, and "the terminal is busy" is not a
+   * fact about the window. Never persisted — a tab restored tomorrow is not running what it ran today.
+   */
+  activity: ActivityState;
+  /**
+   * What is running, when that can be known.
+   *
+   * Only inside tmux, which reports `#{pane_current_command}`. A plain shell's OSC 133 says a command
+   * started and how it ended, never its name — so this stays `null` there rather than inventing one.
+   */
+  command: string | null;
+  /** When the current command started, for the elapsed time. `null` when nothing is running. */
+  activitySince: number | null;
 }
 
 export interface TerminalState {
@@ -106,6 +123,14 @@ export interface TerminalState {
   setPaneDetail: (key: string, detail: GitDetail | null) => void;
   /** Record which tmux session a tab ended up attached to, so a restart can return to it. */
   setPaneTmuxSession: (key: string, session: string | null) => void;
+  /**
+   * Record what this tab is doing.
+   *
+   * `command` is only ever known inside tmux (`#{pane_current_command}`); outside it OSC 133 says
+   * that something is running and how it ended, never what it was. Passing `null` there is the
+   * honest answer, not a gap to fill in.
+   */
+  setPaneActivity: (key: string, activity: ActivityState, command: string | null) => void;
 }
 
 /** Monotonic, process-local. Never shown to the user; the title is. */
@@ -153,6 +178,9 @@ export const useTerminalStore = create<TerminalState>()(
               generation: 0,
               detail: null,
               tmuxSession: null,
+              activity: "idle",
+              command: null,
+              activitySince: null,
             },
           ],
           activeKey: key,
@@ -195,6 +223,28 @@ export const useTerminalStore = create<TerminalState>()(
       setPaneDetail: (key, detail) =>
         set((s) => ({
           panes: s.panes.map((p) => (p.key === key ? { ...p, detail } : p)),
+        })),
+
+      setPaneActivity: (key, activity, command) =>
+        set((s) => ({
+          panes: s.panes.map((p) => {
+            if (p.key !== key) return p;
+            const running = activity === "running";
+            // Stamped only when something NEW starts. tmux is polled on a timer and answers "still
+            // running" every time; restamping on each of those would hold the elapsed time at zero.
+            const started =
+              running && (p.activity !== "running" || p.command !== command)
+                ? Date.now()
+                : running
+                  ? p.activitySince
+                  : null;
+            return {
+              ...p,
+              activity,
+              command: running ? command : null,
+              activitySince: started,
+            };
+          }),
         })),
 
       setPaneTmuxSession: (key, tmuxSession) =>
@@ -240,6 +290,10 @@ export const useTerminalStore = create<TerminalState>()(
             plain: false,
             generation: 0,
             detail: null,
+            // Never restored: a tab reopened tomorrow is a fresh shell that is running nothing.
+            activity: "idle" as const,
+            command: null,
+            activitySince: null,
           }));
 
         // Keys come from a counter that restarts at zero every run, so restored keys are renumbered

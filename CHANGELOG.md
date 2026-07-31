@@ -6,6 +6,48 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The status bar is yours to arrange.** The strip along the bottom is now a list you assemble in
+  Settings › Appearance › Status bar: version, repository, running command, directory, tmux session,
+  plus spacers and separators. Spacers do the aligning rather than fixed left/centre/right regions —
+  that is what makes "second from the right" expressible, and what stops every future element from
+  needing a decision about which region owns it. Drag to arrange, or use the keyboard throughout
+  (`←`/`→` move, `Backspace` removes): HTML5 drag-and-drop has no keyboard equivalent at all, so an
+  editor built only on dragging would be unusable without a mouse.
+- **The scroll-to-top control is deliberately not in that list.** It comes and goes with what is on
+  screen, so as an item it would shove the arrangement sideways on every appearance — and it could be
+  removed altogether, leaving no way back to the top of a long view.
+- **A gate refusing any committed script that kills processes by name** (`check:no-kill`, in
+  `check:all`), with the rule behind it (`rule:live-app`). YggShell is the maintainer's daily terminal
+  and often the one an agent session is running inside: a `pkill -f yggshell` in a build script takes
+  down their open tabs, their running commands and the session itself, silently.
+
+### Fixed
+
+- **An untouched install drew Powerline prompts as empty boxes.** The font picker's placeholder said
+  `MesloLGS NF` while the actual fallback stack started with JetBrains Mono, which has no such glyphs —
+  so the settings page promised a font the terminal was not using, and only choosing it explicitly
+  fixed it. One constant now backs the placeholder, the stack and the text, and the sample previews
+  what the terminal will really render in.
+- **Settings pages are broken into named blocks** instead of one long page divided by anonymous
+  hairlines. The Terminal tab had grown to seven such blocks; each is now a headed panel (Shell, Font,
+  Theme, Selection, tmux, Profiles), and each heading is a landmark a screen reader can jump between.
+  The remote-check setting moved to a new **Tools** tab, where it belongs — it is what the Git tool
+  does, not terminal behaviour.
+- **Reordering the status bar no longer rebuilds the whole list.** Sanitising reissued every key on
+  every edit, handing React a list it had never seen: it unmounted and remounted the lot, losing
+  keyboard focus in the middle of a move.
+
+### Changed
+
+- **The remote check follows what is displayed, not which widget is open** (ADR-PROJ-002). The status
+  bar's repository item shows the same ahead/behind counts, and a count nobody refreshes is not stale
+  but *wrong*. Both share one query, so showing the branch in two places still costs one fetch.
+- **What a tab is running is per-tab state**, held in the store rather than inside the pane component,
+  so the status bar can report the tab in front without the panes agreeing on one activity for the
+  whole window.
+
 ### Changed
 
 - **The default scheme is called Yggdrasil**, and there is no separate "HUD" entry — they were the

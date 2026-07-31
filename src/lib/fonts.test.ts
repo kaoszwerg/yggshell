@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { availableFonts, fontStack, hasFont, waitForFont, FONT_CANDIDATES } from "./fonts";
+import {
+  availableFonts,
+  fontStack,
+  hasFont,
+  waitForFont,
+  DEFAULT_FONT,
+  FONT_CANDIDATES,
+} from "./fonts";
 
 /**
  * jsdom measures nothing, so the canvas is stubbed with metrics we control. What is under test is the
@@ -68,14 +75,15 @@ describe("fontStack", () => {
   it("puts the chosen font first and keeps a generic behind it", () => {
     // A stored name can be a font that has since been uninstalled. Rendering in the browser's
     // last-resort face because of a settings string is far worse than falling back to monospace.
-    expect(fontStack("MesloLGS NF")).toBe(
-      '"MesloLGS NF", "JetBrains Mono", ui-monospace, monospace',
+    expect(fontStack("Fira Code")).toBe(
+      '"Fira Code", "MesloLGS NF", "JetBrains Mono", ui-monospace, monospace',
     );
   });
 
   it("is the default stack when nothing is chosen", () => {
-    expect(fontStack("")).toBe('"JetBrains Mono", ui-monospace, monospace');
-    expect(fontStack("   ")).toBe('"JetBrains Mono", ui-monospace, monospace');
+    const expected = '"MesloLGS NF", "JetBrains Mono", ui-monospace, monospace';
+    expect(fontStack("")).toBe(expected);
+    expect(fontStack("   ")).toBe(expected);
   });
 
   it("quotes a name with spaces so it cannot break the stack", () => {
@@ -124,5 +132,25 @@ describe("waitForFont", () => {
   it("does not hang on a name the API refuses to parse", async () => {
     stubFontsApi({ load: () => Promise.reject(new Error("bad font name")) });
     await expect(waitForFont("}{ nonsense")).resolves.toBe(false);
+  });
+});
+
+describe("what an unconfigured terminal actually renders in", () => {
+  it("falls back to the font that ships with the app, not to one that has no Powerline glyphs", () => {
+    // The defect this pins: the picker's placeholder said "MesloLGS NF" while the fallback stack
+    // started with JetBrains Mono — which has no \ue0b0. A prompt drawn in it is a row of boxes,
+    // and the settings page had just told the user that Meslo ships and works.
+    const stack = fontStack("");
+    expect(stack.indexOf("MesloLGS NF")).toBeGreaterThanOrEqual(0);
+    expect(stack.indexOf("MesloLGS NF")).toBeLessThan(stack.indexOf("JetBrains Mono"));
+  });
+
+  it("still puts an explicit choice first", () => {
+    expect(fontStack("Fira Code").startsWith('"Fira Code"')).toBe(true);
+  });
+
+  it("names the default once, so the picker and the terminal cannot disagree", () => {
+    expect(DEFAULT_FONT).toBe("MesloLGS NF");
+    expect(fontStack("").includes(DEFAULT_FONT)).toBe(true);
   });
 });

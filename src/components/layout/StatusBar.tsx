@@ -1,9 +1,18 @@
 import { Button } from "../ui/Button";
-import { useBuildInfo } from "../../hooks/useBuildInfo";
+import { StatusItemView } from "./statusItems";
 import { useUiStore } from "../../store/ui";
-import { APP_NAME } from "../../lib/app";
 
-/** Bottom status strip: build identity (click → About dialog) and the scroll-to-top control. */
+/**
+ * The bottom strip: whatever the user put in it, and the scroll-to-top control.
+ *
+ * **Two halves, and the split is deliberate.** The left is a layout the user assembles — a flat list
+ * with flexible spacers, because three fixed regions cannot express "second from the right" and force
+ * a bucket decision on every element added later (`lib/statusBar`).
+ *
+ * The right is **not** configurable. Scroll-to-top appears and disappears with what is on screen; as
+ * an item in the list, every appearance would shove the user's arrangement sideways, and it could be
+ * removed altogether — leaving no way back to the top of a long view.
+ */
 export function StatusBar({
   canScrollTop = false,
   onScrollTop,
@@ -11,22 +20,28 @@ export function StatusBar({
   canScrollTop?: boolean;
   onScrollTop?: () => void;
 }) {
-  const { data: build } = useBuildInfo();
-  const setAboutOpen = useUiStore((s) => s.setAboutOpen);
+  const layout = useUiStore((s) => s.statusLayout);
 
   return (
-    <div className="hud-strip hud-strip-bottom flex h-7 shrink-0 items-center justify-between px-3 font-mono text-[10px] text-[var(--saga-text-dim)]">
-      <Button variant="ghost" onClick={() => setAboutOpen(true)} tooltip={`About ${APP_NAME}`}>
-        {APP_NAME} {build ? `v${build.version}` : ""}
-        {build ? (
-          <span className="text-dim ml-1">
-            ({build.git_sha}
-            {build.git_dirty ? "+" : ""})
+    <div className="hud-strip hud-strip-bottom flex h-7 shrink-0 items-center gap-2 px-3 font-mono text-[10px] text-[var(--saga-text-dim)]">
+      {layout.map((item) =>
+        item.id === "spacer" ? (
+          // The spacer IS the alignment: an empty flexible box, so everything after it is pushed
+          // along. Several of them share the free space equally, which is how a centred group works.
+          <span key={item.key} className="flex-1" aria-hidden />
+        ) : item.id === "separator" ? (
+          <span key={item.key} className="bg-cyan/20 h-3 w-px shrink-0" aria-hidden />
+        ) : (
+          <span key={item.key} className="flex min-w-0 shrink-0 items-center whitespace-nowrap">
+            <StatusItemView id={item.id} />
           </span>
-        ) : null}
-        {build?.channel === "dev" ? <span className="text-gold ml-1">· dev</span> : null}
-      </Button>
-      <div className="flex items-center gap-3">
+        ),
+      )}
+
+      {/* A bar with no spacer in it must still not leave this control stranded in the middle. */}
+      {layout.some((i) => i.id === "spacer") ? null : <span className="flex-1" aria-hidden />}
+
+      <div className="flex shrink-0 items-center justify-end">
         {canScrollTop ? (
           <Button
             variant="ghost"

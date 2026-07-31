@@ -1,6 +1,7 @@
 // Global UI state (Zustand): active view, the tool column, and transient dialog flags.
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { defaultLayout, sanitiseLayout, type StatusItem } from "../lib/statusBar";
 
 /** Top-level views (sidebar navigation). Product views are added here as they land. */
 export type ViewId = "terminal" | "logs" | "settings";
@@ -66,6 +67,13 @@ export interface UiState {
    * panel's content belongs to a tab and this does not.
    */
   diffSplit: boolean;
+  /**
+   * What the status bar is made of, left to right.
+   *
+   * A list rather than three fixed regions: spacers do the aligning, so "second from the right" is
+   * expressible and a new element needs no decision about which region owns it (`lib/statusBar`).
+   */
+  statusLayout: StatusItem[];
   /** Whether the HUD About dialog is open (transient — not persisted). */
   aboutOpen: boolean;
 
@@ -75,6 +83,9 @@ export interface UiState {
   setToolWidth: (px: number) => void;
   setGitSplit: (percent: number) => void;
   setDiffSplit: (split: boolean) => void;
+  /** Replace the bar's contents. Sanitised on the way in, so the renderer never meets an unknown id. */
+  setStatusLayout: (items: StatusItem[]) => void;
+  resetStatusLayout: () => void;
   setAboutOpen: (v: boolean) => void;
 }
 
@@ -99,6 +110,7 @@ export const useUiStore = create<UiState>()(
       // Side by side is the default: it is what makes a reindent or a rename readable, and the
       // interleaved form is the one to fall back to in a narrow window.
       diffSplit: true,
+      statusLayout: defaultLayout(),
       aboutOpen: false,
 
       setView: (view) => set({ view }),
@@ -106,6 +118,11 @@ export const useUiStore = create<UiState>()(
       setToolWidth: (px) => set({ toolWidth: clampWidth(px) }),
       setGitSplit: (percent) => set({ gitSplit: clampSplit(percent) }),
       setDiffSplit: (diffSplit) => set({ diffSplit }),
+      // Sanitised HERE rather than at render time: one gate on the way in beats every consumer
+      // defending itself against a payload it did not write (rule:code-quality).
+      setStatusLayout: (items) =>
+        set({ statusLayout: items.length === 0 ? [] : sanitiseLayout(items) }),
+      resetStatusLayout: () => set({ statusLayout: defaultLayout() }),
       setAboutOpen: (aboutOpen) => set({ aboutOpen }),
     }),
     {
@@ -124,6 +141,7 @@ export const useUiStore = create<UiState>()(
         toolWidth: s.toolWidth,
         gitSplit: s.gitSplit,
         diffSplit: s.diffSplit,
+        statusLayout: s.statusLayout,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -143,6 +161,13 @@ export const useUiStore = create<UiState>()(
           : GIT_SPLIT_DEFAULT;
         // A payload from a build that predates the setting has no boolean at all.
         if (typeof state.diffSplit !== "boolean") state.diffSplit = true;
+        // An empty bar is a legitimate choice and must survive a restart; `undefined` is a payload
+        // from a build that predates the setting and gets the defaults (`sanitiseLayout`).
+        state.statusLayout = Array.isArray(state.statusLayout)
+          ? state.statusLayout.length === 0
+            ? []
+            : sanitiseLayout(state.statusLayout)
+          : defaultLayout();
       },
     },
   ),

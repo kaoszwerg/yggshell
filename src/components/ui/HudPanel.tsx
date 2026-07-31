@@ -7,6 +7,14 @@ import type { HudAccent } from "./hudButton";
 interface HudPanelProps {
   accent?: HudAccent;
   label?: string;
+  /**
+   * One line under the label, always visible, saying what this block is for.
+   *
+   * Distinct from `info`, which hides behind a button and is for the detail nobody needs twice. A
+   * page made of several panels needs the reader to find the right one *without* clicking anything —
+   * that is what this is.
+   */
+  description?: ReactNode;
   /** Optional documentation shown via an "i" button (what it shows, how it's computed/interpreted). */
   info?: ReactNode;
   className?: string;
@@ -72,16 +80,32 @@ function InfoButton({ info }: { info: ReactNode }) {
 export function HudPanel({
   accent = "cyan",
   label,
+  description,
   info,
   className = "",
   children,
 }: HudPanelProps) {
   return (
-    <div className={`hud-panel hud-clip hud-accent-${accent} ${className}`}>
+    // A labelled panel is a landmark: with a settings page made of six of them, a screen-reader user
+    // needs to move between blocks rather than read every control to find out where they are.
+    <div
+      className={`hud-panel hud-clip hud-accent-${accent} ${className}`}
+      role={label ? "group" : undefined}
+      aria-label={label}
+    >
       <div className="relative z-[1] p-4">
-        {label || info ? (
+        {label || info || description ? (
           <div className="mb-3 flex items-start justify-between gap-2">
-            {label ? <div className="hud-label">{label}</div> : <span />}
+            {label || description ? (
+              <div className="flex min-w-0 flex-col gap-1">
+                {label ? <div className="hud-label">{label}</div> : null}
+                {description ? (
+                  <p className="text-dim max-w-2xl text-xs leading-relaxed">{description}</p>
+                ) : null}
+              </div>
+            ) : (
+              <span />
+            )}
             {info ? <InfoButton info={info} /> : null}
           </div>
         ) : null}

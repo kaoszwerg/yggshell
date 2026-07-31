@@ -9,7 +9,12 @@ date: 2026-07-31
 triggers:
   [git, fetch, remote, network, egress, ahead, behind, upstream, privacy, offline, credentials]
 applies-to:
-  ["src-tauri/src/git/**", "src/components/tools/**", "src/hooks/useGitSnapshot.ts"]
+  [
+    "src-tauri/src/git/**",
+    "src/components/tools/**",
+    "src/components/layout/statusItems.tsx",
+    "src/hooks/useGitSnapshot.ts",
+  ]
 ---
 
 # ADR-PROJ-002 — The Git tool may fetch, and nothing else may reach the network
@@ -35,8 +40,16 @@ Two ways out were considered:
 
 ## Decision
 
-**The Git tool fetches, on a timer while it is open and on the refresh button that already exists.
-Nothing else in the app reaches the network.**
+**Whatever is showing the ahead/behind counts fetches, on a timer while it is on screen, and on the
+refresh button that already exists. Nothing else in the app reaches the network.**
+
+Originally that meant the Git tool alone. It now also means the status bar's `Repository` item, when
+the user has placed it — and the rule is stated as *what is displayed*, not *which component*,
+because the reason has never been about the component: a count nobody refreshes is not stale, it is
+**wrong**, and it is wrong wherever it is drawn. Tying the refresh to one widget would have shipped
+the exact defect this ADR exists to fix, one strip lower down the window.
+
+Both share a query key, so two things showing the branch cost one read and one fetch, not two.
 
 It is a setting (`git_auto_fetch`), and it defaults to **on**.
 
@@ -85,7 +98,8 @@ and the tool says so — nothing breaks.
 ## Consequences
 
 - The counts are true, or the tool says why they are not.
-- One outbound request per open Git tool per interval. It is visible in the log, like everything else.
+- One outbound request per interval while something is showing the counts — shared, not per widget.
+  It is visible in the log, like everything else.
 - Anyone who wants zero egress turns one setting off and gets exactly the previous behaviour.
 - **Actions are still not on the table.** `commit`, `push` and `pull` were discussed and declined: in a
   terminal they are one word each, and a second actor writing to a tree an agent is working in is a

@@ -13,6 +13,18 @@
  * anything not on the list can still be typed in by hand.
  */
 
+/**
+ * The font a terminal renders in when the user has not chosen one.
+ *
+ * It ships with the app, so it is always present, and it carries the Powerline and Nerd Font glyphs
+ * a modern prompt draws itself with. **This name is the one source**: the picker shows it as the
+ * placeholder, the fallback stack starts with it, and the settings page tells the user about it. They
+ * used to be three separate literals, and they disagreed — the placeholder said Meslo while the stack
+ * started with JetBrains Mono, so an untouched install drew every prompt glyph as an empty box while
+ * the page explained that Powerline works out of the box.
+ */
+export const DEFAULT_FONT = "MesloLGS NF";
+
 /** Text wide enough that a substitution shows up, and made of characters every font has. */
 const PROBE = "MMMMMMMMMMlllllllliiiiiiii0123456789";
 
@@ -28,7 +40,7 @@ const FALLBACKS = ["monospace", "serif", "sans-serif"] as const;
  */
 export const FONT_CANDIDATES = [
   // Bundled with the app, so these are always present.
-  "MesloLGS NF",
+  DEFAULT_FONT,
   "JetBrainsMono Nerd Font",
   // Commonly installed Nerd Font patches.
   "FiraCode Nerd Font",
@@ -103,7 +115,10 @@ export function availableFonts(candidates: readonly string[] = FONT_CANDIDATES):
  */
 export function fontStack(family: string): string {
   const chosen = family.trim();
-  const base = '"JetBrains Mono", ui-monospace, monospace';
+  // The bundled default leads the stack, so an untouched install renders a Powerline prompt rather
+  // than a row of boxes. The generic families stay at the end for the case where a stored name names
+  // a font that has since been uninstalled.
+  const base = `${JSON.stringify(DEFAULT_FONT)}, "JetBrains Mono", ui-monospace, monospace`;
   return chosen === "" ? base : `${JSON.stringify(chosen)}, ${base}`;
 }
 

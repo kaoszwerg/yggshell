@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
+import { StatusBarEditor } from "../components/settings/StatusBarEditor";
 import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
@@ -8,9 +9,10 @@ import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
 import { Tabs } from "../components/ui/Tabs";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
-import { availableFonts } from "../lib/fonts";
+import { availableFonts, DEFAULT_FONT } from "../lib/fonts";
 import { labelShells } from "../lib/shellLabels";
 import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
+import { useFontSettled } from "../hooks/useFontSettled";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 const UI_SCALES = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
@@ -32,15 +34,21 @@ const TMUX_MODES: { id: TmuxMode; label: string; hint: string }[] = [
 ];
 
 /**
- * The sections, in the order they are read down the left-hand side.
+ * The tabs, in the order they are read down the left-hand side.
  *
  * Grouped by *area* rather than by widget, because this list is going to grow: iTerm2 themes, the
  * theme editor and per-terminal configuration all land here. One scrolling page would have made each
  * of those a worse neighbour than the last.
+ *
+ * **A tab is not the unit of grouping — a panel is.** Each tab renders a column of headed
+ * `HudPanel`s, because the Terminal tab had grown to seven blocks separated by nothing but hairlines:
+ * a reader looking for one control had to parse all of them. Adding a setting means adding a panel
+ * or extending one, never lengthening an unbroken page.
  */
 const SECTIONS = [
   { id: "appearance", label: "Appearance" },
   { id: "terminal", label: "Terminal" },
+  { id: "tools", label: "Tools" },
   { id: "window", label: "Window" },
   { id: "about", label: "About" },
 ] as const;
@@ -72,16 +80,42 @@ export function SettingsView() {
         aria-label={current?.label ?? "Settings"}
         className="h-full flex-1 overflow-auto p-6"
       >
-        {section === "appearance" ? <AppearanceSection /> : null}
-        {section === "terminal" ? <TerminalSection /> : null}
-        {section === "window" ? <WindowSection /> : null}
-        {section === "about" ? <AboutSection /> : null}
+        <div className="flex flex-col gap-4">
+          {section === "appearance" ? <AppearanceSection /> : null}
+          {section === "terminal" ? <TerminalSection /> : null}
+          {section === "tools" ? <ToolsSection /> : null}
+          {section === "window" ? <WindowSection /> : null}
+          {section === "about" ? <AboutSection /> : null}
+        </div>
       </div>
     </div>
   );
 }
 
 function AppearanceSection() {
+  return (
+    <>
+      <InterfaceScale />
+      <HudPanel
+        accent="cyan"
+        label="Status bar"
+        description="What the strip along the bottom shows, and in what order."
+        info={
+          <p>
+            A flat list with flexible spacers rather than left/centre/right regions: a spacer pushes
+            everything after it along, so two of them around an item centre it, and &ldquo;second
+            from the right&rdquo; is something you can actually arrange.
+          </p>
+        }
+      >
+        <StatusBarEditor />
+      </HudPanel>
+    </>
+  );
+}
+
+/** How large the chrome is drawn. */
+function InterfaceScale() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const scale = settings.data?.ui_scale ?? 1;
@@ -89,7 +123,8 @@ function AppearanceSection() {
   return (
     <HudPanel
       accent="cyan"
-      label="Appearance"
+      label="Interface"
+      description="How large the chrome is drawn — rail, tabs, panels."
       info={
         <p>
           The UI scale sizes the chrome — rail, tabs, panels. Terminal text has its own size, under
@@ -116,118 +151,184 @@ function AppearanceSection() {
   );
 }
 
+/**
+ * Terminal settings, as a column of headed blocks.
+ *
+ * Ordered by how early you meet them: what runs (Shell), what it looks like (Font, Theme), how it
+ * behaves (Selection), and the two things that are a step beyond ordinary use (tmux, Profiles).
+ */
 function TerminalSection() {
+  return (
+    <>
+      <HudPanel accent="cyan" label="Shell" description="What a new terminal starts.">
+        <ShellControls />
+      </HudPanel>
+
+      <HudPanel
+        accent="cyan"
+        label="Font"
+        description="The typeface and size the terminal renders in."
+        info={
+          <p>
+            Terminal text size is independent of the UI scale: the emulator is handed a size divided
+            by the WebView zoom, so changing one never drags the other along.
+          </p>
+        }
+      >
+        <FontChoice />
+        <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+        <TextSizeChoice />
+      </HudPanel>
+
+      <HudPanel
+        accent="cyan"
+        label="Theme"
+        description="The colours a terminal, a diff and a commit are drawn in."
+      >
+        <ThemeControls />
+      </HudPanel>
+
+      <HudPanel
+        accent="cyan"
+        label="Selection"
+        description="What happens when you drag across output."
+      >
+        <SelectionChoice />
+      </HudPanel>
+
+      <HudPanel
+        accent="cyan"
+        label="tmux"
+        description="Whether a terminal joins a multiplexer session, and which one."
+      >
+        <TmuxControls />
+      </HudPanel>
+
+      <HudPanel
+        accent="cyan"
+        label="Profiles"
+        description="Saved combinations of shell and colour scheme, opened from the tab strip's right-click menu."
+      >
+        <ProfileControls />
+      </HudPanel>
+    </>
+  );
+}
+
+/** How much output fits on screen. Its own component so the Font panel reads as two settings. */
+function TextSizeChoice() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const size = settings.data?.terminal_font_size ?? 13;
-  const copyOnSelect = settings.data?.copy_on_select ?? false;
-  const autoFetch = settings.data?.git_auto_fetch ?? true;
 
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-dim text-xs">Text size</span>
+      <div className="flex flex-wrap gap-1">
+        {TERMINAL_FONT_SIZES.map((s) => (
+          <Button
+            key={s}
+            aria-pressed={Math.abs(size - s) < 0.001}
+            active={Math.abs(size - s) < 0.001}
+            onClick={() => update.mutate({ terminalFontSize: s })}
+          >
+            {s}px
+          </Button>
+        ))}
+      </div>
+      <span className="text-dim text-xs">
+        How much output fits on screen. The UI scale under Appearance sizes the chrome around it.
+      </span>
+    </div>
+  );
+}
+
+/** Whether dragging across output also puts it on the clipboard. */
+function SelectionChoice() {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const copyOnSelect = settings.data?.copy_on_select ?? false;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-dim text-xs">Selecting text</span>
+      <div className="flex flex-wrap gap-1">
+        <Button
+          aria-pressed={!copyOnSelect}
+          active={!copyOnSelect}
+          onClick={() => update.mutate({ copyOnSelect: false })}
+        >
+          Select only
+        </Button>
+        <Button
+          aria-pressed={copyOnSelect}
+          active={copyOnSelect}
+          onClick={() => update.mutate({ copyOnSelect: true })}
+        >
+          Copy to clipboard
+        </Button>
+      </div>
+      <span className="text-dim text-xs">
+        Off by default because it replaces whatever you had copied, without saying so. A
+        middle-click always pastes the last selection either way, as on X11.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Settings that belong to a tool rather than to the terminal or the window.
+ *
+ * The remote check lived under Terminal, which was simply wrong: it is what the Git tool does. With
+ * every block now carrying a heading, that misfiling became visible — the panel would have had to be
+ * called "Git" inside a tab called "Terminal".
+ */
+function ToolsSection() {
   return (
     <HudPanel
       accent="cyan"
-      label="Terminal"
-      info={
-        <p>
-          Terminal text size is independent of the UI scale: the emulator is handed a size divided
-          by the WebView zoom, so changing one never drags the other along.
-        </p>
-      }
+      label="Git"
+      description="What the Git tool is allowed to do while it is open."
     >
-      <ShellControls />
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <FontChoice />
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Git remote</span>
-        <div className="flex flex-wrap gap-1">
-          <Button
-            aria-pressed={autoFetch}
-            active={autoFetch}
-            onClick={() => update.mutate({ gitAutoFetch: true })}
-          >
-            Check the remote
-          </Button>
-          <Button
-            aria-pressed={!autoFetch}
-            active={!autoFetch}
-            onClick={() => update.mutate({ gitAutoFetch: false })}
-          >
-            Stay offline
-          </Button>
-        </div>
-        <span className="text-dim text-xs">
-          The ahead/behind counts come from what was last fetched, so without this they go quietly
-          wrong — not <em>unknown</em>, but <strong className="text-fg">↓0</strong> while the remote
-          has moved on. This is the only outbound connection the app makes (ADR-PROJ-002): a{" "}
-          <code>git fetch</code> every five minutes while the Git tool is open, never interactive,
-          and it cannot touch your working tree.
-        </span>
-      </div>
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Selecting text</span>
-        <div className="flex flex-wrap gap-1">
-          <Button
-            aria-pressed={!copyOnSelect}
-            active={!copyOnSelect}
-            onClick={() => update.mutate({ copyOnSelect: false })}
-          >
-            Select only
-          </Button>
-          <Button
-            aria-pressed={copyOnSelect}
-            active={copyOnSelect}
-            onClick={() => update.mutate({ copyOnSelect: true })}
-          >
-            Copy to clipboard
-          </Button>
-        </div>
-        <span className="text-dim text-xs">
-          Off by default because it replaces whatever you had copied, without saying so. A
-          middle-click always pastes the last selection either way, as on X11.
-        </span>
-      </div>
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <ThemeControls />
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <ProfileControls />
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Text size</span>
-        <div className="flex flex-wrap gap-1">
-          {TERMINAL_FONT_SIZES.map((s) => (
-            <Button
-              key={s}
-              aria-pressed={Math.abs(size - s) < 0.001}
-              active={Math.abs(size - s) < 0.001}
-              onClick={() => update.mutate({ terminalFontSize: s })}
-            >
-              {s}px
-            </Button>
-          ))}
-        </div>
-        <span className="text-dim text-xs">
-          How much output fits on screen. The UI scale under Appearance sizes the chrome around it.
-        </span>
-      </div>
-
-      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
-
-      <TmuxControls />
+      <GitRemoteChoice />
     </HudPanel>
+  );
+}
+
+/** The one outbound connection this app makes, and the switch that refuses it (ADR-PROJ-002). */
+function GitRemoteChoice() {
+  const settings = useSettings();
+  const update = useUpdateSettings();
+  const autoFetch = settings.data?.git_auto_fetch ?? true;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-dim text-xs">Git remote</span>
+      <div className="flex flex-wrap gap-1">
+        <Button
+          aria-pressed={autoFetch}
+          active={autoFetch}
+          onClick={() => update.mutate({ gitAutoFetch: true })}
+        >
+          Check the remote
+        </Button>
+        <Button
+          aria-pressed={!autoFetch}
+          active={!autoFetch}
+          onClick={() => update.mutate({ gitAutoFetch: false })}
+        >
+          Stay offline
+        </Button>
+      </div>
+      <span className="text-dim text-xs">
+        The ahead/behind counts come from what was last fetched, so without this they go quietly
+        wrong — not <em>unknown</em>, but <strong className="text-fg">↓0</strong> while the remote
+        has moved on. This is the only outbound connection the app makes (ADR-PROJ-002): a{" "}
+        <code>git fetch</code> every five minutes while something is showing those counts — the Git
+        tool, or the status bar&rsquo;s repository item — never interactive, and it cannot touch
+        your working tree.
+      </span>
+    </div>
   );
 }
 
@@ -247,6 +348,14 @@ function FontChoice() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const chosen = settings.data?.terminal_font ?? "";
+  // What the terminal will ACTUALLY render in — the chosen font, or the bundled default. The sample
+  // used to fall back to `undefined` here, so an untouched install previewed the *system* monospace
+  // and showed empty boxes where the Powerline glyphs should be, right under a paragraph promising
+  // that Meslo ships and works.
+  const effective = chosen === "" ? DEFAULT_FONT : chosen;
+  // Re-render once the face has loaded: a bundled @font-face is fetched lazily, so the first paint
+  // would otherwise be the fallback — which for this sample means boxes.
+  const settled = useFontSettled(effective);
   // Probed once: fonts are not installed while a settings page is open, and each probe measures text
   // on a canvas.
   const options = useMemo(
@@ -267,7 +376,7 @@ function FontChoice() {
           label="Terminal font"
           value={chosen}
           options={options}
-          placeholder="MesloLGS NF"
+          placeholder={DEFAULT_FONT}
           emptyHint="Not found on this machine — it will be used anyway if you have it."
           className="max-w-xs flex-1"
           onChange={(family) => update.mutate({ terminalFont: family })}
@@ -280,16 +389,18 @@ function FontChoice() {
           there? A name in a list cannot tell you that. */}
       <div
         className="hud-clip-sm bg-elevated text-fg overflow-x-auto px-2 py-1 text-xs whitespace-pre"
-        style={{ fontFamily: chosen === "" ? undefined : `"${chosen}", monospace` }}
+        style={{ fontFamily: `"${effective}", monospace` }}
+        data-font-settled={settled}
         aria-label="Font preview"
       >
         {"\ue0b0 \ue0b2 \uf07b \uf126  ~/git-projects  0O1lI| {} => != ->"}
       </div>
       <span className="text-dim text-xs">
-        <strong className="text-fg">MesloLGS NF</strong> ships with the app — it is the font
-        powerlevel10k recommends, so a Powerline prompt works without installing anything. A font
-        this list does not show can still be typed in: a WebView cannot enumerate what is installed,
-        so the list is what could be detected rather than everything you have.
+        <strong className="text-fg">{DEFAULT_FONT}</strong> ships with the app and is what a
+        terminal uses when you have not chosen anything — it is the font powerlevel10k recommends,
+        so a Powerline prompt works without installing anything. A font this list does not show can
+        still be typed in: a WebView cannot enumerate what is installed, so the list is what could
+        be detected rather than everything you have.
       </span>
     </div>
   );
@@ -436,9 +547,8 @@ function WindowSection() {
   const minimizeToTray = settings.data?.minimize_to_tray ?? false;
 
   return (
-    <HudPanel accent="cyan" label="Window">
+    <HudPanel accent="cyan" label="Close button" description="What the window's close button does.">
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Close button</span>
         <div className="flex flex-wrap gap-1">
           <Button
             aria-pressed={!minimizeToTray}
@@ -456,8 +566,8 @@ function WindowSection() {
           </Button>
         </div>
         <span className="text-dim text-xs">
-          What the window&apos;s close button does. &ldquo;Minimize to tray&rdquo; keeps the app
-          running in the system tray with an Open/Quit menu.
+          &ldquo;Minimize to tray&rdquo; keeps the app running in the system tray with an Open/Quit
+          menu.
         </span>
       </div>
     </HudPanel>

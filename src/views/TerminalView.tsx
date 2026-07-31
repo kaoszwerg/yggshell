@@ -244,7 +244,16 @@ function Pane({
    * Per pane, like everything else about a tab: two terminals run different things, and one indicator
    * for the window would be telling you about whichever tab happened to report last.
    */
-  const [activity, setActivity] = useState<ActivityState>("idle");
+  const activity = useTerminalStore(
+    (s) => s.panes.find((p) => p.key === paneKey)?.activity ?? "idle",
+  );
+  const setPaneActivity = useTerminalStore((s) => s.setPaneActivity);
+  // Kept in a ref as well so the callbacks below do not have to be rebuilt — and re-subscribe the
+  // emulator — every time the state changes, which is several times a second while a command runs.
+  const setActivity = useCallback(
+    (next: ActivityState, command: string | null = null) => setPaneActivity(paneKey, next, command),
+    [paneKey, setPaneActivity],
+  );
   /** Clears a held result. Held here rather than in the line, so the primitive stays a primitive. */
   const activityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [schemeOpen, setSchemeOpen] = useState(false);
@@ -370,17 +379,20 @@ function Pane({
   // The result is HELD for a moment and then cleared: a command's outcome is announced once, and a
   // state that never settles stops being a signal. Driven from the event rather than from an effect,
   // because that is what it is.
-  const onActivity = useCallback((next: Activity) => {
-    if (activityTimer.current !== null) clearTimeout(activityTimer.current);
-    if (next.state === "running") {
-      setActivity("running");
-      return;
-    }
-    // An unknown exit status counts as success: it is what a shell that says nothing means, and
-    // colouring silence red would cry wolf on every less talkative shell.
-    setActivity(next.exit === null || next.exit === 0 ? "ok" : "failed");
-    activityTimer.current = setTimeout(() => setActivity("idle"), RESULT_MS);
-  }, []);
+  const onActivity = useCallback(
+    (next: Activity) => {
+      if (activityTimer.current !== null) clearTimeout(activityTimer.current);
+      if (next.state === "running") {
+        setActivity("running");
+        return;
+      }
+      // An unknown exit status counts as success: it is what a shell that says nothing means, and
+      // colouring silence red would cry wolf on every less talkative shell.
+      setActivity(next.exit === null || next.exit === 0 ? "ok" : "failed");
+      activityTimer.current = setTimeout(() => setActivity("idle"), RESULT_MS);
+    },
+    [setActivity],
+  );
 
   useEffect(
     () => () => {
@@ -416,7 +428,10 @@ function Pane({
           // Inside tmux this poll is the only source of activity: OSC 133 is swallowed there, so
           // there is no exit status to be had — only whether something is running.
           if (status.command !== null) {
-            setActivity(status.busy ? "running" : "idle");
+            // In tmux this is also the only place the command's NAME can come from — OSC 133 never
+            // carries one — which is why the status bar can say "cargo" here and only "running"
+            // outside a session.
+            setActivity(status.busy ? "running" : "idle", status.busy ? status.command : null);
           }
         })
         .catch(survivable("read the session status"));
@@ -427,7 +442,7 @@ function Pane({
       stopped = true;
       clearInterval(timer);
     };
-  }, [active, sessionOpen, paneKey, setCwd]);
+  }, [active, sessionOpen, paneKey, setCwd, setActivity]);
 
   // ⌘F / Ctrl+Shift+F on the WINDOW, not on the emulator: xterm's key handler only fires while the
   // terminal holds focus, so binding it there made the search unreachable the moment the caret was

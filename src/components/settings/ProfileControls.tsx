@@ -37,7 +37,6 @@ export function ProfileControls() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <span className="text-dim text-xs">Profiles</span>
         <div className="flex flex-wrap gap-1">
           {(profiles.data ?? []).length === 0 ? (
             <span className="text-dim/60 font-mono text-xs">None yet.</span>
@@ -50,9 +49,8 @@ export function ProfileControls() {
           )}
         </div>
         <span className="text-dim text-xs">
-          Right-click the tab strip to start a terminal from one. A tab keeps the profile it was
-          opened with — it decided which shell is running, so changing it under a live tab would be
-          a claim about a process that is not true.
+          A tab keeps the profile it was opened with — it decided which shell is running, so
+          changing it under a live tab would be a claim about a process that is not true.
         </span>
       </div>
 

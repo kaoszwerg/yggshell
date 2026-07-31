@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { makeItem } from "../lib/statusBar";
 import { useUiStore } from "./ui";
 
 describe("useUiStore", () => {
@@ -108,5 +109,44 @@ describe("useUiStore", () => {
     await useUiStore.persist.rehydrate();
 
     expect(useUiStore.getState().toolWidth).toBe(180);
+  });
+});
+
+describe("the status bar layout", () => {
+  it("starts with the defaults", () => {
+    expect(useUiStore.getState().statusLayout.map((i) => i.id)).toEqual([
+      "version",
+      "spacer",
+      "command",
+      "separator",
+      "repository",
+    ]);
+  });
+
+  it("stores a layout the editor produces", () => {
+    const next = [makeItem("cwd"), makeItem("spacer")];
+    useUiStore.getState().setStatusLayout(next);
+    expect(useUiStore.getState().statusLayout.map((i) => i.id)).toEqual(["cwd", "spacer"]);
+  });
+
+  it("takes an empty bar, because removing everything is a choice", () => {
+    useUiStore.getState().setStatusLayout([]);
+    expect(useUiStore.getState().statusLayout).toEqual([]);
+  });
+
+  it("puts the defaults back", () => {
+    useUiStore.getState().setStatusLayout([]);
+    useUiStore.getState().resetStatusLayout();
+    expect(useUiStore.getState().statusLayout.length).toBeGreaterThan(0);
+  });
+
+  it("refuses an id it does not know, rather than rendering a blank slot", () => {
+    // The payload passes through localStorage, which anything can edit, and older builds knew fewer
+    // items. Sanitising on the way IN means the renderer never has to defend itself.
+    useUiStore.getState().setStatusLayout([
+      { key: "a", id: "version" },
+      { key: "b", id: "teleporter" },
+    ] as never);
+    expect(useUiStore.getState().statusLayout.map((i) => i.id)).toEqual(["version"]);
   });
 });

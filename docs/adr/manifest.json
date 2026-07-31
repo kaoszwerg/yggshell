@@ -935,11 +935,12 @@
       "applies-to": [
         "src-tauri/src/git/**",
         "src/components/tools/**",
+        "src/components/layout/statusItems.tsx",
         "src/hooks/useGitSnapshot.ts"
       ],
       "supersededBy": null,
       "path": "docs/adr/project/proj-002-git-auto-fetch.md",
-      "hash": "89b12a3a6a5a9f92"
+      "hash": "d3d75e4d1c61b064"
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { pane } from "../test/panes";
 import { useTerminalStore } from "./terminal";
 
 const reset = () => useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: false });
@@ -97,5 +98,77 @@ describe("useTerminalStore", () => {
     // no-op rather than an error or a focus jump.
     expect(useTerminalStore.getState().panes.map((p) => p.key)).toEqual([a]);
     expect(useTerminalStore.getState().activeKey).toBe(a);
+  });
+});
+
+/**
+ * What the tab in front is doing, so something other than that tab can say so.
+ *
+ * It used to live inside the pane component as React state, which was fine while the only thing
+ * showing it was the pane itself. The status bar is not the pane — and in a tabbed, multiplexed app
+ * this is per-tab state like every other, not one activity for the window.
+ */
+describe("what a tab is running", () => {
+  beforeEach(() => {
+    useTerminalStore.setState({
+      panes: [pane({ key: "a" }), pane({ key: "b" })],
+      activeKey: "a",
+    });
+  });
+
+  const paneA = () => useTerminalStore.getState().panes.find((p) => p.key === "a");
+
+  it("starts idle, with nothing claimed about a command", () => {
+    expect(paneA()?.activity).toBe("idle");
+    expect(paneA()?.command).toBeNull();
+    expect(paneA()?.activitySince).toBeNull();
+  });
+
+  it("records what started, and when", () => {
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    expect(paneA()?.activity).toBe("running");
+    expect(paneA()?.command).toBe("cargo");
+    expect(paneA()?.activitySince).toBeTypeOf("number");
+  });
+
+  it("keeps the start time across repeats, so a duration does not reset every poll", () => {
+    // tmux is polled on a timer and reports "still running" over and over. Stamping each of those
+    // would peg the elapsed time at zero and make the whole display useless.
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    const started = paneA()?.activitySince;
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    expect(paneA()?.activitySince).toBe(started);
+  });
+
+  it("restamps when a different command starts", () => {
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    const started = paneA()?.activitySince ?? 0;
+    useTerminalStore.getState().setPaneActivity("a", "running", "vim");
+    expect(paneA()?.activitySince).toBeGreaterThanOrEqual(started);
+    expect(paneA()?.command).toBe("vim");
+  });
+
+  it("forgets the command once nothing is running", () => {
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    useTerminalStore.getState().setPaneActivity("a", "idle", null);
+    expect(paneA()?.command).toBeNull();
+    expect(paneA()?.activitySince).toBeNull();
+  });
+
+  it("belongs to one tab, never to the window", () => {
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    const b = useTerminalStore.getState().panes.find((p) => p.key === "b");
+    expect(b?.activity).toBe("idle");
+    expect(b?.command).toBeNull();
+  });
+
+  it("is not persisted — a restored tab is not running what it ran last week", () => {
+    useTerminalStore.getState().setPaneActivity("a", "running", "cargo");
+    const stored: unknown = JSON.parse(window.localStorage.getItem("app-terminals") ?? "{}");
+    const panes = (stored as { state?: { panes?: Record<string, unknown>[] } }).state?.panes ?? [];
+    for (const p of panes) {
+      expect(p).not.toHaveProperty("activity");
+      expect(p).not.toHaveProperty("command");
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SettingsView } from "./SettingsView";
 
@@ -55,6 +55,10 @@ function mockShells(state: { data?: typeof OFFERED; isPending?: boolean; isError
 // the wiring, not the detection — that has its own tests in lib/fonts.
 vi.mock("../lib/fonts", () => ({
   availableFonts: () => ["MesloLGS NF", "Menlo"],
+  // The real constant: the point of these tests is that the page and the terminal agree on it, and a
+  // mock free to say something else would let them drift apart again without failing anything.
+  DEFAULT_FONT: "MesloLGS NF",
+  waitForFont: () => Promise.resolve(true),
 }));
 
 function mockSettings(
@@ -85,6 +89,10 @@ function openTerminalSection() {
 
 function openWindowSection() {
   fireEvent.click(screen.getByRole("tab", { name: "Window" }));
+}
+
+function openToolsSection() {
+  fireEvent.click(screen.getByRole("tab", { name: "Tools" }));
 }
 
 describe("SettingsView", () => {
@@ -316,13 +324,98 @@ describe("SettingsView", () => {
       // The one outbound connection the app makes, so it must be refusable (ADR-PROJ-002).
       mockSettings();
       render(<SettingsView />);
-      openTerminalSection();
+      openToolsSection();
 
       expect(
         screen.getByRole("button", { name: "Check the remote" }).getAttribute("aria-pressed"),
       ).toBe("true");
       fireEvent.click(screen.getByRole("button", { name: "Stay offline" }));
       expect(mutate).toHaveBeenCalledWith({ gitAutoFetch: false });
+    });
+  });
+
+  // A tab holding seven blocks separated by nothing but hairlines is a wall of text: the reader has
+  // to parse every control to work out where the thing they came for is. Each block carries its own
+  // heading, and each heading is a landmark, so it can be found by eye and by screen reader alike.
+  describe("named sections inside each tab", () => {
+    const named = (name: string) => screen.getByRole("group", { name });
+
+    it("breaks the Terminal tab into headed blocks rather than one long page", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      for (const name of ["Shell", "Font", "Theme", "Selection", "tmux", "Profiles"]) {
+        expect(named(name)).toBeInTheDocument();
+      }
+      expect(screen.getAllByRole("group").length).toBeGreaterThan(3);
+    });
+
+    it("puts every block's heading above its controls, so the heading names what follows", () => {
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      // The font control has to be inside the block called Font, not merely somewhere on the page.
+      expect(
+        within(named("Font")).getByRole("combobox", { name: "Terminal font" }),
+      ).toBeInTheDocument();
+      expect(within(named("Selection")).getByRole("button", { name: "Copy to clipboard" }));
+    });
+
+    it("keeps the remote check with the Git tool it belongs to, not under Terminal", () => {
+      // It is neither terminal behaviour nor window behaviour: it is what one tool does.
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+      expect(screen.queryByRole("button", { name: "Check the remote" })).toBeNull();
+
+      openToolsSection();
+      expect(within(named("Git")).getByRole("button", { name: "Check the remote" }));
+    });
+
+    it("heads the Appearance and Window tabs too", () => {
+      mockSettings();
+      render(<SettingsView />);
+      expect(named("Interface")).toBeInTheDocument();
+
+      openWindowSection();
+      expect(named("Close button")).toBeInTheDocument();
+    });
+  });
+
+  // Reported from a screenshot: the picker showed "MesloLGS NF" and the sample below it drew empty
+  // boxes where the Powerline glyphs belong. Two separate defects behind one symptom — the name in
+  // the box was the PLACEHOLDER (nothing was chosen), and the unconfigured fallback was JetBrains
+  // Mono, which has no such glyphs. The page was promising a font it was not using.
+  describe("the font sample shows what the terminal will really use", () => {
+    it("previews the bundled default when nothing has been chosen", () => {
+      mockSettings({ terminal_font: "" } as never);
+      render(<SettingsView />);
+      openTerminalSection();
+
+      const sample = screen.getByLabelText("Font preview");
+      expect(sample.getAttribute("style")).toContain("MesloLGS NF");
+    });
+
+    it("previews the chosen font once there is one", () => {
+      mockSettings({ terminal_font: "Fira Code" } as never);
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(screen.getByLabelText("Font preview").getAttribute("style")).toContain("Fira Code");
+    });
+
+    it("offers the default as the placeholder rather than as a value", () => {
+      // The placeholder is what made it look chosen. It stays — it is the right thing to show — but
+      // now it names the font the terminal actually falls back to.
+      mockSettings({ terminal_font: "" } as never);
+      render(<SettingsView />);
+      openTerminalSection();
+
+      const box = screen.getByRole("combobox", { name: "Terminal font" });
+      expect(box).toHaveValue("");
+      expect(box.getAttribute("placeholder")).toBe("MesloLGS NF");
     });
   });
 });
