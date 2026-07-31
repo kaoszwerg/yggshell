@@ -31,13 +31,23 @@ export interface TabsProps {
   onMiddleClick?: (id: string) => void;
   /** Accessible name of the add control. */
   addLabel?: string;
+  /**
+   * `horizontal` (default) is a strip; `vertical` is a column, for a settings pane whose sections
+   * sit down the left-hand side. Only the axis changes — the ARIA pattern, the roving tabindex and
+   * the callbacks are the same, which is the whole reason this is one primitive and not two.
+   */
+  orientation?: "horizontal" | "vertical";
   /** Ties each tab to the panel it controls, when the caller renders panels with known ids. */
   getPanelId?: (id: string) => string;
   className?: string;
 }
 
-/** Keys that move the selection, and by how much. Arrow keys step; Home/End jump to an end. */
-const STEP = { ArrowRight: 1, ArrowLeft: -1 } as const;
+/** The two arrow keys that step along the strip, per axis (WAI-ARIA: a vertical tab list is driven
+ *  by Up/Down, a horizontal one by Left/Right). Home/End jump on both. */
+const ARROWS = {
+  horizontal: { back: "ArrowLeft", forward: "ArrowRight" },
+  vertical: { back: "ArrowUp", forward: "ArrowDown" },
+} as const;
 
 /**
  * HUD tab strip (ADR-APP-020, ADR-APP-026) — the primitive behind the terminal's tabs, which live in
@@ -65,11 +75,13 @@ export function Tabs({
   onAdd,
   onMiddleClick,
   addLabel = "New tab",
+  orientation = "horizontal",
   getPanelId,
   className = "",
 }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const vertical = orientation === "vertical";
 
   // Keyboard selection must carry the focus with it, or the next arrow key is delivered to the tab
   // the user left behind. Only when focus is already inside the strip: a selection changed from
@@ -91,10 +103,11 @@ export function Tabs({
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (items.length === 0) return;
     const index = items.findIndex((i) => i.id === activeId);
+    const arrows = vertical ? ARROWS.vertical : ARROWS.horizontal;
 
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    if (e.key === arrows.forward || e.key === arrows.back) {
       e.preventDefault();
-      const step = e.key === "ArrowRight" ? STEP.ArrowRight : STEP.ArrowLeft;
+      const step = e.key === arrows.forward ? 1 : -1;
       select(items.at((index + step + items.length) % items.length)?.id);
       return;
     }
@@ -127,7 +140,10 @@ export function Tabs({
       ref={listRef}
       role="tablist"
       aria-label={label}
-      className={`no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto ${className}`.trim()}
+      aria-orientation={orientation}
+      className={`no-scrollbar flex min-w-0 gap-1 ${
+        vertical ? "flex-col items-stretch overflow-y-auto" : "items-center overflow-x-auto"
+      } ${className}`.trim()}
     >
       {items.map((item) => {
         const active = item.id === activeId;
@@ -135,7 +151,9 @@ export function Tabs({
           <div
             key={item.id}
             role="presentation"
-            className={`${hudButtonClass({ active })} flex max-w-[13rem] shrink-0 items-center`}
+            className={`${hudButtonClass({ active })} flex items-center ${
+              vertical ? "w-full" : "max-w-[13rem] shrink-0"
+            }`}
           >
             <button
               type="button"
@@ -150,7 +168,9 @@ export function Tabs({
               onClick={() => onSelect(item.id)}
               onAuxClick={(e) => onAuxClick(e, item.id)}
               onKeyDown={onKeyDown}
-              className="truncate px-2 py-0.5 font-mono text-xs"
+              className={`truncate font-mono text-xs ${
+                vertical ? "flex-1 px-3 py-1.5 text-left" : "px-2 py-0.5"
+              }`}
             >
               {item.label}
             </button>

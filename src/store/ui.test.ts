@@ -3,7 +3,7 @@ import { useUiStore } from "./ui";
 
 describe("useUiStore", () => {
   beforeEach(() => {
-    useUiStore.setState({ view: "home", aboutOpen: false });
+    useUiStore.setState({ view: "terminal", aboutOpen: false });
     window.localStorage.clear();
   });
 
@@ -25,7 +25,7 @@ describe("useUiStore", () => {
     expect(useUiStore.getState().aboutOpen).toBe(false);
   });
 
-  it("onRehydrateStorage resets an invalid persisted view to home", async () => {
+  it("onRehydrateStorage resets an invalid persisted view to the terminal", async () => {
     window.localStorage.setItem(
       "app-ui",
       JSON.stringify({ state: { view: "not-a-real-view" }, version: 1 }),
@@ -33,7 +33,17 @@ describe("useUiStore", () => {
 
     await useUiStore.persist.rehydrate();
 
-    expect(useUiStore.getState().view).toBe("home");
+    expect(useUiStore.getState().view).toBe("terminal");
+  });
+
+  it("falls back to the terminal for a view that used to exist", async () => {
+    // "home" was a real view until the Home page was removed. A persisted one must not leave the
+    // user staring at a blank pane.
+    window.localStorage.setItem("app-ui", JSON.stringify({ state: { view: "home" }, version: 1 }));
+
+    await useUiStore.persist.rehydrate();
+
+    expect(useUiStore.getState().view).toBe("terminal");
   });
 
   it("onRehydrateStorage keeps a valid persisted view", async () => {

@@ -34,7 +34,7 @@ function renderStatusBar(props: Parameters<typeof StatusBar>[0] = {}) {
 
 describe("StatusBar", () => {
   beforeEach(() => {
-    useUiStore.setState({ view: "home", aboutOpen: false });
+    useUiStore.setState({ view: "terminal", aboutOpen: false });
     vi.mocked(api.buildInfo).mockReset();
     vi.mocked(api.buildInfo).mockResolvedValue(build);
   });

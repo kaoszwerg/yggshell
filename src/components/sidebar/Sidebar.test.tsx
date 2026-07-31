@@ -5,20 +5,23 @@ import { useUiStore } from "../../store/ui";
 
 describe("Sidebar", () => {
   beforeEach(() => {
-    useUiStore.setState({ view: "home", aboutOpen: false });
+    useUiStore.setState({ view: "terminal", aboutOpen: false });
   });
 
-  it("exposes the primary navigation landmark with Home, Logs and Settings", () => {
+  it("exposes the primary navigation landmark with Terminal, Logs and Settings", () => {
     render(<Sidebar />);
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Terminal" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Logs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
   });
 
   it("marks the active view as the current page", () => {
     render(<Sidebar />);
-    expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Terminal" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByRole("button", { name: "Logs" })).not.toHaveAttribute("aria-current");
   });
 

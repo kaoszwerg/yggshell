@@ -60,7 +60,7 @@ describe("App shell", () => {
   it("shows the primary navigation rail", () => {
     renderApp();
     expect(screen.getByLabelText("Primary")).toBeInTheDocument();
-    expect(screen.getByLabelText("Home")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Terminal" })).toBeInTheDocument();
     expect(screen.getByLabelText("Logs")).toBeInTheDocument();
     expect(screen.getByLabelText("Settings")).toBeInTheDocument();
   });

@@ -3,9 +3,9 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 /** Top-level views (sidebar navigation). Product views are added here as they land. */
-export type ViewId = "terminal" | "home" | "logs" | "settings";
+export type ViewId = "terminal" | "logs" | "settings";
 
-const VIEWS: ViewId[] = ["terminal", "home", "logs", "settings"];
+const VIEWS: ViewId[] = ["terminal", "logs", "settings"];
 
 export interface UiState {
   view: ViewId;
@@ -38,7 +38,9 @@ export const useUiStore = create<UiState>()(
       partialize: (s) => ({ view: s.view }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        if (!VIEWS.includes(state.view)) state.view = "home";
+        // A persisted "home" from an older build is no longer a view; it falls back to the terminal
+        // rather than to a blank screen.
+        if (!VIEWS.includes(state.view)) state.view = "terminal";
       },
     },
   ),

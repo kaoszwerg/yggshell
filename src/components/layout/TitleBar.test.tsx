@@ -82,7 +82,7 @@ describe("TitleBar", () => {
   describe("terminal tabs", () => {
     beforeEach(() => {
       useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: false });
-      useUiStore.setState({ view: "home" });
+      useUiStore.setState({ view: "logs" });
       clearPrimarySelection();
       clearPasteTargets();
     });
@@ -149,7 +149,7 @@ describe("TitleBar", () => {
       fireEvent.click(screen.getByRole("button", { name: "Close cargo" }));
 
       expect(useTerminalStore.getState().panes.map((p) => p.key)).toEqual(["term-0"]);
-      expect(useUiStore.getState().view).toBe("home");
+      expect(useUiStore.getState().view).toBe("logs");
     });
 
     it("pastes into a terminal on middle-click, and never closes it", () => {

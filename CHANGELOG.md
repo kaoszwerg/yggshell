@@ -80,6 +80,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Paste inserted everything twice on macOS.** ⌘V is handled natively by the WebView — Tauri's
+  default Edit menu supplies the key equivalent and xterm listens for the resulting `paste` event —
+  so the custom handler was a second paste on top of it. `return false` from xterm's key handler
+  stops xterm's own key processing, not the browser default that produces the event. The shortcut is
+  now intercepted only on Windows and Linux, where `Ctrl+Shift+C/V` are not browser shortcuts and
+  nothing happens unless the app does it.
 - `useTerminalStore.closePane` left `activeKey` pointing at the pane it had just removed when that
   pane was the only one open: `Array.at(index - 1)` wraps to the END of the list at index 0. Found by
   the test written for it, not in the app.
@@ -103,6 +109,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
+- **The Home view.** It described the empty template — "no product features yet", "add a backend
+  module under src-tauri/src/" — which stopped being true the moment this became a terminal. The one
+  thing it was good for, the build identity, is now the About section of Settings. A persisted
+  `view: "home"` falls back to the terminal instead of leaving a blank pane.
+- Two of the three copies of the build-identity block. `BuildIdentity` is the one source now; the
+  About dialog and the About section both render it (rule:reusability).
 - Template-creation artifacts: `docs/howto/new-project-from-template.md`, the `/bootstrap` command,
   and the "Create a project from this template" section of the README.
 - Mobile icon assets emitted by `tauri icon` (`src-tauri/icons/android/`, `ios/`, `64x64.png`) —
