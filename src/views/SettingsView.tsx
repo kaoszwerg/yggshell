@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
+import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
 import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
@@ -129,6 +130,10 @@ function TerminalSection() {
       }
     >
       <ShellControls />
+
+      <div className="bg-cyan/15 my-4 h-px" aria-hidden />
+
+      <ThemeControls />
 
       <div className="bg-cyan/15 my-4 h-px" aria-hidden />
 

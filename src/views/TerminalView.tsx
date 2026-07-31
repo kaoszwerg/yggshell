@@ -14,7 +14,8 @@ import {
 import { isMac } from "../lib/platform";
 import { readPrimarySelection } from "../lib/primarySelection";
 import { registerPasteTarget } from "../lib/terminalHandles";
-import { useSettings } from "../hooks/useSettings";
+import { useSettings, useTerminalThemes } from "../hooks/useSettings";
+import { themeById } from "../lib/terminalTheme";
 import { useTerminalStore } from "../store/terminal";
 
 /**
@@ -151,6 +152,10 @@ function Pane({
   // after which the two really are independent, which is the point of having both.
   const uiScale = settings.data?.ui_scale ?? 1;
   const fontSize = (settings.data?.terminal_font_size ?? 13) / (uiScale > 0 ? uiScale : 1);
+  // A scheme the settings name but that no longer exists resolves to `null`, which is the HUD
+  // palette — a deleted theme must not leave a terminal unstyled.
+  const themes = useTerminalThemes();
+  const theme = themeById(themes.data, settings.data?.terminal_theme ?? "");
   const [hasSelection, setHasSelection] = useState(false);
   // Flipped once the PTY exists. The working-directory poll below waits for it: mounting starts that
   // effect immediately, when `sessionId` is still null, so without this its first ask does nothing and
@@ -376,6 +381,7 @@ function Pane({
             onSelectionChange={setHasSelection}
             onCwd={onCwd}
             fontSize={fontSize}
+            theme={theme}
           />
         </div>
       </ContextMenu>

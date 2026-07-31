@@ -70,6 +70,7 @@ describe("api", () => {
         uiScale: 1.25,
         terminalFontSize: null,
         terminalShell: null,
+        terminalTheme: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -89,6 +90,22 @@ describe("api", () => {
         uiScale: null,
         terminalFontSize: 18,
         terminalShell: null,
+        terminalTheme: null,
+        tmuxMode: null,
+        tmuxSession: null,
+        minimizeToTray: null,
+      });
+    });
+
+    it("carries the chosen colour scheme by id", async () => {
+      // An id, not a palette: the scheme itself lives in a file the backend owns, and sending the
+      // colours would make the settings a second copy of it.
+      await api.updateSettings({ terminalTheme: "nord" });
+      expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
+        uiScale: null,
+        terminalFontSize: null,
+        terminalShell: null,
+        terminalTheme: "nord",
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -103,6 +120,7 @@ describe("api", () => {
         uiScale: null,
         terminalFontSize: null,
         terminalShell: "/bin/bash",
+        terminalTheme: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -116,6 +134,7 @@ describe("api", () => {
         uiScale: null,
         terminalFontSize: null,
         terminalShell: null,
+        terminalTheme: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: true,
@@ -133,6 +152,7 @@ describe("api", () => {
         uiScale: null,
         terminalFontSize: null,
         terminalShell: null,
+        terminalTheme: null,
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: null,
@@ -148,6 +168,7 @@ describe("api", () => {
         uiScale: null,
         terminalFontSize: null,
         terminalShell: null,
+        terminalTheme: null,
         tmuxMode: "attach-or-create",
         tmuxSession: null,
         minimizeToTray: null,
@@ -164,12 +185,14 @@ describe("api", () => {
         uiScale: 0.8,
         terminalFontSize: 20,
         terminalShell: "/bin/zsh",
+        terminalTheme: "nord",
         minimizeToTray: true,
       });
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 0.8,
         terminalFontSize: 20,
         terminalShell: "/bin/zsh",
+        terminalTheme: "nord",
         tmuxMode: null,
         tmuxSession: null,
         minimizeToTray: true,

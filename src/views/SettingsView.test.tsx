@@ -10,6 +10,12 @@ vi.mock("../hooks/useSettings", () => ({
   useShells: vi.fn(),
 }));
 
+// The colour-scheme controls have their own suite (ThemeControls.test.tsx) and a file-drop listener
+// this view is not the place to exercise.
+vi.mock("../components/settings/ThemeControls", () => ({
+  ThemeControls: () => <div data-testid="theme-controls" />,
+}));
+
 // The About section shows the build identity, which goes through react-query. This view is not the
 // place to test that plumbing — BuildIdentity owns it.
 vi.mock("../hooks/useBuildInfo", () => ({

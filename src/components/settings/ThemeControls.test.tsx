@@ -1,0 +1,204 @@
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ThemeControls } from "./ThemeControls";
+import type { TerminalTheme } from "../../bindings/TerminalTheme";
+
+/** Captures the drag-drop listener the component installs, so a test can be the drop. */
+let onDrop: ((event: { payload: { type: string; paths?: string[] } }) => void) | undefined;
+const unlisten = vi.fn();
+
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: (handler: typeof onDrop) => {
+      onDrop = handler;
+      return Promise.resolve(unlisten);
+    },
+  }),
+}));
+
+vi.mock("../../hooks/useSettings", () => ({
+  useSettings: vi.fn(),
+  useUpdateSettings: vi.fn(),
+  useTerminalThemes: vi.fn(),
+  useImportTerminalTheme: vi.fn(),
+  useSaveTerminalTheme: vi.fn(),
+  useDeleteTerminalTheme: vi.fn(),
+}));
+
+import {
+  useDeleteTerminalTheme,
+  useImportTerminalTheme,
+  useSaveTerminalTheme,
+  useSettings,
+  useTerminalThemes,
+  useUpdateSettings,
+} from "../../hooks/useSettings";
+
+const NORD: TerminalTheme = {
+  id: "nord",
+  name: "Nord",
+  ansi: ["#2e3440", ...Array.from({ length: 15 }, () => null)],
+  background: "#2e3440",
+  foreground: "#d8dee9",
+  cursor: null,
+  cursor_accent: null,
+  selection: null,
+  selection_foreground: null,
+};
+
+const update = vi.fn();
+const importMutate = vi.fn();
+const saveMutate = vi.fn();
+const deleteMutate = vi.fn();
+
+function setup(over: { chosen?: string; themes?: TerminalTheme[]; importing?: boolean } = {}) {
+  vi.mocked(useSettings).mockReturnValue({
+    data: { terminal_theme: over.chosen ?? "" },
+  } as unknown as ReturnType<typeof useSettings>);
+  vi.mocked(useUpdateSettings).mockReturnValue({ mutate: update } as unknown as ReturnType<
+    typeof useUpdateSettings
+  >);
+  vi.mocked(useTerminalThemes).mockReturnValue({
+    data: over.themes ?? [NORD],
+  } as unknown as ReturnType<typeof useTerminalThemes>);
+  vi.mocked(useImportTerminalTheme).mockReturnValue({
+    mutate: importMutate,
+    isPending: over.importing ?? false,
+  } as unknown as ReturnType<typeof useImportTerminalTheme>);
+  vi.mocked(useSaveTerminalTheme).mockReturnValue({
+    mutate: saveMutate,
+    isPending: false,
+    isError: false,
+  } as unknown as ReturnType<typeof useSaveTerminalTheme>);
+  vi.mocked(useDeleteTerminalTheme).mockReturnValue({
+    mutate: deleteMutate,
+  } as unknown as ReturnType<typeof useDeleteTerminalTheme>);
+}
+
+/** Deliver a drop of these paths to the component. */
+function drop(...paths: string[]) {
+  fireEvent(window, new Event("noop"));
+  onDrop?.({ payload: { type: "drop", paths } });
+}
+
+describe("ThemeControls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    onDrop = undefined;
+    setup();
+  });
+
+  it("offers the HUD palette alongside every stored scheme", async () => {
+    render(<ThemeControls />);
+    expect(screen.getByRole("button", { name: "HUD" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Nord" })).toBeTruthy();
+    await waitFor(() => expect(onDrop).toBeDefined());
+  });
+
+  it("marks the chosen one, and HUD when nothing is chosen", () => {
+    render(<ThemeControls />);
+    expect(screen.getByRole("button", { name: "HUD" }).getAttribute("aria-pressed")).toBe("true");
+
+    setup({ chosen: "nord" });
+    render(<ThemeControls />);
+    const nord = screen.getAllByRole("button", { name: "Nord" }).at(-1);
+    expect(nord?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("stores the scheme id when one is picked", () => {
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Nord" }));
+    expect(update).toHaveBeenCalledWith({ terminalTheme: "nord" });
+  });
+
+  it("imports the PATH of a dropped scheme — never its contents", async () => {
+    render(<ThemeControls />);
+    await waitFor(() => expect(onDrop).toBeDefined());
+
+    drop("/Users/steve/Downloads/Ayu Mirage.itermcolors");
+
+    expect(importMutate).toHaveBeenCalledWith(
+      "/Users/steve/Downloads/Ayu Mirage.itermcolors",
+      expect.anything(),
+    );
+  });
+
+  it("picks the scheme out of a drop that also carried other files", async () => {
+    render(<ThemeControls />);
+    await waitFor(() => expect(onDrop).toBeDefined());
+
+    drop("/tmp/notes.txt", "/tmp/Nord.itermcolors");
+
+    expect(importMutate).toHaveBeenCalledWith("/tmp/Nord.itermcolors", expect.anything());
+  });
+
+  it("says so when the dropped file is not a scheme, instead of failing silently", async () => {
+    render(<ThemeControls />);
+    await waitFor(() => expect(onDrop).toBeDefined());
+
+    drop("/tmp/holiday.jpg");
+
+    expect(importMutate).not.toHaveBeenCalled();
+    expect(await screen.findByText(/not an \.itermcolors file/)).toBeTruthy();
+  });
+
+  it("opens an editor on a blank scheme, and on the chosen one", async () => {
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: "New scheme" }));
+    expect(screen.getByLabelText("Scheme name")).toHaveValue("New scheme");
+
+    setup({ chosen: "nord" });
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: /Edit/ }));
+    await waitFor(() => expect(screen.getAllByLabelText("Scheme name").at(-1)).toHaveValue("Nord"));
+  });
+
+  it("edits a colour and saves the whole scheme", () => {
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: "New scheme" }));
+
+    fireEvent.change(screen.getByLabelText("Scheme name"), { target: { value: "Mine" } });
+    fireEvent.change(screen.getByLabelText("Background hex value"), {
+      target: { value: "#101020" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(saveMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Mine", background: "#101020" }),
+      expect.anything(),
+    );
+  });
+
+  it("will not save a scheme with no name", () => {
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: "New scheme" }));
+    fireEvent.change(screen.getByLabelText("Scheme name"), { target: { value: "  " } });
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("offers no delete for a scheme that was never saved", () => {
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: "New scheme" }));
+    expect(screen.queryByRole("button", { name: "Delete this scheme" })).toBeNull();
+  });
+
+  it("deletes a stored scheme and stops pointing the setting at it", async () => {
+    // A setting naming a deleted scheme would leave the terminals on something the user can no
+    // longer see or choose.
+    setup({ chosen: "nord" });
+    render(<ThemeControls />);
+    fireEvent.click(screen.getByRole("button", { name: /Edit/ }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete this scheme" }));
+
+    expect(deleteMutate).toHaveBeenCalledWith("nord", expect.anything());
+  });
+
+  it("stops listening for drops when it goes away", async () => {
+    const view = render(<ThemeControls />);
+    await waitFor(() => expect(onDrop).toBeDefined());
+    view.unmount();
+    await waitFor(() => expect(unlisten).toHaveBeenCalled());
+  });
+});

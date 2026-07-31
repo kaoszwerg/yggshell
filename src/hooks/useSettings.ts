@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/commands";
+import type { TerminalTheme } from "../bindings/TerminalTheme";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 /** Read the persisted user settings (async/server state owned by TanStack Query, cached 60s). */
@@ -19,6 +20,7 @@ export function useUpdateSettings() {
       uiScale?: number;
       terminalFontSize?: number;
       terminalShell?: string;
+      terminalTheme?: string;
       tmuxMode?: TmuxMode;
       tmuxSession?: string;
       minimizeToTray?: boolean;
@@ -39,5 +41,45 @@ export function useShells() {
     queryKey: ["shells"],
     queryFn: api.listShells,
     staleTime: Infinity,
+  });
+}
+
+/**
+ * Every terminal colour scheme the user has stored.
+ *
+ * Not `staleTime: Infinity` like the shell list: themes change while the app is open — an import or
+ * an edit adds one — so this is a normal query that the mutations below invalidate.
+ */
+export function useTerminalThemes() {
+  return useQuery({
+    queryKey: ["terminal-themes"],
+    queryFn: api.listTerminalThemes,
+  });
+}
+
+/** Import an `.itermcolors` file by path, and refresh the list. */
+export function useImportTerminalTheme() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => api.importTerminalTheme(path),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-themes"] }),
+  });
+}
+
+/** Save an edited theme, and refresh the list. */
+export function useSaveTerminalTheme() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (theme: TerminalTheme) => api.saveTerminalTheme(theme),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-themes"] }),
+  });
+}
+
+/** Delete a stored theme, and refresh the list. */
+export function useDeleteTerminalTheme() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteTerminalTheme(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-themes"] }),
   });
 }

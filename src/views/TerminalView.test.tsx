@@ -18,7 +18,8 @@ vi.mock("../components/ui/TerminalSurface", () => ({
 }));
 
 vi.mock("../hooks/useSettings", () => ({
-  useSettings: () => ({ data: { ui_scale: 1, terminal_font_size: 13 } }),
+  useSettings: () => ({ data: { ui_scale: 1, terminal_font_size: 13, terminal_theme: "" } }),
+  useTerminalThemes: () => ({ data: [] }),
 }));
 
 vi.mock("../api/terminal", () => ({

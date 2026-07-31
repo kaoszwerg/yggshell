@@ -13,6 +13,7 @@ pub mod logging;
 pub mod settings;
 pub mod state;
 pub mod terminal;
+pub mod theme;
 pub mod tray;
 
 use crate::state::AppState;
@@ -55,6 +56,10 @@ pub fn run() {
             commands::get_settings,
             commands::update_settings,
             commands::list_shells,
+            commands::list_terminal_themes,
+            commands::import_terminal_theme,
+            commands::save_terminal_theme,
+            commands::delete_terminal_theme,
             commands::open_external,
             commands::report_crash,
             commands::pending_crash,

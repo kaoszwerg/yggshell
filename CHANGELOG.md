@@ -8,6 +8,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **iTerm2 colour schemes, and an editor for them** (Settings → Terminal).
+  - **Import is a file drop**: drop an `.itermcolors` file anywhere on the window. A drop hands the
+    webview a *path*, never contents, so the backend is what opens the file — extension-checked, size-
+    bounded, and parsed by a reader written for this and nothing else.
+  - **That reader is hand-written on purpose, and it is a security decision rather than a size one.**
+    Every `.itermcolors` opens with a `<!DOCTYPE plist PUBLIC … "http://www.apple.com/DTDs/…">`, and a
+    general XML parser is a machine for resolving exactly that — external entities, nested expansion,
+    DTDs — on a file the user downloaded from the internet. This one resolves nothing: it walks tags
+    and understands five element names, so the class of attack does not exist rather than being
+    configured away. There is a test that drops an XXE payload on it.
+  - **A scheme carries only what it defines.** Colour has one home in this project and it is the
+    frontend (rule:theming); a full palette stored in Rust would be a second source for the same fact.
+    Anything a scheme never mentions keeps the HUD's colour — which is also what a user expects,
+    rather than a stray black caret on a dark background.
+  - **A theme editor** for all twenty-two colours, with a live preview of the palette on the
+    background it will actually sit on, and a `ColorField` HUD primitive behind each one: the native
+    picker is used as the *mechanism* — it is the OS picker people already know — and never seen, with
+    a hex field beside it because schemes are written, pasted and shared as hex.
+  - Changing a scheme repaints every open terminal at once. The emulator is not restarted, so nothing
+    running is disturbed.
 - **The Git tool got its layout, and two things to click.**
   - **Branch on top, fixed; changes and history below it, sharing a draggable divider.** The branch is
     two lines whatever happens, so a share of a scroll area would only ever be wasted on it. The other

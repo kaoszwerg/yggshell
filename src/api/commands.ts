@@ -6,6 +6,7 @@ import type { CrashReport } from "../bindings/CrashReport";
 import type { LogRecord } from "../bindings/LogRecord";
 import type { SettingsDto } from "../bindings/SettingsDto";
 import type { ShellInfo } from "../bindings/ShellInfo";
+import type { TerminalTheme } from "../bindings/TerminalTheme";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 /**
@@ -31,6 +32,30 @@ export const api = {
    * (ADR-PROJ-001 §5).
    */
   listShells: () => invoke<ShellInfo[]>("list_shells"),
+
+  /**
+   * Every colour scheme the user has imported or saved.
+   *
+   * The built-in HUD palette is deliberately not in this list — colour lives in the frontend
+   * (rule:theming), and `terminalTheme.ts` puts it in front of these.
+   */
+  listTerminalThemes: () => invoke<TerminalTheme[]>("list_terminal_themes"),
+
+  /**
+   * Import an `.itermcolors` file and store it.
+   *
+   * The PATH travels, never the contents: a drop event gives the webview a path, and the backend is
+   * the one that opens the file — bounded, extension-checked, and parsed by a reader that resolves no
+   * entities (ADR-PROJ-001 §5, rule:security).
+   */
+  importTerminalTheme: (path: string) => invoke<TerminalTheme>("import_terminal_theme", { path }),
+
+  /** Store an edited theme. Its id is derived from the name by the backend, never sent. */
+  saveTerminalTheme: (theme: TerminalTheme) =>
+    invoke<TerminalTheme>("save_terminal_theme", { theme }),
+
+  /** Delete a stored theme. Deleting one that is not there is not a failure. */
+  deleteTerminalTheme: (id: string) => invoke<void>("delete_terminal_theme", { id }),
   /**
    * Partial update — omitted fields keep their current value. Toggling `minimizeToTray` installs or
    * removes the system-tray icon immediately (no restart).
@@ -39,6 +64,7 @@ export const api = {
     uiScale?: number;
     terminalFontSize?: number;
     terminalShell?: string;
+    terminalTheme?: string;
     tmuxMode?: TmuxMode;
     tmuxSession?: string;
     minimizeToTray?: boolean;
@@ -47,6 +73,7 @@ export const api = {
       uiScale: opts.uiScale ?? null,
       terminalFontSize: opts.terminalFontSize ?? null,
       terminalShell: opts.terminalShell ?? null,
+      terminalTheme: opts.terminalTheme ?? null,
       tmuxMode: opts.tmuxMode ?? null,
       tmuxSession: opts.tmuxSession ?? null,
       minimizeToTray: opts.minimizeToTray ?? null,

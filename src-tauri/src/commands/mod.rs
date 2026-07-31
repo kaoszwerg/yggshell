@@ -4,7 +4,7 @@
 pub mod git;
 pub mod terminal;
 
-use crate::dto::{BuildInfo, CrashReport, SettingsDto, ShellInfo, TmuxMode};
+use crate::dto::{BuildInfo, CrashReport, SettingsDto, ShellInfo, TerminalTheme, TmuxMode};
 use crate::error::{AppError, Result};
 use crate::state::AppState;
 use tauri::State;
@@ -119,6 +119,7 @@ pub fn update_settings(
     ui_scale: Option<f64>,
     terminal_font_size: Option<f64>,
     terminal_shell: Option<String>,
+    terminal_theme: Option<String>,
     tmux_mode: Option<TmuxMode>,
     tmux_session: Option<String>,
     minimize_to_tray: Option<bool>,
@@ -127,6 +128,7 @@ pub fn update_settings(
         ?ui_scale,
         ?terminal_font_size,
         ?terminal_shell,
+        ?terminal_theme,
         ?tmux_mode,
         ?tmux_session,
         ?minimize_to_tray,
@@ -137,6 +139,7 @@ pub fn update_settings(
         ui_scale,
         terminal_font_size,
         terminal_shell,
+        terminal_theme,
         tmux_mode,
         tmux_session,
         minimize_to_tray,
@@ -168,6 +171,48 @@ pub fn list_shells() -> Vec<ShellInfo> {
             is_default: o.is_default,
         })
         .collect()
+}
+
+/// Every colour scheme the user has imported or saved.
+///
+/// The built-in HUD palette is **not** in this list: it lives in the frontend, where colour lives
+/// (rule:theming). The frontend puts it in front of these.
+#[tauri::command]
+pub fn list_terminal_themes(state: State<'_, AppState>) -> Vec<TerminalTheme> {
+    let themes = crate::theme::list(&state.data_dir);
+    tracing::debug!(count = themes.len(), "list_terminal_themes");
+    themes
+}
+
+/// Import an `.itermcolors` file the user dropped on the window, and store it.
+///
+/// The path is a path from outside — the webview hands it over, even though a drop produced it — so
+/// the extension and the size are checked before anything is read, and the document is parsed by a
+/// reader that resolves no entities and follows no DTD (`theme::itermcolors`).
+#[tauri::command]
+pub fn import_terminal_theme(state: State<'_, AppState>, path: String) -> Result<TerminalTheme> {
+    tracing::info!(%path, "import_terminal_theme");
+    let theme = crate::theme::import(std::path::Path::new(&path))?;
+    let stored = crate::theme::save(&state.data_dir, &theme)?;
+    tracing::info!(id = %stored.id, "import_terminal_theme ok");
+    Ok(stored)
+}
+
+/// Store a theme the user edited. The id is derived from the name here, never taken from the caller.
+#[tauri::command]
+pub fn save_terminal_theme(
+    state: State<'_, AppState>,
+    theme: TerminalTheme,
+) -> Result<TerminalTheme> {
+    tracing::info!(name = %theme.name, "save_terminal_theme");
+    crate::theme::save(&state.data_dir, &theme)
+}
+
+/// Delete a stored theme. Deleting one that is not there is not a failure.
+#[tauri::command]
+pub fn delete_terminal_theme(state: State<'_, AppState>, id: String) -> Result<()> {
+    tracing::info!(%id, "delete_terminal_theme");
+    crate::theme::remove(&state.data_dir, &id)
 }
 
 /// Open an external URL in the user's default browser. Routed through the backend so any failure

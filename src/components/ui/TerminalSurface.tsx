@@ -10,7 +10,8 @@ import "@xterm/xterm/css/xterm.css";
 import { parseOsc7 } from "../../lib/osc7";
 import { isLinux, isMac } from "../../lib/platform";
 import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
-import { PALETTE } from "../../styles/palette";
+import { resolveTheme } from "../../lib/terminalTheme";
+import type { TerminalTheme } from "../../bindings/TerminalTheme";
 
 /** Which way a search step runs. */
 export type SearchDirection = "next" | "previous";
@@ -54,6 +55,13 @@ export interface TerminalSurfaceProps {
    * away the scrollback and the running process every time the slider moved.
    */
   fontSize: number;
+  /**
+   * The colour scheme, or `null`/absent for the built-in HUD palette.
+   *
+   * Applied to the live terminal like `fontSize`, and for the same reason: rebuilding the emulator to
+   * repaint it would take the scrollback and the running process with it.
+   */
+  theme?: TerminalTheme | null;
   /** The shell's current working directory, as it reports it (OSC 7). Never fires for a shell that
    *  does not emit the sequence — see the backend's shell integration. */
   onCwd?: (path: string) => void;
@@ -82,6 +90,7 @@ export function TerminalSurface({
   onSelectionChange,
   onCwd,
   fontSize,
+  theme,
   className = "",
 }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -100,13 +109,23 @@ export function TerminalSurface({
     onSelectionChange,
     onCwd,
     fontSize,
+    theme,
   });
   // Updated in an effect, not during render: a ref written while rendering is a React Compiler
   // violation, and it is declared before the mount effect below so the first callbacks xterm can
   // possibly fire already see the current values.
   useEffect(() => {
-    handlers.current = { onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize };
-  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize]);
+    handlers.current = {
+      onData,
+      onResize,
+      onLink,
+      onTitle,
+      onSelectionChange,
+      onCwd,
+      fontSize,
+      theme,
+    };
+  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize, theme]);
 
   useImperativeHandle(
     ref,
@@ -124,6 +143,14 @@ export function TerminalSurface({
     }),
     [],
   );
+
+  // A colour scheme reaches the LIVE terminal too, and for the same reason: rebuilding the emulator
+  // to repaint it would throw away the scrollback and the running process with it.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.theme = resolveTheme(theme);
+  }, [theme]);
 
   // Size changes reach the LIVE terminal. The mount effect below deliberately does not depend on
   // `fontSize`, or every step would dispose the emulator and take the scrollback with it.
@@ -152,34 +179,9 @@ export function TerminalSurface({
       scrollback: 10_000,
       // Ctrl+C must stay SIGINT, so copy is never bound to it. The selection is still cleared on
       // input, which is what makes select-then-type behave like every other terminal.
-      theme: {
-        background: PALETTE.deep,
-        foreground: PALETTE.fg,
-        cursor: PALETTE.cyan,
-        cursorAccent: PALETTE.deep,
-        selectionBackground: `${PALETTE.cyan}40`,
-        // xterm draws its own scrollbar; these are the only way to colour it, and
-        // globals.css only gets to say how wide the slider paints.
-        scrollbarSliderBackground: `${PALETTE.cyan}4d`,
-        scrollbarSliderHoverBackground: `${PALETTE.cyan}99`,
-        scrollbarSliderActiveBackground: PALETTE.cyan,
-        black: PALETTE.deep,
-        red: PALETTE.danger,
-        green: PALETTE.green,
-        yellow: PALETTE.gold,
-        blue: PALETTE.cyan,
-        magenta: PALETTE.purple,
-        cyan: PALETTE.cyan,
-        white: PALETTE.fg,
-        brightBlack: PALETTE.dim,
-        brightRed: PALETTE.danger,
-        brightGreen: PALETTE.green,
-        brightYellow: PALETTE.gold,
-        brightBlue: PALETTE.cyan,
-        brightMagenta: PALETTE.purple,
-        brightCyan: PALETTE.cyan,
-        brightWhite: "#ffffff",
-      },
+      // Read through the ref for the same reason as `fontSize`: depending on the prop here would
+      // rebuild the emulator whenever the scheme changed.
+      theme: resolveTheme(handlers.current.theme),
     });
 
     const fit = new FitAddon();

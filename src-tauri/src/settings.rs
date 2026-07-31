@@ -27,6 +27,7 @@ pub struct SettingsPatch {
     pub ui_scale: Option<f64>,
     pub terminal_font_size: Option<f64>,
     pub terminal_shell: Option<String>,
+    pub terminal_theme: Option<String>,
     pub tmux_mode: Option<TmuxMode>,
     pub tmux_session: Option<String>,
     pub minimize_to_tray: Option<bool>,
@@ -106,6 +107,11 @@ impl SettingsStore {
             }
             if let Some(shell) = patch.terminal_shell {
                 guard.terminal_shell = shell.trim().to_string();
+            }
+            if let Some(theme) = patch.terminal_theme {
+                // Stored as given: an id naming a theme that has since been deleted is handled where
+                // it is used — the frontend falls back to the HUD palette rather than a blank screen.
+                guard.terminal_theme = theme.trim().to_string();
             }
             if let Some(mode) = patch.tmux_mode {
                 guard.tmux_mode = mode;

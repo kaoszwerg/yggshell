@@ -22,6 +22,10 @@ ui_scale: number,
  */
 terminal_font_size: number, 
 /**
+ * The colour scheme a terminal uses, by id. Empty means the built-in HUD palette.
+ */
+terminal_theme: string, 
+/**
  * Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
  *
  * Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.

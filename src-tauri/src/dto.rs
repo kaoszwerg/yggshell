@@ -41,6 +41,9 @@ pub struct SettingsDto {
     /// emulator, so the WebView zoom cannot drag it along.
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f64,
+    /// The colour scheme a terminal uses, by id. Empty means the built-in HUD palette.
+    #[serde(default)]
+    pub terminal_theme: String,
     /// Which shell a new terminal starts, as an absolute path. Empty means the user's own `$SHELL`.
     ///
     /// Only a path the backend itself offered is ever accepted or acted on — see `terminal::shells`.
@@ -139,6 +142,31 @@ pub struct GitCommitDetail {
     pub files: Vec<GitFileStat>,
 }
 
+/// A terminal colour scheme — imported from iTerm2, or edited here.
+///
+/// **Every colour is optional, on purpose.** Colour has one home in this project and it is the
+/// frontend (`globals.css` + `palette.ts`, rule:theming); the backend storing a full palette would be
+/// a second source for the same fact. A scheme carries only what it actually defines, and the
+/// frontend fills the rest from the HUD palette — which is also what a user expects from a scheme
+/// that never mentioned a cursor colour.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TerminalTheme {
+    /// Filesystem-safe id, derived from the name by the backend. Never chosen by a caller: it decides
+    /// a filename.
+    pub id: String,
+    pub name: String,
+    /// The 16 ANSI colours, in order. Always 16 entries; an undefined one is `null`.
+    pub ansi: Vec<Option<String>>,
+    pub background: Option<String>,
+    pub foreground: Option<String>,
+    pub cursor: Option<String>,
+    /// The colour of the character *under* the cursor.
+    pub cursor_accent: Option<String>,
+    pub selection: Option<String>,
+    pub selection_foreground: Option<String>,
+}
+
 /// A shell this machine offers, as presented in Settings.
 ///
 /// The list is produced by the backend from what the operating system declares (`/etc/shells`, the
@@ -204,6 +232,7 @@ impl Default for SettingsDto {
             ui_scale: default_ui_scale(),
             terminal_font_size: default_terminal_font_size(),
             terminal_shell: String::new(),
+            terminal_theme: String::new(),
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             minimize_to_tray: false,
@@ -227,6 +256,7 @@ mod tests {
         let s = SettingsDto {
             terminal_font_size: 13.0,
             terminal_shell: "/bin/zsh".into(),
+            terminal_theme: String::new(),
             tmux_mode: TmuxMode::Off,
             tmux_session: String::new(),
             ui_scale: 1.25,
