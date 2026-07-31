@@ -66,15 +66,41 @@ fn shell_kind(program: &str) -> Option<Kind> {
     }
 }
 
-/// The hook itself, in POSIX-ish shell. Emitted after every prompt, and once at start so the first
-/// reading does not wait for the user to press Enter.
+/// The hook itself, in POSIX-ish shell.
+///
+/// **Defined only — never called here.** It used to run once at the end of the rc file, on the theory
+/// that the first reading should not wait for the user to press Enter. It does not have to: `precmd`
+/// (zsh) and `PROMPT_COMMAND` (bash) both run before the *first* prompt as well, so the immediate call
+/// bought nothing — and it wrote to the terminal at an unpredictable point in someone else's startup.
+/// With powerlevel10k's instant prompt that point is mid-line, which leaves zsh convinced the previous
+/// output had no trailing newline and makes it print its `%` end-of-line mark at the top of every
+/// fresh terminal.
 fn hook(host_var: &str) -> String {
+    // Inside tmux the sequence has to be smuggled out. tmux CONSUMES OSC 7 for its own
+    // `pane_current_path` and does not forward it, so the outer terminal — us — never sees it and the
+    // Git tool stops following `cd` the moment a session runs under tmux. The way through is tmux's
+    // DCS passthrough (`ESC P tmux; <escaped> ESC \`), where every ESC in the payload is doubled.
+    // It is gated behind the pane option `allow-passthrough`, which is off by default since tmux 3.3,
+    // so the hook turns it on for ITS OWN PANE only — never for the server, never for the user's
+    // other windows.
     format!(
         r#"
 _yggshell_report_cwd() {{
-  printf '\033]7;file://%s%s\033\\' "${{{host_var}:-}}" "$PWD"
+  local seq
+  seq=$(printf '\033]7;file://%s%s\033\\' "${{{host_var}:-}}" "$PWD")
+  if [ -n "${{TMUX:-}}" ]; then
+    # Double every ESC and wrap, which is what tmux's passthrough expects.
+    printf '\033Ptmux;%s\033\\' "${{seq//$'\033'/$'\033\033'}}"
+  else
+    printf '%s' "$seq"
+  fi
 }}
-_yggshell_report_cwd
+_yggshell_enable_passthrough() {{
+  [ -n "${{TMUX:-}}" ] && command -v tmux >/dev/null 2>&1 \
+    && tmux set -p allow-passthrough on >/dev/null 2>&1
+}}
+_yggshell_enable_passthrough
+unset -f _yggshell_enable_passthrough
 "#
     )
 }
@@ -225,6 +251,9 @@ mod tests {
             "ZDOTDIR is real before their config reads it"
         );
         assert!(sources_user < installs_hook);
+        // The hook is DEFINED here and left to precmd to call. Calling it inline wrote to the
+        // terminal at an unpredictable point in the user's own startup — see `hook`.
+        assert!(!zshrc.contains("\n_yggshell_report_cwd\n"));
 
         assert!(integration
             .env
@@ -272,6 +301,9 @@ mod tests {
         assert!(rc.contains(r#". "$HOME/.bashrc""#));
         // Prepended, not overwritten: a PROMPT_COMMAND the user already had must keep running.
         assert!(rc.contains(r#"${PROMPT_COMMAND:+;$PROMPT_COMMAND}"#));
+        // Defined, never called here: writing to the terminal mid-startup is what made zsh print its
+        // end-of-line mark at the top of every fresh terminal.
+        assert!(!rc.contains("\n_yggshell_report_cwd\n"));
         assert!(integration.args.contains(&"--rcfile".to_string()));
         assert!(integration.args.contains(&"-i".to_string()));
     }

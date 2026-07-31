@@ -101,7 +101,6 @@ function AppearanceSection() {
               aria-pressed={Math.abs(scale - s) < 0.001}
               active={Math.abs(scale - s) < 0.001}
               onClick={() => update.mutate({ uiScale: s })}
-              className="px-3 py-1 text-xs"
             >
               {Math.round(s * 100)}%
             </Button>
@@ -137,7 +136,6 @@ function TerminalSection() {
               aria-pressed={Math.abs(size - s) < 0.001}
               active={Math.abs(size - s) < 0.001}
               onClick={() => update.mutate({ terminalFontSize: s })}
-              className="px-3 py-1 text-xs"
             >
               {s}px
             </Button>
@@ -181,7 +179,6 @@ function TmuxControls() {
               aria-pressed={mode === m.id}
               active={mode === m.id}
               onClick={() => update.mutate({ tmuxMode: m.id })}
-              className="px-3 py-1 text-xs"
             >
               {m.label}
             </Button>
@@ -235,7 +232,6 @@ function WindowSection() {
             aria-pressed={!minimizeToTray}
             active={!minimizeToTray}
             onClick={() => update.mutate({ minimizeToTray: false })}
-            className="px-3 py-1 text-xs"
           >
             Quit app
           </Button>
@@ -243,7 +239,6 @@ function WindowSection() {
             aria-pressed={minimizeToTray}
             active={minimizeToTray}
             onClick={() => update.mutate({ minimizeToTray: true })}
-            className="px-3 py-1 text-xs"
           >
             Minimize to tray
           </Button>

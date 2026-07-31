@@ -80,6 +80,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A tmux detach took the whole interface down.** Sessions end underneath pending calls constantly —
+  the user typed `exit`, tmux detached, the tab closed a keystroke ago — and the backend answers
+  `no terminal session N`. Those rejections were unhandled, reached the app's global handler and
+  became a **fatal screen over everything**. Every terminal call, and the clipboard and link paths
+  with them, now handles its own failure. `void somePromise` satisfies the linter and throws the
+  rejection away; it is gone from this view.
+- **HUD buttons were broken by their own text.** `Button` carried no padding at all — every caller had
+  been passing its own, and the fatal screen was the one that did not, so its label sat inside the
+  chamfer. Padding and `whitespace-nowrap` belong to the primitive: a clipped shape whose label wraps
+  is not taller, it is cropped.
+- **With tmux enabled, shell integration silently stopped being installed.** It was prepared for the
+  program being spawned, which is `tmux` and not a shell, so no hook was written and the Git tool
+  stopped following `cd`. It is prepared for the shell now — the environment reaches every shell tmux
+  starts either way. On top of that, tmux *consumes* OSC 7 for its own pane tracking: the hook now
+  wraps the sequence in tmux's DCS passthrough and enables `allow-passthrough` for its own pane only.
 - **A bundled app could not find anything the user has installed.** macOS launches a GUI app through
   `launchd`, which hands it `PATH=/usr/bin:/bin:/usr/sbin:/sbin` — so the user's own `.zshrc` failed
   with `command not found: direnv`, and the tmux integration reported "not installed" for a `tmux`

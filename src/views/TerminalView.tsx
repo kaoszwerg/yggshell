@@ -17,6 +17,23 @@ import { registerPasteTarget } from "../lib/terminalHandles";
 import { useSettings } from "../hooks/useSettings";
 import { useTerminalStore } from "../store/terminal";
 
+/**
+ * A call to a session that may already be gone.
+ *
+ * Sessions end underneath pending calls all the time: the user typed `exit`, tmux detached, the shell
+ * died, the tab was closed a keystroke ago. The backend answers `no terminal session N`, and an
+ * unhandled rejection from that reaches the app's global handler — which turns an ordinary race into
+ * a FATAL SCREEN over the whole interface. It did exactly that on a tmux detach.
+ *
+ * So every one of these is caught here and reported where it belongs: in the console, not across the
+ * user's work. The pane is already being torn down by the exit event on its own.
+ */
+function survivable(what: string): (error: unknown) => void {
+  return (error) => {
+    console.warn(`terminal: ${what} failed —`, error);
+  };
+}
+
 /** Written into the terminal itself when something goes wrong. A failure the user cannot see is a
  *  silent failure (rule:logging), and this is the one surface they are already looking at. */
 const encoder = new TextEncoder();
@@ -61,7 +78,7 @@ export function TerminalView() {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 
-    void terminalApi
+    terminalApi
       .onExit((exit) => {
         for (const [key, id] of sessions.current) {
           if (id !== exit.id) continue;
@@ -73,7 +90,8 @@ export function TerminalView() {
       .then((fn) => {
         if (cancelled) fn();
         else unlisten = fn;
-      });
+      })
+      .catch(survivable("subscribe to session exits"));
 
     return () => {
       cancelled = true;
@@ -138,13 +156,13 @@ function Pane({
     (rows: number, cols: number) => {
       const id = sessionId.current;
       if (id !== null) {
-        void terminalApi.resize(id, rows, cols);
+        terminalApi.resize(id, rows, cols).catch(survivable("resize"));
         return;
       }
       if (opening.current) return;
       opening.current = true;
 
-      void terminalApi
+      terminalApi
         .open({
           rows,
           cols,
@@ -169,11 +187,12 @@ function Pane({
   const onData = useCallback((data: string) => {
     const id = sessionId.current;
     if (id === null) return;
-    void terminalApi.write(id, data);
+    terminalApi.write(id, data).catch(survivable("write"));
   }, []);
 
   const onLink = useCallback((url: string) => {
-    void api.openExternal(url);
+    // A refused or malformed URL is the backend's to reject; it must not become a fatal screen.
+    api.openExternal(url).catch(survivable("open link"));
   }, []);
 
   // The shell's own title (OSC 0/2) names the tab once it sets one — `cargo watch` is worth far more
@@ -243,7 +262,7 @@ function Pane({
   useEffect(
     () => () => {
       const id = sessionId.current;
-      if (id !== null) void terminalApi.close(id);
+      if (id !== null) terminalApi.close(id).catch(survivable("close"));
     },
     [],
   );
@@ -264,7 +283,8 @@ function Pane({
             shortcut: KEYS.copy,
             disabled: !hasSelection,
             onSelect: () => {
-              void navigator.clipboard.writeText(readPrimarySelection());
+              // The clipboard can refuse — permissions, an empty selection, a webview without focus.
+              navigator.clipboard.writeText(readPrimarySelection()).catch(survivable("copy"));
             },
           },
           {
@@ -272,11 +292,14 @@ function Pane({
             label: "Paste",
             shortcut: KEYS.paste,
             onSelect: () => {
-              void navigator.clipboard.readText().then((text) => {
-                // Through the emulator, so it is bracketed: a multi-line paste must not run line by
-                // line the moment it arrives.
-                if (text !== "") handle.current?.paste(text);
-              });
+              navigator.clipboard
+                .readText()
+                .then((text) => {
+                  // Through the emulator, so it is bracketed: a multi-line paste must not run line by
+                  // line the moment it arrives.
+                  if (text !== "") handle.current?.paste(text);
+                })
+                .catch(survivable("paste"));
             },
           },
           { separator: true },

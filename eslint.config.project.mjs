@@ -3,6 +3,13 @@
 //
 // Everything here states a fact the base config cannot know about this project. Nothing here relaxes a
 // finding to make the gate green — that is the regression rule:security exists to prevent.
+//
+// NOT here, and deliberately: `@typescript-eslint/no-floating-promises` with `ignoreVoid: false`.
+// `void somePromise` discards the rejection, which in this app becomes a fatal screen over the whole
+// interface — so the rule would be worth having. It is type-aware, the base config runs no type-aware
+// linting at all, and enabling that for `src/**` from an overlay makes the rule crash rather than
+// report. Catching every rejection at the call site is held by review until the base config grows a
+// typed parser; the reasoning lives here so the next attempt starts from what was already learned.
 
 export default [
   {
