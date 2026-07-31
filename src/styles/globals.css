@@ -458,3 +458,55 @@ input[type="range"]:disabled::-moz-range-thumb {
     animation: none;
   }
 }
+
+/* The activity line: the top edge of a terminal, doing what iTerm2's does — saying that something is
+   running — in the window frame's own colours. A travelling linear gradient rather than the frame's
+   rotating conic one, because a 2px strip has no angle to rotate through; the palette is the same on
+   purpose, so the two read as one system.
+
+   Only as wide as the terminal it belongs to: the rail and the tool column are not part of what is
+   running, and a line sweeping across them would be claiming otherwise. */
+@keyframes activity-sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
+.hud-activity {
+  height: 2px;
+  background: var(--saga-neon-cyan);
+  opacity: 0.18;
+  transition:
+    opacity 250ms ease,
+    background-color 250ms ease;
+}
+.hud-activity-running {
+  opacity: 1;
+  background: linear-gradient(
+    90deg,
+    var(--saga-neon-green),
+    var(--saga-neon-cyan),
+    var(--saga-rune-purple),
+    var(--saga-gold),
+    var(--saga-neon-green)
+  );
+  background-size: 200% 100%;
+  animation: activity-sweep 2.4s linear infinite;
+}
+/* What the command DID, which is the part you miss when you look away. Held briefly, then faded back
+   to rest by the transition above. */
+.hud-activity-ok {
+  opacity: 0.9;
+  background: var(--saga-neon-green);
+}
+.hud-activity-failed {
+  opacity: 0.9;
+  background: var(--saga-danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-activity-running {
+    animation: none;
+    /* Still unmistakably "busy", without anything moving. */
+    background: var(--saga-neon-cyan);
+    opacity: 0.85;
+  }
+}

@@ -39,7 +39,7 @@ vi.mock("../api/terminal", () => ({
     open: vi.fn(),
     resize: vi.fn(() => Promise.resolve()),
     write: vi.fn(() => Promise.resolve()),
-    cwd: vi.fn(() => Promise.resolve(null)),
+    status: vi.fn(() => Promise.resolve({ cwd: null, command: null, busy: false })),
     close: vi.fn(() => Promise.resolve()),
     onExit: vi.fn(() => Promise.resolve(() => {})),
   },
@@ -195,11 +195,11 @@ describe("TerminalView", () => {
       warn.mockRestore();
     });
 
-    it("does not let a rejected working-directory poll escape", async () => {
+    it("does not let a rejected status poll escape", async () => {
       const opened = deferOpen(5);
       render(<TerminalView />);
       act(() => measure?.(30, 100));
-      vi.mocked(terminalApi.cwd).mockRejectedValue(new Error("no terminal session 5"));
+      vi.mocked(terminalApi.status).mockRejectedValue(new Error("no terminal session 5"));
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       await opened();
@@ -209,7 +209,7 @@ describe("TerminalView", () => {
 
       // Asked at all — the poll used to start before the session existed, so its first ask hit a
       // null id and did nothing, leaving the Git tool blank for a whole tick.
-      expect(terminalApi.cwd).toHaveBeenCalledWith(5);
+      expect(terminalApi.status).toHaveBeenCalledWith(5);
       // …and the rejection was handled. vitest fails a run on an unhandled one, so reaching here is
       // the proof; the warning is what makes it visible rather than silent.
       expect(warn).toHaveBeenCalled();
@@ -478,6 +478,87 @@ describe("TerminalView", () => {
       });
 
       expect(vi.mocked(terminalApi.open).mock.calls.at(-1)?.[0]?.cwd).toBeUndefined();
+    });
+  });
+
+  // The line along the top edge — iTerm2's idea, our treatment. Its whole value is that it says
+  // "THIS terminal", so per-pane state is the part worth pinning.
+  describe("the activity line", () => {
+    it("follows what the shell reports, straight from OSC 133", async () => {
+      const opened = deferOpen(60);
+      const { container } = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      const line = () => container.querySelector("[data-activity]") as HTMLElement;
+      expect(line().dataset.activity).toBe("idle");
+
+      act(() => (surfaceProps.onActivity as (a: unknown) => void)({ state: "running" }));
+      expect(line().dataset.activity).toBe("running");
+
+      act(() => (surfaceProps.onActivity as (a: unknown) => void)({ state: "finished", exit: 0 }));
+      expect(line().dataset.activity).toBe("ok");
+    });
+
+    it("marks a failure differently from a success", async () => {
+      const opened = deferOpen(61);
+      const { container } = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      act(() => (surfaceProps.onActivity as (a: unknown) => void)({ state: "finished", exit: 1 }));
+      expect((container.querySelector("[data-activity]") as HTMLElement).dataset.activity).toBe(
+        "failed",
+      );
+    });
+
+    it("takes the tmux poll's word for it when there is no OSC 133", async () => {
+      // Inside tmux the sequences are swallowed, so `busy` from `#{pane_current_command}` is all
+      // there is — no exit status, just running or not.
+      vi.mocked(terminalApi.status).mockResolvedValue({
+        cwd: "/repo",
+        command: "cargo",
+        busy: true,
+      });
+      const opened = deferOpen(62);
+      const { container } = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect((container.querySelector("[data-activity]") as HTMLElement).dataset.activity).toBe(
+        "running",
+      );
+    });
+
+    it("spans only the terminal, not the window", async () => {
+      // The rail and the tool column are not part of what is running.
+      const opened = deferOpen(63);
+      const { container } = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      const line = container.querySelector("[data-activity]") as HTMLElement;
+      expect(line.className).toContain("absolute");
+      expect(line.className).not.toContain("fixed");
+    });
+
+    it("clears a held result by itself, so a signal does not become decoration", async () => {
+      vi.useFakeTimers();
+      const opened = deferOpen(64);
+      const { container } = render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      act(() => (surfaceProps.onActivity as (a: unknown) => void)({ state: "finished", exit: 1 }));
+      const line = container.querySelector("[data-activity]") as HTMLElement;
+      expect(line.dataset.activity).toBe("failed");
+
+      act(() => void vi.advanceTimersByTime(2500));
+      expect(line.dataset.activity).toBe("idle");
+      vi.useRealTimers();
     });
   });
 });

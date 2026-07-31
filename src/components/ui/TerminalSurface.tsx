@@ -8,6 +8,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { parseOsc7 } from "../../lib/osc7";
+import { parseOsc133, type Activity } from "../../lib/osc133";
 import { isLinux, isMac } from "../../lib/platform";
 import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
 import { resolveTheme } from "../../lib/terminalTheme";
@@ -72,6 +73,8 @@ export interface TerminalSurfaceProps {
   /** The shell's current working directory, as it reports it (OSC 7). Never fires for a shell that
    *  does not emit the sequence — see the backend's shell integration. */
   onCwd?: (path: string) => void;
+  /** What the shell says it is doing (OSC 133). Never fires for a shell without the hook. */
+  onActivity?: (activity: Activity) => void;
   className?: string;
 }
 
@@ -96,6 +99,7 @@ export function TerminalSurface({
   onTitle,
   onSelectionChange,
   onCwd,
+  onActivity,
   fontSize,
   theme,
   copyOnSelect,
@@ -116,6 +120,7 @@ export function TerminalSurface({
     onTitle,
     onSelectionChange,
     onCwd,
+    onActivity,
     fontSize,
     theme,
     copyOnSelect,
@@ -131,11 +136,23 @@ export function TerminalSurface({
       onTitle,
       onSelectionChange,
       onCwd,
+      onActivity,
       fontSize,
       theme,
       copyOnSelect,
     };
-  }, [onData, onResize, onLink, onTitle, onSelectionChange, onCwd, fontSize, theme, copyOnSelect]);
+  }, [
+    onData,
+    onResize,
+    onLink,
+    onTitle,
+    onSelectionChange,
+    onCwd,
+    onActivity,
+    fontSize,
+    theme,
+    copyOnSelect,
+  ]);
 
   useImperativeHandle(
     ref,
@@ -273,6 +290,15 @@ export function TerminalSurface({
     term.parser.registerOscHandler(7, (data) => {
       const path = parseOsc7(data);
       if (path !== null) handlers.current.onCwd?.(path);
+      return true;
+    });
+
+    // OSC 133 — the shell saying that a command started or finished, and how. Same vocabulary iTerm2
+    // uses, and the thing that drives the activity line. Measured to reach us from a plain shell and
+    // to be swallowed entirely by tmux, where it is polled from `#{pane_current_command}` instead.
+    term.parser.registerOscHandler(133, (data) => {
+      const activity = parseOsc133(data);
+      if (activity !== null) handlers.current.onActivity?.(activity);
       return true;
     });
 

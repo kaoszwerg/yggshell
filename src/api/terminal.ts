@@ -4,6 +4,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
 import type { TerminalOpened } from "../bindings/TerminalOpened";
+import type { TerminalStatus } from "../bindings/TerminalStatus";
 
 /** Backend session id. Allocated by the registry; meaningless outside this process. */
 export type SessionId = number;
@@ -59,13 +60,14 @@ export const terminalApi = {
     invoke<void>("terminal_resize", { id, rows, cols }),
 
   /**
-   * Where this session's shell is, when the backend can answer it — inside tmux.
+   * What a session is doing, for the things the frontend cannot see for itself.
    *
-   * `null` for an ordinary shell, where OSC 7 has already told the frontend instantly and no polling
-   * is needed. Inside tmux the sequence never arrives (tmux consumes it), and a session that existed
-   * before this app started could never have had a hook injected into it, so tmux is asked directly.
+   * Everything is empty for an ordinary shell, and deliberately so: there OSC 7 and OSC 133 reach the
+   * emulator directly — instantly, and with an exit status a poll could never give. Inside tmux both
+   * are swallowed (measured), so the working directory and whether a command is running are asked of
+   * tmux instead.
    */
-  cwd: (id: SessionId) => invoke<string | null>("terminal_cwd", { id }),
+  status: (id: SessionId) => invoke<TerminalStatus>("terminal_status", { id }),
 
   /** End a session because its tab was closed. Takes the foreground process group with it. */
   close: (id: SessionId) => invoke<void>("terminal_close", { id }),

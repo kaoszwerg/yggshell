@@ -343,6 +343,23 @@ mod tests {
     }
 }
 
+/// What a session is doing right now, as far as the backend can tell.
+///
+/// Only tmux sessions have anything to report here: outside tmux the shell's own OSC 133 sequences
+/// reach the emulator directly and are read there, instantly and with an exit status. Inside tmux
+/// they are swallowed (measured), so the busy state is polled from `#{pane_current_command}` instead —
+/// which says *whether* something is running, never how it ended.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TerminalStatus {
+    /// Where the session's shell is, when tmux can be asked.
+    pub cwd: Option<String>,
+    /// The command tmux says is running, or `null` outside tmux.
+    pub command: Option<String>,
+    /// True when that command is something other than the shell itself.
+    pub busy: bool,
+}
+
 /// What a freshly opened session turned out to be.
 ///
 /// The id alone was enough while every terminal was a shell. It is not any more: a tab needs to know

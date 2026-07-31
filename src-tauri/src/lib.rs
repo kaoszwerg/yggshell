@@ -72,7 +72,7 @@ pub fn run() {
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
-            commands::terminal::terminal_cwd,
+            commands::terminal::terminal_status,
             commands::git::git_snapshot,
             commands::git::git_file_diff,
             commands::git::git_commit,

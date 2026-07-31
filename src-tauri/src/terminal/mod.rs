@@ -90,9 +90,13 @@ impl Coalescer {
 /// One live session as the registry sees it.
 struct Session {
     pty: Pty,
-    /// The tmux session this joined, if any. Inside tmux the working directory is read back from tmux
-    /// rather than from the shell — see [`TerminalRegistry::cwd`].
+    /// The tmux session this joined, if any. Inside tmux the working directory and the running
+    /// command are both read back from tmux rather than from the shell — see
+    /// [`TerminalRegistry::status`].
     tmux_session: Option<String>,
+    /// The program this session started, kept so "is something running" can be answered: tmux names
+    /// the shell itself when a prompt is waiting, and the only way to know that is to know its name.
+    shell: String,
 }
 
 /// Every live terminal in this process. Managed by Tauri, so a command reaches it as `State`.
@@ -325,6 +329,7 @@ impl TerminalRegistry {
             Session {
                 pty: spawned.pty,
                 tmux_session: launch.tmux_session,
+                shell: shell.clone(),
             },
         );
         // The tmux session travels back with the id: a tab that knows which session it landed on can
@@ -374,19 +379,51 @@ impl TerminalRegistry {
     /// joined has no hook in it and never will, so tmux — which tracks `pane_current_path` itself — is
     /// asked instead. `None` for an ordinary shell session means exactly "the frontend already knows
     /// better than I do".
-    pub fn cwd(&self, id: SessionId) -> Result<Option<String>> {
+    pub fn status(&self, id: SessionId) -> Result<crate::dto::TerminalStatus> {
         // The name is copied out and the lock released before tmux is asked: that call spawns a
         // process, and holding the registry lock across it would stall every keystroke in every other
         // terminal for as long as it takes.
-        let name = {
+        let (name, shell) = {
             let sessions = self.sessions.lock().map_err(poisoned)?;
             match sessions.get(&id) {
                 // Not an error: a poll can outlive the tab it was polling for.
-                None => return Ok(None),
-                Some(session) => session.tmux_session.clone(),
+                None => {
+                    return Ok(crate::dto::TerminalStatus {
+                        cwd: None,
+                        command: None,
+                        busy: false,
+                    })
+                }
+                Some(session) => (session.tmux_session.clone(), session.shell.clone()),
             }
         };
-        Ok(name.as_deref().and_then(tmux::pane_cwd))
+        let Some(name) = name else {
+            // Outside tmux there is nothing to poll for: OSC 7 and OSC 133 both reach the emulator
+            // directly, instantly, and with more detail than a poll could give.
+            return Ok(crate::dto::TerminalStatus {
+                cwd: None,
+                command: None,
+                busy: false,
+            });
+        };
+
+        let command = tmux::pane_command(&name);
+        // "Busy" is "running something other than the shell". tmux reports the shell's own name when
+        // a prompt is waiting, and the comparison is on the FILE NAME because tmux gives `zsh` where
+        // the session was started from `/bin/zsh`.
+        let shell_name = std::path::Path::new(&shell)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or(shell);
+        let busy = command
+            .as_deref()
+            .is_some_and(|c| c != shell_name && !c.is_empty());
+
+        Ok(crate::dto::TerminalStatus {
+            cwd: tmux::pane_cwd(&name),
+            command,
+            busy,
+        })
     }
 
     /// Drop a session that ended by itself. Never an error: the tab may already have been closed.

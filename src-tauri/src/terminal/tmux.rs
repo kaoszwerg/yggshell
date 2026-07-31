@@ -197,25 +197,37 @@ fn has_session(tmux: &str, session: &str) -> bool {
 /// session we created and one we merely joined, which is why this is the primary source inside tmux
 /// and the hook is the fast path outside it.
 pub fn pane_cwd(session: &str) -> Option<String> {
+    ask(session, "#{pane_current_path}")
+}
+
+/// What the active pane of `session` is running, asked of tmux itself.
+///
+/// The counterpart to [`pane_cwd`], and it exists for the same measured reason: **tmux swallows
+/// OSC 133** exactly as it swallows OSC 7. A probe emitted `133;C` and `133;D` from inside a tmux
+/// session and counted zero of each at the outer terminal, while this query answered correctly. So
+/// outside tmux the shell hook drives the activity indicator, and inside it, this does.
+///
+/// It answers the shell's own name when nothing is running, which is how a caller tells the two
+/// apart — there is no exit status to be had this way, only "busy" and "not".
+pub fn pane_command(session: &str) -> Option<String> {
+    ask(session, "#{pane_current_command}")
+}
+
+/// One `display-message -p` query against a session, trimmed, with an empty answer read as none.
+fn ask(session: &str, format: &str) -> Option<String> {
     let tmux = find_tmux()?;
     let out = Command::new(tmux)
-        .args([
-            "display-message",
-            "-p",
-            "-t",
-            session,
-            "#{pane_current_path}",
-        ])
+        .args(["display-message", "-p", "-t", session, format])
         .output()
         .ok()?;
     if !out.status.success() {
         return None;
     }
-    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if path.is_empty() {
+    let value = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if value.is_empty() {
         None
     } else {
-        Some(path)
+        Some(value)
     }
 }
 

@@ -88,6 +88,12 @@ fn hook(host_var: &str) -> String {
 _yggshell_report_cwd() {{
   printf '\033]7;file://%s%s\033\\' "${{{host_var}:-}}" "$PWD"
 }}
+_yggshell_cmd_start() {{
+  printf '\033]133;C\033\\'
+}}
+_yggshell_cmd_end() {{
+  printf '\033]133;D;%s\033\\' "$1"
+}}
 "#
     )
 }
@@ -130,8 +136,25 @@ unset YGGSHELL_OURS
 # HISTFILE, set here, still wins over the repair above.
 [ -f "$ZDOTDIR/.zshrc" ] && . "$ZDOTDIR/.zshrc"
 {hook}
-autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd _yggshell_report_cwd 2>/dev/null \
-  || precmd_functions+=(_yggshell_report_cwd)
+# OSC 133 — the semantic-prompt sequences iTerm2 uses, and what tells the app a command is RUNNING
+# rather than that a prompt is waiting. `preexec` fires as a command starts, `precmd` after it
+# finishes, and `$?` there is that command's exit status.
+#
+# `precmd` also runs before the FIRST prompt, so an end arrives with no start before it. That is not
+# worked around here: the reader treats an end without a start as "nothing is running", which is
+# exactly what it means.
+_yggshell_precmd() {{
+  local yggshell_status=$?
+  _yggshell_cmd_end "$yggshell_status"
+  _yggshell_report_cwd
+}}
+if autoload -Uz add-zsh-hook 2>/dev/null; then
+  add-zsh-hook precmd _yggshell_precmd 2>/dev/null
+  add-zsh-hook preexec _yggshell_cmd_start 2>/dev/null
+else
+  precmd_functions+=(_yggshell_precmd)
+  preexec_functions+=(_yggshell_cmd_start)
+fi
 "#,
         hook = hook("HOST")
     );
@@ -161,7 +184,29 @@ fn bash(dir: &Path) -> Integration {
 # --rcfile REPLACES ~/.bashrc, so the user's own file is sourced here first.
 [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
 {hook}
-PROMPT_COMMAND="_yggshell_report_cwd${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
+# OSC 133, as far as bash allows it. `PROMPT_COMMAND` marks the end of a command and carries its
+# status; the start is marked by a DEBUG trap, which fires before every simple command — including the
+# ones inside PROMPT_COMMAND itself, hence the guard. Any trap the user already had is left in place
+# and called first: replacing it would break whatever it was doing.
+_yggshell_prompt() {{
+  local yggshell_status=$?
+  _yggshell_cmd_end "$yggshell_status"
+  _yggshell_at_prompt=1
+  _yggshell_report_cwd
+}}
+_yggshell_debug() {{
+  [ -n "${{_yggshell_at_prompt:-}}" ] || return 0
+  unset _yggshell_at_prompt
+  _yggshell_cmd_start
+}}
+# A DEBUG trap the user already had is LEFT ALONE rather than chained onto. Chaining means
+# re-evaluating somebody else's trap string on every command, which is fragile in a way that is very
+# hard to notice and very annoying when it bites. The cost is that bash loses the start marker in that
+# case — the end still arrives, so the indicator settles correctly rather than sticking on.
+if [ -z "$(trap -p DEBUG)" ]; then
+  trap '_yggshell_debug' DEBUG 2>/dev/null
+fi
+PROMPT_COMMAND="_yggshell_prompt${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
 "#,
         hook = hook("HOSTNAME")
     );

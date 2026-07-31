@@ -95,16 +95,18 @@ pub fn terminal_resize(
     registry.resize(id, Size { rows, cols })
 }
 
-/// Where a session's shell currently is, when the backend can answer it (inside tmux).
+/// What a session is doing, for the cases the frontend cannot see for itself.
 ///
-/// `null` for an ordinary shell — there the frontend already has the answer from OSC 7, instantly and
-/// without polling anything.
+/// Everything here is empty for an ordinary shell, and deliberately so: outside tmux the shell's own
+/// OSC 7 and OSC 133 sequences reach the emulator directly — instantly, and with an exit status a
+/// poll could never provide. Inside tmux both are swallowed (measured, not assumed), so the working
+/// directory and whether a command is running are asked of tmux instead.
 #[tauri::command]
-pub fn terminal_cwd(
+pub fn terminal_status(
     registry: State<'_, TerminalRegistry>,
     id: SessionId,
-) -> Result<Option<String>> {
-    registry.cwd(id)
+) -> Result<crate::dto::TerminalStatus> {
+    registry.status(id)
 }
 
 /// End a session because the user closed its tab.

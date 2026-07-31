@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, TerminalSquare, X } from "lucide-react";
 import { api } from "../api/commands";
 import { terminalApi, type SessionId } from "../api/terminal";
 import { GitDetailPanel } from "../components/tools/GitDetailPanel";
+import { ActivityLine } from "../components/ui/ActivityLine";
 import { Button } from "../components/ui/Button";
 import { ContextMenu } from "../components/ui/ContextMenu";
 import { IconButton } from "../components/ui/IconButton";
@@ -17,6 +18,7 @@ import { readPrimarySelection } from "../lib/primarySelection";
 import { registerPasteTarget } from "../lib/terminalHandles";
 import { useSettings, useTerminalProfiles, useTerminalThemes } from "../hooks/useSettings";
 import { themeById } from "../lib/terminalTheme";
+import type { Activity, ActivityState } from "../lib/osc133";
 import { useTerminalStore } from "../store/terminal";
 
 /**
@@ -45,6 +47,9 @@ const notice = (text: string) => encoder.encode(`\r\n\x1b[38;2;255;51;102m${text
  *  inside tmux does the call do any work — outside it the answer is `null` and OSC 7 has already
  *  delivered the truth without waiting for a tick. */
 const CWD_POLL_MS = 2000;
+
+/** How long the activity line holds the result of a command before settling back to rest. */
+const RESULT_MS = 1600;
 
 /** Shown in the menu so the shortcut is discoverable rather than folklore. */
 const KEYS = {
@@ -233,6 +238,15 @@ function Pane({
   // the Git tool sits blank for a whole tick before the first real answer.
   const [sessionOpen, setSessionOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  /**
+   * What this terminal is doing, for the line along its top edge.
+   *
+   * Per pane, like everything else about a tab: two terminals run different things, and one indicator
+   * for the window would be telling you about whichever tab happened to report last.
+   */
+  const [activity, setActivity] = useState<ActivityState>("idle");
+  /** Clears a held result. Held here rather than in the line, so the primitive stays a primitive. */
+  const activityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [schemeOpen, setSchemeOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
   const setCwd = useTerminalStore((s) => s.setCwd);
@@ -350,6 +364,31 @@ function Pane({
     [paneKey, setCwd],
   );
 
+  // Straight from the shell (OSC 133) when there is no tmux in the way — instant, and with the exit
+  // status the tmux poll cannot provide.
+  //
+  // The result is HELD for a moment and then cleared: a command's outcome is announced once, and a
+  // state that never settles stops being a signal. Driven from the event rather than from an effect,
+  // because that is what it is.
+  const onActivity = useCallback((next: Activity) => {
+    if (activityTimer.current !== null) clearTimeout(activityTimer.current);
+    if (next.state === "running") {
+      setActivity("running");
+      return;
+    }
+    // An unknown exit status counts as success: it is what a shell that says nothing means, and
+    // colouring silence red would cry wolf on every less talkative shell.
+    setActivity(next.exit === null || next.exit === 0 ? "ok" : "failed");
+    activityTimer.current = setTimeout(() => setActivity("idle"), RESULT_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (activityTimer.current !== null) clearTimeout(activityTimer.current);
+    },
+    [],
+  );
+
   const openSearch = useCallback(() => {
     setSearchOpen(true);
   }, []);
@@ -370,11 +409,17 @@ function Pane({
       const id = sessionId.current;
       if (id === null) return;
       terminalApi
-        .cwd(id)
-        .then((path) => {
-          if (!stopped && path !== null) setCwd(paneKey, path);
+        .status(id)
+        .then((status) => {
+          if (stopped) return;
+          if (status.cwd !== null) setCwd(paneKey, status.cwd);
+          // Inside tmux this poll is the only source of activity: OSC 133 is swallowed there, so
+          // there is no exit status to be had — only whether something is running.
+          if (status.command !== null) {
+            setActivity(status.busy ? "running" : "idle");
+          }
         })
-        .catch(survivable("read the working directory"));
+        .catch(survivable("read the session status"));
     };
     ask();
     const timer = setInterval(ask, CWD_POLL_MS);
@@ -426,6 +471,10 @@ function Pane({
       id={`terminal-panel-${paneKey}`}
       aria-label="Terminal"
     >
+      {/* Only as wide as the terminal: the rail and the tool column are not part of what is running,
+          and a line sweeping across them would be claiming otherwise. */}
+      <ActivityLine state={activity} className="absolute inset-x-2 top-0 z-10" />
+
       <ContextMenu
         label="Terminal actions"
         items={[
@@ -481,6 +530,7 @@ function Pane({
             onTitle={onTitle}
             onSelectionChange={setHasSelection}
             onCwd={onCwd}
+            onActivity={onActivity}
             fontSize={fontSize}
             theme={theme}
             copyOnSelect={settings.data?.copy_on_select ?? false}

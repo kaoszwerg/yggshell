@@ -21,6 +21,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **An activity line along the top edge of each terminal** — iTerm2's idea, in the window frame's own
+  travelling gradient so the two read as one system. At rest a quiet cyan hairline; while a command
+  runs, the gradient sweeps; when it ends, green or red for a moment and then back to rest. That last
+  part is the one worth having: the exit status of a command you looked away from is information you
+  otherwise simply lose, and a state that never clears stops being a signal.
+  - **Only as wide as the terminal.** The rail and the tool column are not part of what is running.
+  - **Per tab**, like everything else about a tab: two terminals run different things.
+  - Not a spinner. A spinner turns forever and says "something, somewhere"; this says *this terminal*,
+    and it says how it ended. `prefers-reduced-motion` freezes it to a static line.
+  - **Two sources, because measurement said so.** A probe emitted OSC 133 from inside a tmux session
+    and counted **zero** `133;C` and **zero** `133;D` at the outer terminal, while a plain shell
+    delivered both — tmux swallows them exactly as it swallows OSC 7. So the shell hook drives it
+    outside tmux (instantly, with the exit status), and inside tmux it is polled from
+    `#{pane_current_command}` on the poll that already runs there. That path has no exit status to
+    give: it knows *running* and *not*, and does not pretend otherwise.
 - **URLs in the terminal open with ⌘-click** (Ctrl-click elsewhere), in the default browser. The
   modifier is the point: a plain click in a terminal is a selection or a cursor move, and opening a
   browser because somebody clicked a line of log output is the surprise it prevents. The URL goes
