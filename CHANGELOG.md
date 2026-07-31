@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`ContextMenu` HUD primitive** (`src/components/ui/ContextMenu.tsx`) — the right-click menu the
+  terminal and the tab strip need. Portal-rendered so a parent's `clip-path` cannot crop it, measured
+  and clamped into the viewport so a menu opened near an edge stays on screen, and suppressing the
+  native menu itself rather than relying on `useNativeContextMenuGuard` having run. WAI-ARIA menu
+  keyboard model: first enabled row focused on open, arrows skip disabled rows and wrap, Home/End
+  jump, Enter/Space activate, Escape closes and returns focus to the trigger.
 - **`Tabs` HUD primitive** (`src/components/ui/Tabs.tsx`) — the tab strip behind the terminal's tabs,
   which live in the title bar (ADR-PROJ-001) and therefore scroll rather than wrap. WAI-ARIA tabs
   pattern with automatic activation: arrow keys move selection and focus, Home/End jump, Delete and

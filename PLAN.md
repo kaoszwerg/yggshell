@@ -35,7 +35,8 @@ The substrate. A genuine terminal, not a reduced emulation.
 - The three new HUD primitives the milestone needs, with tests (`src/components/ui/`):
   - [x] `Tabs` — WAI-ARIA tab strip, roving tabindex, close/add, middle-click close. Lives in the
         title bar (ADR-PROJ-001), so it scrolls rather than wraps.
-  - [ ] `ContextMenu` — right-click menu for the terminal and the tab strip.
+  - [x] `ContextMenu` — WAI-ARIA menu on right-click: portal, viewport clamp, arrow keys over
+        enabled rows only, Escape returns focus to the trigger.
   - [ ] `TerminalSurface` — the `@xterm/xterm` wrapper; the only file allowed to name xterm.
 - [ ] Backend: PTY spawn/resize/kill per tab, streamed output, process lifecycle, structured logging
       of every session's start/exit (rule:logging).
