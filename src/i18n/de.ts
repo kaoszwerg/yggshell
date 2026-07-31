@@ -189,6 +189,10 @@ export const de: Translations = {
   "cli.title": "Kommandozeile",
   "cli.description": "Von jeder Shell aus — oder aus dem Finder — hier ein Terminal öffnen.",
   "cli.install": "ygg-Befehl installieren",
+  "cli.reinstall": "Neu installieren",
+  "cli.checking": "Wird geprüft…",
+  "cli.alreadyInstalled": "Installiert in {directory} — {names}",
+  "cli.notInstalled": "Noch nicht installiert.",
   "cli.installing": "Wird installiert…",
   "cli.installed": "Installiert in {directory} — {names}",
   "cli.notOnPath":

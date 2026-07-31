@@ -193,6 +193,10 @@ export const en = {
   "cli.title": "Command line",
   "cli.description": "Open a terminal here from any shell, or from Finder.",
   "cli.install": "Install ygg command",
+  "cli.reinstall": "Reinstall",
+  "cli.checking": "Checking…",
+  "cli.alreadyInstalled": "Installed in {directory} — {names}",
+  "cli.notInstalled": "Not installed yet.",
   "cli.installing": "Installing…",
   "cli.installed": "Installed in {directory} — {names}",
   "cli.notOnPath":

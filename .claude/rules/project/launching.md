@@ -84,7 +84,22 @@ Both live in `src-tauri/Info.plist`, which Tauri merges (it looks for that name 
 | Want | Mechanism | Also needs |
 | --- | --- | --- |
 | **Open With ▸ YggShell** on a folder | `CFBundleDocumentTypes` + `public.folder` | nothing |
-| **New YggShell Terminal Here** in the menu | `NSServices` | a provider registered at runtime (`services.rs`) |
+| **New YggShell Terminal Here**, right-clicking a window's empty area | `NSServices` + `NSSendFileTypes: public.directory` | a provider registered at runtime (`services.rs`) |
+
+**`public.directory`, not `public.folder`, and the difference is not cosmetic**: the folder type does
+not produce the entry in the empty-area menu at all. Copied from Apple's own Terminal.app ("New
+Terminal at Folder"), which is exactly this case; `com.apple.resolvable` alongside it is what makes it
+work on an alias or a symlink.
+
+**Files are deliberately not accepted.** iTerm2 declares `NSFilenamesPboardType` and so offers its
+entry on every file in every menu. A terminal opened "at" a shell script is a guess about what the
+user meant, and the menu is long enough already.
+
+**LaunchServices caches document types per bundle identifier, and replacing the app does NOT
+invalidate that cache.** After installing a build that declared `public.folder`, `lsregister -dump`
+still had no claim for it and Finder showed nothing; one `lsregister -f` fixed both. So the app
+re-registers itself at every launch (`services::refresh_launch_services`) — a single call, and it
+makes every future update fix itself instead of needing a terminal command nobody would think to run.
 
 **The document type must be `Role: Editor` with no `LSHandlerRank`.** The first attempt used
 `Viewer` + `Alternate`, reasoning that the app should offer itself without claiming to be the default

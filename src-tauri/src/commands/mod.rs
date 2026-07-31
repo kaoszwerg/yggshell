@@ -175,6 +175,23 @@ pub fn update_settings(
     Ok(next)
 }
 
+/// Whether the command-line launcher is already installed, and where.
+///
+/// Asked when the settings page opens, so the button can say what it will do rather than looking
+/// identical whether or not the job is already done.
+#[tauri::command]
+pub fn cli_status(app: tauri::AppHandle) -> Result<Option<crate::cli_install::CliInstall>> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
+    let path_var = std::env::var("PATH").unwrap_or_default();
+    let status =
+        crate::cli_install::status(&crate::cli_install::default_candidates(&home), &path_var);
+    tracing::debug!(installed = status.is_some(), "cli_status");
+    Ok(status)
+}
+
 /// Put `ygg` and `yggshell` on the user's PATH.
 ///
 /// **Only ever on request.** Writing to a directory on someone's PATH is not something an app does

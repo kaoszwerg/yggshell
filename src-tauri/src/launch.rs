@@ -53,12 +53,27 @@ impl Pending {
 /// Anything that does not resolve is **logged and dropped**, never substituted — opening a terminal
 /// somewhere the user did not name would be a silent lie about what they asked for.
 pub fn handle_urls(app: &tauri::AppHandle, urls: &[String]) {
-    for url in urls {
-        let Some(path) = path_from_url(url) else {
-            tracing::info!(%url, "ignoring a launch request that is not a file:// URL");
-            continue;
-        };
-        match resolve(&path) {
+    let paths: Vec<PathBuf> = urls
+        .iter()
+        .filter_map(|url| match path_from_url(url) {
+            Some(path) => Some(path),
+            None => {
+                tracing::info!(%url, "ignoring a launch request that is not a file:// URL");
+                None
+            }
+        })
+        .collect();
+    handle_paths(app, &paths);
+}
+
+/// The same thing for paths that did not arrive as URLs.
+///
+/// The Finder service can hand over a plain filesystem path (`NSFilenamesPboardType`), so the two
+/// routes differ in *shape* and not in *trust*: both end here, and `resolve` is the one place that
+/// decides whether a path is usable.
+pub fn handle_paths(app: &tauri::AppHandle, paths: &[PathBuf]) {
+    for path in paths {
+        match resolve(path) {
             Target::Directory(dir) => {
                 let dir = dir.to_string_lossy().to_string();
                 tracing::info!(path = %dir, "opening a terminal from outside the app");

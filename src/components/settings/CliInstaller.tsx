@@ -1,74 +1,109 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../ui/Button";
 import { api } from "../../api/commands";
 import { useT } from "../../hooks/useT";
 import type { CliInstall } from "../../bindings/CliInstall";
 
-/** What the button has done so far. `null` before anything has been asked of it. */
-type Outcome =
-  { kind: "installed"; result: CliInstall } | { kind: "failed"; reason: string } | null;
+/** What the panel knows. `checking` is the moment before the first answer arrives. */
+type State =
+  | { kind: "checking" }
+  | { kind: "installed"; result: CliInstall }
+  | { kind: "absent" }
+  | { kind: "failed"; reason: string };
 
 /**
- * Offer to put `ygg` on the user's `PATH`.
+ * Offer to put `ygg` on the user's `PATH` — and say whether it is already there.
  *
- * **Nothing is written until this is pressed.** An app that quietly places executables on someone's
- * `PATH` because it launched is doing something they did not ask for; this is a button, the way
- * editors do it.
+ * **Nothing is written until the button is pressed.** An app that quietly places executables on
+ * someone's `PATH` because it launched is doing something they did not ask for.
  *
- * The result is reported in full, including the case that matters most: **installed but not on
- * `PATH`**. That is a worse outcome than not installed at all — the user types `ygg`, gets nothing,
- * and has no reason to suspect where the problem is. So the directory is named and the fix is stated.
+ * **The state is asked for, not remembered.** A button that looks identical whether or not the job
+ * is done invites pressing it again, and again — which is exactly what happened. The answer is read
+ * from the filesystem on every visit, because the user can delete the script and a remembered "yes"
+ * would then be a lie.
+ *
+ * The case that matters most is **installed but not on `PATH`**: worse than not installed at all,
+ * because the user types `ygg`, gets nothing, and has no reason to suspect where the problem is.
  */
 export function CliInstaller() {
   const t = useT();
+  const [state, setState] = useState<State>({ kind: "checking" });
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .cliStatus()
+      .then((result) => {
+        if (cancelled) return;
+        setState(result === null ? { kind: "absent" } : { kind: "installed", result });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        // Reported rather than shown as "not installed": claiming it is absent when we simply could
+        // not look would send the user to install a second copy over their own.
+        setState({ kind: "failed", reason: messageOf(error) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const install = () => {
     setBusy(true);
     void api
       .installCli()
-      .then((result) => setOutcome({ kind: "installed", result }))
-      .catch((error: unknown) =>
-        // Surfaced, not just logged: the user pressed a button and is owed an answer either way
-        // (rule:logging — no silent failures).
-        setOutcome({
-          kind: "failed",
-          reason: error instanceof Error ? error.message : String(error),
-        }),
-      )
+      .then((result) => setState({ kind: "installed", result }))
+      .catch((error: unknown) => setState({ kind: "failed", reason: messageOf(error) }))
       .finally(() => setBusy(false));
   };
 
+  const installed = state.kind === "installed";
+
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap gap-1">
-        <Button accent="green" disabled={busy} onClick={install}>
-          {busy ? t("cli.installing") : t("cli.install")}
-        </Button>
-      </div>
-
-      {outcome?.kind === "installed" ? (
+      {/* The state is stated BEFORE the button, so it is read before the click rather than after. */}
+      {state.kind === "checking" ? (
+        <span className="text-dim text-xs">{t("cli.checking")}</span>
+      ) : null}
+      {state.kind === "absent" ? (
+        <span className="text-dim text-xs">{t("cli.notInstalled")}</span>
+      ) : null}
+      {installed ? (
         <>
           <span className="text-green text-xs">
-            {t("cli.installed", {
-              directory: outcome.result.directory,
-              names: outcome.result.names.join(", "),
+            {t("cli.alreadyInstalled", {
+              directory: state.result.directory,
+              names: state.result.names.join(", "),
             })}
           </span>
-          {outcome.result.onPath ? null : (
+          {state.result.onPath ? null : (
             <span className="text-gold text-xs">
-              {t("cli.notOnPath", { directory: outcome.result.directory })}
+              {t("cli.notOnPath", { directory: state.result.directory })}
             </span>
           )}
         </>
       ) : null}
-
-      {outcome?.kind === "failed" ? (
-        <span className="text-danger text-xs">{t("cli.failed", { reason: outcome.reason })}</span>
+      {state.kind === "failed" ? (
+        <span className="text-danger text-xs">{t("cli.failed", { reason: state.reason })}</span>
       ) : null}
+
+      <div className="flex flex-wrap gap-1">
+        <Button
+          accent={installed ? "cyan" : "green"}
+          disabled={busy || state.kind === "checking"}
+          onClick={install}
+        >
+          {busy ? t("cli.installing") : installed ? t("cli.reinstall") : t("cli.install")}
+        </Button>
+      </div>
 
       <span className="text-dim text-xs">{t("cli.usage")}</span>
     </div>
   );
+}
+
+/** A message a person can act on, whatever the backend threw. */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

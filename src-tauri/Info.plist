@@ -47,9 +47,26 @@
           <key>NSTextContent</key>
           <string>FilePath</string>
         </dict>
+        <!--
+          Copied from Apple's own Terminal.app ("New Terminal at Folder"), which is the exact case
+          this is for: a right-click on the EMPTY AREA of a Finder window, meaning "a terminal in the
+          folder I am looking at". Measured in its Info.plist rather than guessed.
+
+          `public.directory`, not `public.folder`: the folder type does not produce the entry in that
+          empty-area menu. `com.apple.resolvable` is what makes it work on an alias or a symlink.
+
+          Files are deliberately NOT accepted. iTerm2 declares NSFilenamesPboardType and so offers its
+          entry on every file, which is noise in a menu that is already long — and a terminal opened
+          "at" a shell script is a guess about what the user meant.
+        -->
         <key>NSSendFileTypes</key>
         <array>
-          <string>public.folder</string>
+          <string>public.directory</string>
+          <string>com.apple.resolvable</string>
+        </array>
+        <key>NSSendTypes</key>
+        <array>
+          <string>public.plain-text</string>
         </array>
       </dict>
     </array>

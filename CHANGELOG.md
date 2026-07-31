@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Finder entry now appears where it was actually wanted**: right-clicking the empty area of a
+  window, meaning "a terminal in the folder I am looking at". It needs `public.directory`, not
+  `public.folder` — copied from Apple's own Terminal.app, which is exactly this case. Files are
+  deliberately not accepted: a terminal opened "at" a shell script is a guess about what was meant.
+- **An update no longer keeps the old Finder registration.** macOS caches document types per bundle
+  identifier and replacing the app does not invalidate that cache — measured: after installing a
+  build that declared the folder type, `lsregister` still had no claim for it and the menu showed
+  nothing. The app now re-registers itself at every launch, so future updates fix themselves.
+- **The command-line installer says whether it is already installed**, and where. It looked identical
+  either way, so there was nothing to do but press it again — the state is read from the filesystem
+  on every visit rather than remembered, because the script can be deleted.
+
 ### Added
 
 - **"New YggShell Terminal Here" in Finder's context menu.** The folder association alone was not

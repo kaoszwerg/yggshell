@@ -90,6 +90,41 @@ fn is_writable(dir: &Path) -> bool {
     }
 }
 
+/// Where the launcher already is, if it is anywhere.
+///
+/// **Asked before offering to install**, because a button that looks identical whether or not the
+/// job is done invites pressing it again — and again. The answer is read from the filesystem every
+/// time rather than remembered: the user can delete the script, or another install can move it, and
+/// a remembered "yes" would then be a lie.
+///
+/// `PATH` is searched as well as the candidate directories, so a copy someone put in `~/bin`
+/// themselves is found rather than reported as missing.
+pub fn status(candidates: &[PathBuf], path_var: &str) -> Option<CliInstall> {
+    let searched = candidates.iter().cloned().chain(
+        path_var
+            .split(':')
+            .filter(|e| !e.is_empty())
+            .map(PathBuf::from),
+    );
+
+    for directory in searched {
+        let found: Vec<String> = NAMES
+            .iter()
+            .filter(|name| directory.join(name).is_file())
+            .map(|name| (*name).to_string())
+            .collect();
+        if found.is_empty() {
+            continue;
+        }
+        return Some(CliInstall {
+            directory: directory.to_string_lossy().to_string(),
+            names: found,
+            on_path: is_on_path(&directory, path_var),
+        });
+    }
+    None
+}
+
 /// Write the launcher under every name, and report where it went.
 ///
 /// Overwrites an existing copy deliberately: this is also how the script is *updated*, and refusing
@@ -198,6 +233,53 @@ mod tests {
     fn a_trailing_slash_does_not_hide_a_directory_that_is_on_path() {
         assert!(is_on_path(Path::new("/opt/bin"), "/usr/bin:/opt/bin/"));
         assert!(is_on_path(Path::new("/opt/bin/"), "/usr/bin:/opt/bin"));
+    }
+
+    #[test]
+    fn nothing_installed_reads_as_nothing_installed() {
+        let home = tempfile::tempdir().expect("tempdir");
+        assert!(status(&only(home.path()), "").is_none());
+    }
+
+    #[test]
+    fn an_existing_install_is_found_and_described() {
+        // The point of asking at all: a button that looks the same either way gets pressed again and
+        // again, because nothing on screen says the job is done.
+        let home = tempfile::tempdir().expect("tempdir");
+        let installed = install(SCRIPT, &only(home.path()), "").expect("install");
+
+        let found = status(&only(home.path()), &installed.directory).expect("must be found");
+        assert_eq!(found.directory, installed.directory);
+        assert_eq!(found.names, vec!["ygg", "yggshell"]);
+        assert!(found.on_path);
+    }
+
+    #[test]
+    fn a_copy_the_user_put_somewhere_else_on_path_still_counts() {
+        // Reporting "not installed" while `ygg` runs perfectly well would be worse than saying
+        // nothing: the user would install a second copy over their own.
+        let home = tempfile::tempdir().expect("tempdir");
+        let elsewhere = home.path().join("bin");
+        std::fs::create_dir_all(&elsewhere).expect("mkdir");
+        std::fs::write(elsewhere.join("ygg"), SCRIPT).expect("write");
+
+        let found =
+            status(&only(home.path()), &elsewhere.to_string_lossy()).expect("must be found");
+        assert_eq!(found.directory, elsewhere.to_string_lossy());
+        assert_eq!(found.names, vec!["ygg"]);
+    }
+
+    #[test]
+    fn a_partial_install_is_reported_as_what_is_actually_there() {
+        // One name present and the other missing is a real state — an interrupted install, or a
+        // manual copy. Claiming both would be a lie the user finds out about at the prompt.
+        let home = tempfile::tempdir().expect("tempdir");
+        let dir = home.path().join(".local/bin");
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::write(dir.join("yggshell"), SCRIPT).expect("write");
+
+        let found = status(&only(home.path()), "").expect("must be found");
+        assert_eq!(found.names, vec!["yggshell"]);
     }
 
     #[test]

@@ -20,8 +20,9 @@
 
 use objc2::rc::Retained;
 use objc2::{define_class, msg_send, AllocAnyThread, ClassType};
-use objc2_app_kit::{NSApplication, NSPasteboard};
-use objc2_foundation::{MainThreadMarker, NSArray, NSString, NSURL};
+use objc2_app_kit::{NSApplication, NSPasteboard, NSPasteboardTypeString};
+use objc2_foundation::{MainThreadMarker, NSArray, NSBundle, NSString, NSURL};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use tauri::AppHandle;
 
@@ -61,17 +62,22 @@ define_class!(
                 return;
             };
             tracing::info!(count = paths.len(), "opening a terminal from the Finder service");
-            crate::launch::handle_urls(app, &paths);
+            crate::launch::handle_paths(app, &paths);
         }
     }
 );
 
-/// The `file://` URLs sitting on a pasteboard, as strings.
+/// The filesystem paths sitting on a pasteboard.
 ///
-/// Read as URLs rather than as filenames: `NSFilenamesPboardType` is deprecated, and `launch` speaks
-/// URLs anyway because that is what the *opened* event delivers — so both routes converge on exactly
-/// the same parsing and the same validation, rather than on two shapes that drift.
-fn paths_on(pasteboard: &NSPasteboard) -> Vec<String> {
+/// **Two shapes, because the service accepts two.** `NSFilenamesPboardType` arrives as URLs, and
+/// `public.plain-text` as a string somebody may have selected in another app. Both are declared in
+/// `Info.plist` for the same reason iTerm2 declares them: without the text type the menu item does
+/// not appear for a plain FILE at all, only for a folder — and "new terminal here" is exactly as
+/// meaningful on a file.
+///
+/// Neither is trusted. Both end up in `launch::resolve`, which is the one place that decides whether
+/// a path is usable at all.
+fn paths_on(pasteboard: &NSPasteboard) -> Vec<PathBuf> {
     let classes = NSArray::from_slice(&[NSURL::class()]);
     // SAFETY: `readObjectsForClasses:options:` is a documented AppKit method; the class array is
     // built above and the options argument is allowed to be null.
@@ -79,20 +85,72 @@ fn paths_on(pasteboard: &NSPasteboard) -> Vec<String> {
         msg_send![pasteboard, readObjectsForClasses: &*classes, options: std::ptr::null::<objc2::runtime::AnyObject>()]
     };
 
-    let Some(objects) = objects else {
-        return Vec::new();
-    };
-
     let mut out = Vec::new();
-    for index in 0..objects.count() {
-        let object = objects.objectAtIndex(index);
-        // SAFETY: the read was restricted to NSURL, so every element is one.
-        let url: &NSURL = unsafe { &*(std::ptr::from_ref(&*object).cast::<NSURL>()) };
-        if let Some(string) = url.absoluteString() {
-            out.push(string.to_string());
+    if let Some(objects) = objects {
+        for index in 0..objects.count() {
+            let object = objects.objectAtIndex(index);
+            // SAFETY: the read was restricted to NSURL, so every element is one.
+            let url: &NSURL = unsafe { &*(std::ptr::from_ref(&*object).cast::<NSURL>()) };
+            if let Some(path) = url.path() {
+                out.push(PathBuf::from(path.to_string()));
+            }
         }
     }
+
+    // A selection of TEXT, which is the other type the service declares. Only an absolute path is
+    // taken: a sentence somebody happened to have selected is not a directory, and guessing at a
+    // relative one has no base to resolve against.
+    if out.is_empty() {
+        // SAFETY: `stringForType:` is a documented AppKit reader; the type constant comes from
+        // AppKit itself, and it returns nil rather than misbehaving when the type is absent.
+        if let Some(text) = unsafe { pasteboard.stringForType(NSPasteboardTypeString) } {
+            let trimmed = text.to_string().trim().to_string();
+            if trimmed.starts_with('/') {
+                out.push(PathBuf::from(trimmed));
+            }
+        }
+    }
+
     out
+}
+
+/// Tell LaunchServices about this bundle, every launch.
+///
+/// **Why this is not redundant.** macOS caches a bundle's document types under its identifier, and
+/// **replacing the app does not invalidate that cache** — an update that adds or changes a document
+/// type keeps the OLD one until something re-registers. Measured on this machine: after installing a
+/// build that declares `public.folder`, `lsregister -dump` still had no claim for it, and Finder's
+/// "Open With" had no entry; one manual `lsregister -f` fixed both.
+///
+/// Doing it at startup costs a single call and makes the fix automatic for every future update,
+/// rather than something the user has to be told to run in a terminal.
+fn refresh_launch_services() {
+    let Some(bundle) = NSBundle::mainBundle().bundleURL().absoluteString() else {
+        tracing::warn!("could not find our own bundle to register with LaunchServices");
+        return;
+    };
+    // `lsregister` is the documented, supported way to do this and needs no private API. It is
+    // idempotent, takes well under a second, and failing is not a reason to stop launching.
+    let path = bundle.to_string();
+    match std::process::Command::new(LSREGISTER)
+        .args(["-f", "-R", "-trusted"])
+        .arg(bundle_path())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+    {
+        Ok(status) if status.success() => tracing::debug!(%path, "registered with LaunchServices"),
+        Ok(status) => tracing::info!(?status, "lsregister reported a problem"),
+        Err(error) => tracing::info!(%error, "could not run lsregister"),
+    }
+}
+
+/// The tool that maintains the LaunchServices database. Part of the OS, at a stable path.
+const LSREGISTER: &str = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+
+/// This app's bundle directory, as a filesystem path.
+fn bundle_path() -> std::path::PathBuf {
+    NSBundle::mainBundle().bundlePath().to_string().into()
 }
 
 /// Register the provider so the menu entry actually does something.
@@ -125,6 +183,9 @@ pub fn register(app: &AppHandle) {
     std::mem::forget(provider);
 
     tracing::info!("registered the Finder service");
+
+    // Done after the provider, so a slow call cannot delay the thing that must exist first.
+    refresh_launch_services();
 }
 
 #[cfg(test)]

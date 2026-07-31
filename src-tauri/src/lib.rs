@@ -65,6 +65,7 @@ pub fn run() {
             commands::list_shells,
             commands::pending_launches,
             commands::install_cli,
+            commands::cli_status,
             commands::list_terminal_themes,
             commands::import_terminal_theme,
             commands::save_terminal_theme,

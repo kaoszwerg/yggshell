@@ -117,6 +117,11 @@ export const api = {
    * worse outcome than not installed, so the caller has to be able to say so.
    */
   installCli: () => invoke<CliInstall>("install_cli"),
+  /**
+   * Where the launcher already is, or `null`. Read from the filesystem each time — the user can
+   * delete it, and a remembered answer would then be wrong.
+   */
+  cliStatus: () => invoke<CliInstall | null>("cli_status"),
   /** Open an http(s) URL in the default browser (routed through the backend so it is logged). */
   openExternal: (url: string) => invoke<void>("open_external", { url }),
   /**
