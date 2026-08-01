@@ -118,7 +118,7 @@ later contradicted. The measurements are kept so the next agent does not pay for
   has tests. Measurements behind it, so nobody repeats them: `$COLUMNS`/`stty size` match the spawn
   size exactly (the column-mismatch-at-spawn theory in this file was wrong); xterm.js fed zsh's exact
   bytes leaves `%` at 80 real vs. 100 believed columns and nothing at 100 vs. 100.
-## Owed upstream: the window-frame paint measurement (open, 2026-08-01)
+## Round 6 — owed upstream: the window-frame paint measurement (OPEN, 2026-08-01)
 
 **The template is waiting on us.** `kaoszwerg/saga-rust-template@a9cb0f5` confirmed the *mechanism*
 (164.7 repaint triggers/s, one per frame) but could not measure the *cost*: five attempts on
@@ -155,6 +155,20 @@ session running in the measured window**, and `load average` below ~1.5 with Win
 digits. Recorded at the time of writing: load 5.73, VM 144 %, WindowServer 18.5 % — unusable.
 
 ## Performance rounds — measured, and where they stopped (2026-08-01)
+
+**The rounds at a glance** — one line each, details below and in Round 6 above:
+
+| # | What | State |
+| --- | --- | --- |
+| 1 | Frame paint, polling inventory, blocking-path check | **done**, shipped 0.34.x/0.35.0 |
+| 2 | Widget switching | React ruled out (0–3 ms); click-to-*visible* unmeasured |
+| 3 | Terminal rendering (~25 %, largest remaining) | open, needs a quiet machine |
+| 4 | Measurement-led deep analysis | open, follows 2 and 3 |
+| 5 | Targeted code audit | **done**, one finding (`launch::Pending`) |
+| 6 | The measurement the template is waiting on | open, **blocked on a quiet machine** |
+
+Rounds 3, 4 and 6 all need the same thing — a calm system. Round 6 is the one somebody else is waiting
+on, so it goes first when the machine is quiet.
 
 **A resumable state, not a wish list.** Read the numbers before re-measuring anything; each cost
 real time. Round 1 landed in 0.34–0.35 and is closed. Rounds 2–4 are open, in priority order agreed
