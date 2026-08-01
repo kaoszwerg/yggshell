@@ -91,9 +91,13 @@ not produce the entry in the empty-area menu at all. Copied from Apple's own Ter
 Terminal at Folder"), which is exactly this case; `com.apple.resolvable` alongside it is what makes it
 work on an alias or a symlink.
 
-**Files are deliberately not accepted.** iTerm2 declares `NSFilenamesPboardType` and so offers its
-entry on every file in every menu. A terminal opened "at" a shell script is a guess about what the
-user meant, and the menu is long enough already.
+**Files are accepted too** (`public.item`) — and the point is that the file is **never opened**.
+`launch::resolve` turns it into the directory holding it, so right-clicking a script means "a
+terminal where that script lives". That is what a terminal has always done with a file dropped on it,
+and it is pinned by a test: whatever comes in, a **directory** comes out.
+
+`public.item` alone is not enough: `public.directory` is what produces the entry on a window's empty
+area, where there is no selection at all.
 
 **LaunchServices caches document types per bundle identifier, and replacing the app does NOT
 invalidate that cache.** After installing a build that declared `public.folder`, `lsregister -dump`

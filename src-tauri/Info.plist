@@ -55,14 +55,19 @@
           `public.directory`, not `public.folder`: the folder type does not produce the entry in that
           empty-area menu. `com.apple.resolvable` is what makes it work on an alias or a symlink.
 
-          Files are deliberately NOT accepted. iTerm2 declares NSFilenamesPboardType and so offers its
-          entry on every file, which is noise in a menu that is already long — and a terminal opened
-          "at" a shell script is a guess about what the user meant.
+          FILES ARE ACCEPTED TOO, via `public.item`, and the reason is the one thing this must not get
+          wrong: the file is never OPENED. `launch::resolve` turns it into the directory holding it,
+          so right-clicking a script means "a terminal where that script lives" — which is how a
+          terminal has always treated a file dropped on it, and what iTerm2's entry does as well.
+
+          `public.item` alone would not be enough: `public.directory` is what produces the entry when
+          the right-click lands on a window's EMPTY AREA, where there is no selection at all.
         -->
         <key>NSSendFileTypes</key>
         <array>
           <string>public.directory</string>
           <string>com.apple.resolvable</string>
+          <string>public.item</string>
         </array>
         <key>NSSendTypes</key>
         <array>

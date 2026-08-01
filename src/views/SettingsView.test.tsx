@@ -59,6 +59,10 @@ vi.mock("../lib/fonts", () => ({
   // The real constant: the point of these tests is that the page and the terminal agree on it, and a
   // mock free to say something else would let them drift apart again without failing anything.
   DEFAULT_FONT: "MesloLGS NF",
+  // The real list: the tests assert on the buttons it produces, and a mock free to say something
+  // else would let the page and the shortcuts drift apart without failing anything.
+  FONT_SIZES: [11, 12, 13, 14, 16, 18, 20],
+  DEFAULT_FONT_SIZE: 13,
   waitForFont: () => Promise.resolve(true),
 }));
 

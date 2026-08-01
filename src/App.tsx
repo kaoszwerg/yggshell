@@ -12,6 +12,7 @@ import { useScrollTop } from "./hooks/useScrollTop";
 import { useApplyUiScale } from "./hooks/useUiScale";
 import { useSyncLocale } from "./hooks/useT";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
+import { useShortcuts } from "./hooks/useShortcuts";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
 import { useUiStore } from "./store/ui";
 
@@ -29,6 +30,8 @@ export default function App() {
   useSyncLocale();
   // `ygg <dir>` and Finder's "Open With" both land here as a new terminal in that directory.
   useLaunchRequests();
+  // Keyboard shortcuts, matched on the window so they work wherever the caret is.
+  useShortcuts();
   useNativeContextMenuGuard();
 
   return (

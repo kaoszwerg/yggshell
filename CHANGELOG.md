@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Keyboard shortcuts, and every one of them rebindable.** New/close tab, next/previous, jump to a
+  tab by number, search, text size, clear the screen, settings, log, Git tool — with the usual
+  defaults (`⌘T`, `⌘W`, `⌘1`…, `⌘F`, `⌘+`/`⌘−`, `⌘K`, `⌘,`) on macOS and `Ctrl+Shift` equivalents
+  elsewhere. Settings › Keyboard lists them all and records a new key when you press one.
+- **A shortcut can never take a key the shell needs.** `Ctrl+C`, `Ctrl+D`, `Ctrl+Z` and everything in
+  that range stay with the terminal: a binding without the platform's own modifier is refused by the
+  editor *and* refused again when read back from storage, so a hand-edited payload cannot smuggle one
+  in. The editor says which modifier to use instead, and refuses a combination another action already
+  has rather than silently stealing it.
+- **That list is also the help.** It shows what is bound right now rather than a printed set of
+  defaults, which would be wrong the moment anything is rebound — plus what the mouse does
+  (`⌘`-click for links, middle-click to paste, right-click for the menu), none of which is
+  discoverable otherwise.
+
+### Fixed
+
+- **The terminal text sizes were two lists** — one in Settings, one implied by the shortcuts. They are
+  one now, so `⌘+` cannot land on a size the settings page has no button for.
+
 ### Fixed
 
 - **The Finder entry now appears where it was actually wanted**: right-clicking the empty area of a

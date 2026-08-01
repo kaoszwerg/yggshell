@@ -214,6 +214,26 @@ mod tests {
     }
 
     #[test]
+    fn a_file_is_never_opened_only_the_place_it_lives() {
+        // The property the Finder entry depends on. Right-clicking a script and choosing
+        // "New YggShell Terminal Here" must give a terminal WHERE THAT SCRIPT IS — never an attempt
+        // to run or open it. Nothing downstream executes anything, and this is the reason it cannot:
+        // what leaves here is a directory, whatever came in.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let script = dir.path().join("deploy.sh");
+        std::fs::write(&script, "#!/bin/sh\nrm -rf /\n").expect("write");
+
+        match resolve(&script) {
+            Target::Directory(resolved) => {
+                assert_eq!(resolved, dir.path().canonicalize().expect("canonicalize"));
+                assert!(resolved.is_dir(), "what comes out is always a directory");
+                assert_ne!(resolved, script, "the file itself must never be the target");
+            }
+            other => panic!("a file must resolve to its directory, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn a_path_that_does_not_exist_is_refused_rather_than_substituted() {
         // Falling back to the home directory would silently open a terminal somewhere the user never
         // asked for, which is worse than saying nothing happened.

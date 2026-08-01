@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { defaultLayout, sanitiseLayout, type StatusItem } from "../lib/statusBar";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "../i18n";
+import { defaultBindings, sanitiseBindings, type ActionId, type Binding } from "../lib/shortcuts";
 
 /** Top-level views (sidebar navigation). Product views are added here as they land. */
 export type ViewId = "terminal" | "logs" | "settings";
@@ -90,6 +91,14 @@ export interface UiState {
    *    changes about once in a user's life.
    */
   locale: Locale;
+  /**
+   * Which keys ask for which action.
+   *
+   * Sanitised on the way in and on rehydrate, because one rule here is not the user's to override:
+   * a binding without the platform's own modifier reaches the SHELL, and taking `Ctrl+C` away from
+   * every program they run is not a preference (`lib/shortcuts`).
+   */
+  shortcuts: Record<ActionId, Binding>;
   /** Whether the HUD About dialog is open (transient — not persisted). */
   aboutOpen: boolean;
 
@@ -103,6 +112,9 @@ export interface UiState {
   setStatusLayout: (items: StatusItem[]) => void;
   resetStatusLayout: () => void;
   setLocale: (locale: Locale) => void;
+  /** Rebind one action. A binding the shell needs is refused, not stored. */
+  setShortcut: (action: ActionId, binding: Binding) => void;
+  resetShortcuts: () => void;
   setAboutOpen: (v: boolean) => void;
 }
 
@@ -129,6 +141,7 @@ export const useUiStore = create<UiState>()(
       diffSplit: true,
       statusLayout: defaultLayout(),
       locale: DEFAULT_LOCALE,
+      shortcuts: defaultBindings(),
       aboutOpen: false,
 
       setView: (view) => set({ view }),
@@ -142,6 +155,9 @@ export const useUiStore = create<UiState>()(
         set({ statusLayout: items.length === 0 ? [] : sanitiseLayout(items) }),
       resetStatusLayout: () => set({ statusLayout: defaultLayout() }),
       setLocale: (locale) => set({ locale }),
+      setShortcut: (action, binding) =>
+        set((s) => ({ shortcuts: sanitiseBindings({ ...s.shortcuts, [action]: binding }) })),
+      resetShortcuts: () => set({ shortcuts: defaultBindings() }),
       setAboutOpen: (aboutOpen) => set({ aboutOpen }),
     }),
     {
@@ -162,6 +178,7 @@ export const useUiStore = create<UiState>()(
         diffSplit: s.diffSplit,
         statusLayout: s.statusLayout,
         locale: s.locale,
+        shortcuts: s.shortcuts,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -186,6 +203,8 @@ export const useUiStore = create<UiState>()(
         // A language this build does not have — a downgrade, a hand-edited payload — would otherwise
         // put raw message keys on screen.
         if (!isLocale(state.locale)) state.locale = DEFAULT_LOCALE;
+        // Also the gate against a hand-edited payload binding something the shell needs.
+        state.shortcuts = sanitiseBindings(state.shortcuts);
         state.statusLayout = Array.isArray(state.statusLayout)
           ? state.statusLayout.length === 0
             ? []

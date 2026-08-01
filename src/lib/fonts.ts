@@ -25,6 +25,17 @@
  */
 export const DEFAULT_FONT = "MesloLGS NF";
 
+/**
+ * The terminal text sizes on offer.
+ *
+ * One list, used by the settings buttons AND by the ⌘+/⌘− shortcuts — they must step through the same
+ * sizes, or the shortcut lands on a value the page cannot show as selected (ADR-CORE-005).
+ */
+export const FONT_SIZES = [11, 12, 13, 14, 16, 18, 20] as const;
+
+/** What a terminal renders at when nothing has been chosen. */
+export const DEFAULT_FONT_SIZE = 13;
+
 /** Text wide enough that a substitution shows up, and made of characters every font has. */
 const PROBE = "MMMMMMMMMMlllllllliiiiiiii0123456789";
 

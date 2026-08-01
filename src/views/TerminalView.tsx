@@ -447,21 +447,14 @@ function Pane({
     };
   }, [active, sessionOpen, paneKey, setCwd, setActivity]);
 
-  // ⌘F / Ctrl+Shift+F on the WINDOW, not on the emulator: xterm's key handler only fires while the
-  // terminal holds focus, so binding it there made the search unreachable the moment the caret was
-  // anywhere else. Only the visible pane listens, so several open terminals do not fight over it.
+  // The search shortcut is matched centrally (`useShortcuts`) and arrives here as an event, because
+  // the KEY is configurable and having two places decide what "find" means is how they drift apart.
+  // Only the visible pane listens, so several open terminals do not fight over it.
   useEffect(() => {
     if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      const modified = isMac()
-        ? e.metaKey && !e.ctrlKey && !e.altKey
-        : e.ctrlKey && e.shiftKey && !e.altKey;
-      if (!modified || e.key.toLowerCase() !== "f") return;
-      e.preventDefault();
-      setSearchOpen(true);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onFind = () => setSearchOpen(true);
+    window.addEventListener("yggshell:find", onFind);
+    return () => window.removeEventListener("yggshell:find", onFind);
   }, [active]);
 
   // The title bar pastes into a terminal it does not render — a middle-click on a tab lands here.
@@ -470,9 +463,12 @@ function Pane({
   useEffect(() => {
     registerPasteTarget(paneKey, {
       paste: (text: string) => handle.current?.paste(text),
+      // Ctrl+L, straight to the shell: it redraws its prompt, exactly as if the key had been
+      // pressed. Not a `clear` command — the interface does not choose what runs (ADR-PROJ-001 §5).
+      clear: () => onData("\x0c"),
     });
     return () => registerPasteTarget(paneKey, undefined);
-  }, [paneKey]);
+  }, [paneKey, onData]);
 
   // Becoming visible changes the pane's size from 0×0, so it must re-measure — and take the caret,
   // because a terminal you switched to that does not accept typing is broken.

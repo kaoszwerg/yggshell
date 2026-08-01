@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
 import { CliInstaller } from "../components/settings/CliInstaller";
+import { MouseReference, ShortcutEditor } from "../components/settings/ShortcutEditor";
 import { StatusBarEditor } from "../components/settings/StatusBarEditor";
 import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
@@ -12,7 +13,7 @@ import { Tabs } from "../components/ui/Tabs";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
 import { smallCaps } from "../lib/smallCaps";
 import logoUrl from "../../src-tauri/icons/icon.svg";
-import { availableFonts, DEFAULT_FONT } from "../lib/fonts";
+import { availableFonts, DEFAULT_FONT, FONT_SIZES } from "../lib/fonts";
 import { labelShells } from "../lib/shellLabels";
 import { useSettings, useShells, useUpdateSettings } from "../hooks/useSettings";
 import { useFontSettled } from "../hooks/useFontSettled";
@@ -22,7 +23,6 @@ import { LOCALES, type MessageKey } from "../i18n";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
 const UI_SCALES = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
-const TERMINAL_FONT_SIZES = [11, 12, 13, 14, 16, 18, 20] as const;
 
 /** Three states, because "join one if it is running" and "always have one" are different wishes. */
 const TMUX_MODES: { id: TmuxMode; label: MessageKey; hint: MessageKey }[] = [
@@ -50,6 +50,7 @@ const TMUX_MODES: { id: TmuxMode; label: MessageKey; hint: MessageKey }[] = [
 const SECTIONS = [
   { id: "appearance", label: "settings.tab.appearance" },
   { id: "terminal", label: "settings.tab.terminal" },
+  { id: "keyboard", label: "keys.title" },
   { id: "tools", label: "settings.tab.tools" },
   { id: "window", label: "settings.tab.window" },
   { id: "about", label: "settings.tab.about" },
@@ -86,6 +87,7 @@ export function SettingsView() {
         <div className="flex flex-col gap-4">
           {section === "appearance" ? <AppearanceSection /> : null}
           {section === "terminal" ? <TerminalSection /> : null}
+          {section === "keyboard" ? <KeyboardSection /> : null}
           {section === "tools" ? <ToolsSection /> : null}
           {section === "window" ? <WindowSection /> : null}
           {section === "about" ? <AboutSection /> : null}
@@ -265,7 +267,7 @@ function TextSizeChoice() {
     <div className="flex flex-col gap-1.5">
       <span className="text-dim text-xs">{t("settings.font.size")}</span>
       <div className="flex flex-wrap gap-1">
-        {TERMINAL_FONT_SIZES.map((s) => (
+        {FONT_SIZES.map((s) => (
           <Button
             key={s}
             aria-pressed={Math.abs(size - s) < 0.001}
@@ -309,6 +311,27 @@ function SelectionChoice() {
       </div>
       <span className="text-dim text-xs">{t("settings.selection.hint")}</span>
     </div>
+  );
+}
+
+/**
+ * Every shortcut, and what the mouse does — the app's answer to "what can I press?".
+ *
+ * It lives in Settings rather than in a separate help window because it is the same list either way:
+ * a help page listing defaults would be wrong the moment somebody rebinds one, and then it is worse
+ * than nothing.
+ */
+function KeyboardSection() {
+  const t = useT();
+  return (
+    <>
+      <HudPanel accent="cyan" label={t("keys.title")} description={t("keys.description")}>
+        <ShortcutEditor />
+      </HudPanel>
+      <HudPanel accent="cyan" label={t("keys.mouse.title")}>
+        <MouseReference />
+      </HudPanel>
+    </>
   );
 }
 

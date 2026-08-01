@@ -169,7 +169,7 @@ describe("TitleBar", () => {
       // Middle-click means paste everywhere in this app — on the tab exactly as inside the terminal.
       // One gesture that closes here and pastes there is how a user loses a running process.
       const paste = vi.fn();
-      registerPasteTarget("term-1", { paste });
+      registerPasteTarget("term-1", { paste, clear: vi.fn() });
       setPrimarySelection("cargo test --locked");
       useTerminalStore.setState({
         panes: [
@@ -194,7 +194,7 @@ describe("TitleBar", () => {
 
     it("still shows the tab on middle-click when nothing is selected", () => {
       const paste = vi.fn();
-      registerPasteTarget("term-1", { paste });
+      registerPasteTarget("term-1", { paste, clear: vi.fn() });
       useTerminalStore.setState({
         panes: [
           pane({ key: "term-0", title: "zsh", cwd: null }),

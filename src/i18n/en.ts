@@ -205,6 +205,48 @@ export const en = {
   "cli.usage":
     "ygg opens a terminal in the current directory; ygg <path> opens one there. Finder offers YggShell under Open With for any folder — that needs no installation.",
 
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────────────────────
+  "keys.title": "Keyboard",
+  "keys.description": "What each shortcut does, and which keys ask for it.",
+  "keys.info":
+    "A shortcut must carry the modifier the terminal itself never receives — {modifier} on this platform. Anything else would reach the shell, and taking Ctrl+C away from every program you run is not something a setting should be able to do.",
+  "keys.change": "Change",
+  "keys.recording": "Press a key…",
+  "keys.cancel": "Cancel",
+  "keys.reset": "Reset all shortcuts",
+  "keys.reserved": "That combination belongs to the shell. Use {modifier}.",
+  "keys.conflict": "Already used by “{action}”.",
+  "keys.action.newTab": "New terminal",
+  "keys.action.closeTab": "Close terminal",
+  "keys.action.nextTab": "Next tab",
+  "keys.action.previousTab": "Previous tab",
+  "keys.action.selectTab1": "Go to tab 1",
+  "keys.action.selectTab2": "Go to tab 2",
+  "keys.action.selectTab3": "Go to tab 3",
+  "keys.action.selectTab4": "Go to tab 4",
+  "keys.action.selectTab5": "Go to tab 5",
+  "keys.action.selectTab6": "Go to tab 6",
+  "keys.action.selectTab7": "Go to tab 7",
+  "keys.action.selectTab8": "Go to tab 8",
+  "keys.action.selectTab9": "Go to tab 9",
+  "keys.action.find": "Search the terminal",
+  "keys.action.fontBigger": "Larger text",
+  "keys.action.fontSmaller": "Smaller text",
+  "keys.action.fontReset": "Default text size",
+  "keys.action.clear": "Clear the screen",
+  "keys.action.openSettings": "Open settings",
+  "keys.action.openLogs": "Open the log",
+  "keys.action.toggleGitTool": "Show or hide the Git tool",
+
+  // ── Things the mouse does ───────────────────────────────────────────────────────────────────
+  "keys.mouse.title": "Mouse",
+  "keys.mouse.openLink": "Open a link in the browser",
+  "keys.mouse.openLink.how": "{modifier}-click",
+  "keys.mouse.paste": "Paste the last selection",
+  "keys.mouse.paste.how": "Middle click",
+  "keys.mouse.menu": "Copy, paste, search, colour scheme",
+  "keys.mouse.menu.how": "Right click",
+
   // ── About ────────────────────────────────────────────────────────────────────────────────────
   "about.title": "About",
   "about.close": "Close About",

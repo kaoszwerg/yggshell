@@ -5,7 +5,9 @@ import {
   hasFont,
   waitForFont,
   DEFAULT_FONT,
+  DEFAULT_FONT_SIZE,
   FONT_CANDIDATES,
+  FONT_SIZES,
 } from "./fonts";
 
 /**
@@ -152,5 +154,18 @@ describe("what an unconfigured terminal actually renders in", () => {
   it("names the default once, so the picker and the terminal cannot disagree", () => {
     expect(DEFAULT_FONT).toBe("MesloLGS NF");
     expect(fontStack("").includes(DEFAULT_FONT)).toBe(true);
+  });
+});
+
+describe("the terminal text sizes", () => {
+  it("are one list, shared by the settings buttons and the shortcuts", () => {
+    // Two lists would let ⌘+ land on a size the settings page cannot show as selected — the button
+    // row would simply have nothing highlighted, with no explanation (ADR-CORE-005).
+    expect(FONT_SIZES.length).toBeGreaterThan(3);
+    expect([...FONT_SIZES]).toEqual([...FONT_SIZES].sort((a, b) => a - b));
+  });
+
+  it("contain the default, so ⌘0 lands on a size the page can show", () => {
+    expect(FONT_SIZES).toContain(DEFAULT_FONT_SIZE);
   });
 });

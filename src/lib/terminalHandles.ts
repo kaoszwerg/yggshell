@@ -9,9 +9,18 @@
 // for a lookup table that only two event handlers touch would be ceremony (rule:frontend-architecture
 // — the store is for state the UI renders).
 
-/** The one thing a caller outside the pane needs from a live terminal. */
+/** What a caller outside the pane may ask of a live terminal. */
 export interface PasteTarget {
   paste: (text: string) => void;
+  /**
+   * Clear the screen, the way the shell does it.
+   *
+   * **A method, not "send this string".** It sends one control character (`Ctrl+L`) that the shell
+   * interprets and answers by redrawing its prompt — the same thing pressing that key does. Exposing
+   * a general "send text" instead would be a way for the interface to put a COMMAND into a terminal,
+   * which is exactly what ADR-PROJ-001 §5 forbids: the webview never chooses what runs.
+   */
+  clear: () => void;
 }
 
 const targets = new Map<string, PasteTarget>();
@@ -27,6 +36,11 @@ export function registerPasteTarget(key: string, target: PasteTarget | undefined
 export function pasteInto(key: string, text: string): void {
   if (text === "") return;
   targets.get(key)?.paste(text);
+}
+
+/** Clear one terminal's screen. Does nothing for a pane that has already gone. */
+export function clearTerminal(key: string): void {
+  targets.get(key)?.clear();
 }
 
 /** Test seam — the module holds process-global state. */
