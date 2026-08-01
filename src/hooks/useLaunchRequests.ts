@@ -49,11 +49,41 @@ export function useLaunchRequests(): void {
         console.error("could not read the queued launch requests", error);
       });
 
-    const unlisten = listen<string>(LAUNCH_EVENT, (event) => open(event.payload));
+    // Held as a value rather than unwrapped in the cleanup, and called AT MOST ONCE.
+    //
+    // The first version did `unlisten.then((off) => off())` on the way out, with no catch. Tauri
+    // keeps its listeners in a table keyed by event id and deletes the entry on unregister, so a
+    // second call reads `listeners[id].handlerId` off `undefined` — and because that happened inside
+    // an unhandled promise, it did not fail quietly: it reached `unhandledrejection` and put the
+    // whole interface behind the fatal screen. It crashed the maintainer's app, in a release build.
+    let off: (() => void) | undefined;
+    let stopped = false;
+    void listen<string>(LAUNCH_EVENT, (event) => open(event.payload))
+      .then((fn) => {
+        // Registered after the cleanup already ran — unregister immediately rather than leaking it.
+        if (stopped) {
+          fn();
+          return;
+        }
+        off = fn;
+      })
+      .catch((error: unknown) => {
+        // Not fatal: launch requests stop arriving while the app is open, and the queue still works
+        // on the next start. Silence would be the defect (rule:logging).
+        console.error("could not listen for launch requests", error);
+      });
 
     return () => {
       cancelled = true;
-      void unlisten.then((off) => off());
+      stopped = true;
+      try {
+        off?.();
+      } catch (error) {
+        // Already gone — a hot reload, a double cleanup. Reported, never rethrown: this runs during
+        // teardown, where a throw takes the interface with it.
+        console.error("could not stop listening for launch requests", error);
+      }
+      off = undefined;
     };
   }, [openPaneIn, setView]);
 }

@@ -330,6 +330,7 @@ export const de: Translations = {
   "scheme.label": "Farbschema",
   "scheme.appliesToAll":
     "Gilt sofort für alle offenen Terminals — der Emulator wird live neu gezeichnet, es muss nichts neu gestartet werden.",
+  "scheme.inUse": "aktiv",
   "scheme.new": "Neues Schema",
   "scheme.edit": "„{name}“ bearbeiten",
   "scheme.name": "Name des Schemas",

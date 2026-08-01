@@ -24,15 +24,27 @@ describe("Credits", () => {
     expect(await screen.findByText(/Dracula Theme/)).toBeInTheDocument();
   });
 
-  it("keeps the wording exactly as written", async () => {
-    // A licence notice is its wording. Parsing it into markup and dropping a line would be the
-    // defect this panel exists to prevent.
-    const text = "© 2011 Ethan Schoonover\n  indented, deliberately\n";
-    vi.mocked(api.bundledCredits).mockResolvedValue(text);
+  it("keeps every line, including one the renderer does not understand", async () => {
+    // A licence notice is its wording, and a renderer that silently drops what it cannot parse turns
+    // it into a shorter notice — nobody notices until the missing line is the one that mattered.
+    vi.mocked(api.bundledCredits).mockResolvedValue(
+      "© 2011 Ethan Schoonover\n\n> a block quote nobody taught it about\n",
+    );
     const { container } = render(<Credits />);
 
     await screen.findByText(/Schoonover/);
-    expect(container.querySelector("pre")?.textContent).toBe(text);
+    expect(container.textContent).toContain("a block quote nobody taught it about");
+  });
+
+  it("renders the table of upstreams as a table", async () => {
+    // Most of the notice IS a table; as raw text it is a wall of pipes.
+    vi.mocked(api.bundledCredits).mockResolvedValue(
+      "| Scheme | Licence |\n| --- | --- |\n| Nord | MIT |\n",
+    );
+    render(<Credits />);
+
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "MIT" })).toBeInTheDocument();
   });
 
   it("says it could not read them rather than showing nothing", async () => {

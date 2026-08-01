@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/commands";
 import { useT } from "../../hooks/useT";
+import { Markdown } from "../ui/Markdown";
 
 /**
  * The licence notices of everything bundled with the app.
@@ -9,9 +10,10 @@ import { useT } from "../../hooks/useT";
  * notice to travel with the copy — and the schemes shipped inside the binary while the notice stayed
  * in the repository. A file nobody who installs the app can read does not satisfy that.
  *
- * Rendered as the plain text it is, rather than parsed into markup: it is a licence notice, its
- * wording is the thing that matters, and a renderer that dropped a line would be the defect this
- * exists to prevent.
+ * Rendered as the markdown it is — it has a table of upstreams and licences in it, and as raw text
+ * that is a wall of pipes. The renderer keeps anything it does not understand as a paragraph rather
+ * than dropping it, because a licence notice that quietly loses a line is the defect this exists to
+ * prevent (`lib/markdown`).
  */
 export function Credits() {
   const t = useT();
@@ -42,9 +44,5 @@ export function Credits() {
     return <p className="text-dim text-xs">{t("common.loading")}</p>;
   }
 
-  return (
-    <pre className="text-dim max-h-96 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
-      {text}
-    </pre>
-  );
+  return <Markdown source={text} className="max-h-96 overflow-auto pr-1" />;
 }

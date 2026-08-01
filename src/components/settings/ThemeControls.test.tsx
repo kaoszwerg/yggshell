@@ -94,28 +94,30 @@ describe("ThemeControls", () => {
 
   it("offers Yggdrasil alongside every stored scheme", async () => {
     render(<ThemeControls />);
-    expect(terminalGroup().getByRole("button", { name: "Yggdrasil" })).toBeTruthy();
-    expect(terminalGroup().getByRole("button", { name: "Nord" })).toBeTruthy();
+    expect(terminalGroup().getByRole("button", { name: /^Yggdrasil/ })).toBeTruthy();
+    expect(terminalGroup().getByRole("button", { name: /^Nord/ })).toBeTruthy();
     await waitFor(() => expect(onDrop).toBeDefined());
   });
 
   it("marks the chosen one, and Yggdrasil when nothing is chosen", () => {
     render(<ThemeControls />);
     expect(
-      terminalGroup().getByRole("button", { name: "Yggdrasil" }).getAttribute("aria-pressed"),
+      terminalGroup()
+        .getByRole("button", { name: /^Yggdrasil/ })
+        .getAttribute("aria-pressed"),
     ).toBe("true");
 
     cleanup();
     setup({ chosen: "nord" });
     render(<ThemeControls />);
-    expect(terminalGroup().getByRole("button", { name: "Nord" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(
+      terminalGroup().getByRole("button", { name: /^Nord/ }).getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("stores the scheme id when one is picked", () => {
     render(<ThemeControls />);
-    fireEvent.click(terminalGroup().getByRole("button", { name: "Nord" }));
+    fireEvent.click(terminalGroup().getByRole("button", { name: /^Nord/ }));
     expect(update).toHaveBeenCalledWith({ terminalTheme: "nord" });
   });
 
@@ -220,12 +222,12 @@ describe("ThemeControls", () => {
       diffs.getByRole("button", { name: "Same as the terminal" }).getAttribute("aria-pressed"),
     ).toBe("true");
 
-    fireEvent.click(diffs.getByRole("button", { name: "Nord" }));
+    fireEvent.click(diffs.getByRole("button", { name: /^Nord/ }));
     expect(update).toHaveBeenCalledWith({ diffTheme: "nord" });
 
     const commits = within(screen.getByRole("group", { name: "Commits colour scheme" }));
     expect(commits.getByRole("button", { name: "Same as diffs" })).toBeTruthy();
-    fireEvent.click(commits.getByRole("button", { name: "Nord" }));
+    fireEvent.click(commits.getByRole("button", { name: /^Nord/ }));
     expect(update).toHaveBeenCalledWith({ commitTheme: "nord" });
   });
 });
@@ -236,7 +238,7 @@ describe("choosing a scheme by what it looks like", () => {
   it("draws each scheme in its own colours", () => {
     render(<ThemeControls />);
 
-    const card = terminalGroup().getByRole("button", { name: "Nord" });
+    const card = terminalGroup().getByRole("button", { name: /^Nord/ });
     expect(card?.getAttribute("style")).toContain("background-color");
   });
 
@@ -244,16 +246,38 @@ describe("choosing a scheme by what it looks like", () => {
     // A card that adopted the HUD's active fill would stop showing the thing it previews at the very
     // moment it is chosen — so selection is a ring, not a fill.
     render(<ThemeControls />);
-    const card = terminalGroup().getByRole("button", { name: "Nord" });
+    const card = terminalGroup().getByRole("button", { name: /^Nord/ });
 
     fireEvent.click(card as HTMLElement);
-    const after = terminalGroup().getByRole("button", { name: "Nord" });
+    const after = terminalGroup().getByRole("button", { name: /^Nord/ });
     expect(after?.className).toContain("ring");
     expect(after?.getAttribute("style")).toContain("background-color");
   });
 
   it("names each card, since its contents are a picture", () => {
     render(<ThemeControls />);
-    expect(terminalGroup().getByRole("button", { name: "Nord" })).toBeTruthy();
+    expect(terminalGroup().getByRole("button", { name: /^Nord/ })).toBeTruthy();
+  });
+
+  it("says which one is in use, in the name and not only in a ring", () => {
+    // A cyan ring on a wall of cards that are themselves dark and often cyan-ish is exactly the work
+    // these cards were supposed to remove — so the chosen one says so in words as well.
+    setup({ chosen: "nord" });
+    render(<ThemeControls />);
+
+    expect(terminalGroup().getByRole("button", { name: "Nord — in use" })).toBeTruthy();
+    expect(
+      terminalGroup().getByRole("button", { name: "Nord — in use" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("marks exactly one card", () => {
+    setup({ chosen: "nord" });
+    render(<ThemeControls />);
+
+    const marked = terminalGroup()
+      .getAllByRole("button")
+      .filter((b) => (b.getAttribute("aria-label") ?? "").includes("in use"));
+    expect(marked).toHaveLength(1);
   });
 });

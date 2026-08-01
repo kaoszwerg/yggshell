@@ -94,3 +94,72 @@ describe("useLaunchRequests", () => {
     await waitFor(() => expect(off).toHaveBeenCalled());
   });
 });
+
+/**
+ * The crash this hook caused in a release build, and the shape of it.
+ *
+ * The cleanup did `unlisten.then((off) => off())` with no catch. Tauri keeps its listeners in a table
+ * keyed by event id and deletes the entry on unregister, so a second call reads
+ * `listeners[id].handlerId` off `undefined`. Inside an unhandled promise that does not fail quietly:
+ * it reaches `unhandledrejection`, which this app turns into the fatal screen (ADR-APP-032).
+ */
+describe("tearing the listener down", () => {
+  beforeEach(() => {
+    handler = null;
+    off.mockReset();
+    vi.mocked(api.pendingLaunches).mockReset().mockResolvedValue([]);
+    useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: true });
+  });
+
+  it("unregisters at most once, however often the cleanup runs", async () => {
+    const { unmount } = renderHook(() => useLaunchRequests());
+    await waitFor(() => expect(handler).not.toBeNull());
+
+    unmount();
+    await waitFor(() => expect(off).toHaveBeenCalledTimes(1));
+    expect(off).toHaveBeenCalledTimes(1);
+  });
+
+  it("survives an unregister that throws, instead of taking the interface with it", async () => {
+    // Teardown is the worst possible place to throw: it runs while React is dismantling the tree.
+    off.mockImplementation(() => {
+      throw new Error("listener already gone");
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { unmount } = renderHook(() => useLaunchRequests());
+    await waitFor(() => expect(handler).not.toBeNull());
+
+    expect(() => unmount()).not.toThrow();
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("does not leave a listener behind when it arrives after the cleanup", async () => {
+    // The mount/cleanup/mount that React does in development: the first `listen` can resolve after
+    // its own effect is already gone, and the listener it hands over would otherwise leak.
+    let resolveListen: (fn: () => void) => void = () => {};
+    vi.mocked(listen).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveListen = resolve as (fn: () => void) => void;
+        }) as ReturnType<typeof listen>,
+    );
+
+    const { unmount } = renderHook(() => useLaunchRequests());
+    unmount();
+    resolveListen(off);
+
+    await waitFor(() => expect(off).toHaveBeenCalledTimes(1));
+  });
+
+  it("reports a listener that could not be registered rather than crashing", async () => {
+    vi.mocked(listen).mockImplementationOnce(() => Promise.reject(new Error("no ipc")));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    renderHook(() => useLaunchRequests());
+
+    await waitFor(() => expect(logged).toHaveBeenCalled());
+    logged.mockRestore();
+  });
+});

@@ -334,6 +334,7 @@ export const en = {
   "scheme.label": "Colour scheme",
   "scheme.appliesToAll":
     "Applies to every open terminal at once — the emulator is repainted live, so nothing has to be restarted.",
+  "scheme.inUse": "in use",
   "scheme.new": "New scheme",
   "scheme.edit": "Edit “{name}”",
   "scheme.name": "Scheme name",

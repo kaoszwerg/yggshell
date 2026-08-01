@@ -333,12 +333,14 @@ function SchemeCardBody({
   selected: boolean;
   onChoose: () => void;
 }) {
+  const t = useT();
   const swatches = [c.red, c.green, c.yellow, c.blue, c.magenta, c.cyan];
 
   return (
     <PreviewCard
       label={name}
       selected={selected}
+      selectedLabel={t("scheme.inUse")}
       background={c.background}
       onChoose={onChoose}
       className="w-40"

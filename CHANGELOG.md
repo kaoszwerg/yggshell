@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The status bar could not be edited at all.** Tauri intercepts drag events at the OS level by
+  default, so HTML5 drag-and-drop inside the window never fires — the editor was correct and inert.
+  The window now declares `dragDropEnabled: false`. This is the class of defect that passes every
+  test: jsdom has no such layer, so the suite was green while the app was not.
+- **The app crashed when the launch listener was torn down.** The cleanup unregistered through an
+  unguarded promise, and Tauri deletes its listener entry on the first call — a second reached
+  `listeners[id].handlerId` on `undefined`, which arrived as an `unhandledrejection` and put the whole
+  interface behind the fatal screen. It now unregisters at most once, survives an unregister that
+  throws, and reports rather than rethrows.
+- **The licence notices and the changelog are rendered as the markdown they are.** The credits are
+  mostly a table of upstreams and licences; as raw text that was a wall of pipes. Links open in the
+  browser through the backend — an `<a href>` in a Tauri window navigates the window itself, which
+  would replace the interface with a web page and take the terminals with it.
+- **The chosen colour scheme is marked, not merely ringed.** A cyan ring on a wall of cards that are
+  themselves dark and cyan-ish is exactly the work the cards were meant to remove; the one in use now
+  carries a tick and says so in its accessible name.
+
 ### Added
 
 - **Colour schemes are shown as cards, not as a list of names.** "Ayu Mirage" and "Catppuccin Mocha"
