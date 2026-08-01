@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 
 export interface RowProps {
   /** What activating this row does. */
@@ -9,6 +9,14 @@ export interface RowProps {
   selected?: boolean;
   children: ReactNode;
   className?: string;
+  /**
+   * Inline style, for what a class cannot express.
+   *
+   * Added for the file tree, whose indentation is a *computed* depth — a Tailwind class per possible
+   * level is not a thing, and a nested wrapper per level would break the row's own flex layout.
+   * Not a licence to style rows individually: the HUD look stays in the class list.
+   */
+  style?: CSSProperties;
 }
 
 /**
@@ -23,7 +31,14 @@ export interface RowProps {
  * `aria-current` rather than `aria-selected`: this marks what is being *shown*, and `aria-selected`
  * belongs to a listbox, which this is not.
  */
-export function Row({ onActivate, label, selected = false, children, className = "" }: RowProps) {
+export function Row({
+  onActivate,
+  label,
+  selected = false,
+  children,
+  className = "",
+  style,
+}: RowProps) {
   // Enter and Space come free with a real button; this only exists so a row can be activated from a
   // keyboard without the caller wiring it up.
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
@@ -36,6 +51,7 @@ export function Row({ onActivate, label, selected = false, children, className =
     <button
       type="button"
       aria-label={label}
+      style={style}
       aria-current={selected ? "true" : undefined}
       onClick={onActivate}
       onKeyDown={onKeyDown}

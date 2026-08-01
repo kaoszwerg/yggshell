@@ -1,4 +1,4 @@
-import { GitBranch, ScrollText, Settings, TerminalSquare } from "lucide-react";
+import { FolderTree, GitBranch, ScrollText, Settings, TerminalSquare } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import type { HudAccent } from "../ui/hudButton";
@@ -13,7 +13,10 @@ const MAIN_NAV: NavItem[] = [{ id: "terminal", Icon: TerminalSquare, label: "nav
 
 /** Tools open the column beside this rail. They never replace what is on screen — that is what a view
  *  does, and the difference is the reason the column exists. */
-const TOOLS: ToolItem[] = [{ id: "git", Icon: GitBranch, label: "nav.git" }];
+const TOOLS: ToolItem[] = [
+  { id: "git", Icon: GitBranch, label: "nav.git" },
+  { id: "files", Icon: FolderTree, label: "nav.files" },
+];
 
 const BOTTOM_NAV: NavItem[] = [
   { id: "logs", Icon: ScrollText, label: "nav.logs" },

@@ -466,3 +466,44 @@ mod tests {
         assert!(err.to_string().contains("refusing to open non-http url"));
     }
 }
+
+/// List one directory for the file browser.
+///
+/// `root` is the tab's own working directory and `path` the folder being opened; the second is
+/// checked against the first before anything is read, so the browser cannot be talked into
+/// enumerating the filesystem (`files::list`, rule:security).
+///
+/// One level per call, deliberately: a recursive walk would read `node_modules` on the first frame.
+#[tauri::command]
+pub fn list_directory(root: String, path: String) -> Result<crate::dto::DirListing> {
+    tracing::debug!(%root, %path, "list_directory");
+    let listing = crate::files::list(std::path::Path::new(&root), std::path::Path::new(&path))?;
+    tracing::debug!(
+        %path,
+        count = listing.entries.len(),
+        truncated = listing.truncated,
+        "list_directory ok"
+    );
+    Ok(crate::dto::DirListing {
+        entries: listing.entries,
+        truncated: listing.truncated,
+    })
+}
+
+/// Show a file or folder in the system file manager, selected.
+///
+/// **Not `open_external` with a `file://` URL.** That one refuses anything but http(s) on purpose,
+/// and rightly: opening an arbitrary local path with the default handler would *run* an
+/// application chosen by whatever the file is. This reveals the item in the file manager instead —
+/// the folder opens with the item selected, and nothing about the file decides what happens.
+///
+/// The path is checked against the tab's own root exactly as a listing is, so the browser cannot be
+/// talked into revealing something outside the tree it shows (rule:security).
+#[tauri::command]
+pub fn reveal_in_file_manager(root: String, path: String) -> Result<()> {
+    tracing::info!(%root, %path, "reveal_in_file_manager");
+    let target = crate::files::verify(std::path::Path::new(&root), std::path::Path::new(&path))?;
+    crate::files::reveal(&target)?;
+    tracing::info!(%path, "reveal_in_file_manager ok");
+    Ok(())
+}

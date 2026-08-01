@@ -162,6 +162,32 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// One entry in a directory, as the file browser draws it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct DirEntry {
+    pub name: String,
+    /// Absolute, so opening it needs no reassembly on the other side.
+    pub path: String,
+    pub directory: bool,
+    /// Marked rather than followed: a link to a folder stays a link until the user opens it.
+    pub symlink: bool,
+    /// Bytes, for a file. `None` for a directory, whose byte count tells a reader nothing.
+    pub size: Option<u64>,
+    /// Starts with a dot. The frontend decides whether to show it; the backend always lists it.
+    pub hidden: bool,
+}
+
+/// One directory's entries, and whether there were more than the cap allows.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct DirListing {
+    pub entries: Vec<DirEntry>,
+    /// True when the listing was capped. Surfaced, never silent — a truncation nobody mentions is a
+    /// lie about what is on disk.
+    pub truncated: bool,
+}
+
 /// Everything about one commit — the whole message, not the summary the graph shows.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

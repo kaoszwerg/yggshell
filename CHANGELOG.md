@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A file browser in the sidebar.** The tree of the active tab's working directory — folders and
+  files, expandable, following a `cd` the same way the Git tool does. One directory is read per
+  open, never a recursive walk: a tree that fetched everything up front would read `node_modules`
+  before drawing a row, and would be stale the moment a file changed. Right-click reveals an item in
+  the file manager or copies its path. It does not open, rename, move or delete — a file manager
+  sitting next to an agent that edits files is a combination nobody asked for, which is the same
+  reason the Git tool is read-only. Dot-entries are hidden until asked for, and the backend refuses
+  any path outside the tab's own tree.
+
 ### Fixed
 
 - **Colours that could not be read.** Measured rather than judged by eye, with WCAG ratios across all

@@ -9,7 +9,8 @@ pub mod commands;
 pub mod crash;
 pub mod dto;
 pub mod error;
-pub mod git;
+pub mod files;
+mod git;
 pub mod launch;
 pub mod logging;
 pub mod profile;
@@ -70,6 +71,8 @@ pub fn run() {
             commands::bundled_credits,
             commands::changelog,
             commands::system_load,
+            commands::list_directory,
+            commands::reveal_in_file_manager,
             commands::list_terminal_themes,
             commands::import_terminal_theme,
             commands::save_terminal_theme,

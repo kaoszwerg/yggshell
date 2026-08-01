@@ -17,9 +17,9 @@ const VIEWS: ViewId[] = ["terminal", "logs", "settings"];
  * A tool is not a view: a view replaces what you are looking at, a tool sits next to it while the
  * terminal keeps running. That is the whole point of the column, so Logs and Settings stay views.
  */
-export type ToolId = "git";
+export type ToolId = "git" | "files";
 
-const TOOLS: ToolId[] = ["git"];
+const TOOLS: ToolId[] = ["git", "files"];
 
 /** Bounds of the tool column, in pixels. Below the minimum a file path is unreadable; above the
  *  maximum the terminal stops being the main thing on screen. */
@@ -99,6 +99,14 @@ export interface UiState {
    * every program they run is not a preference (`lib/shortcuts`).
    */
   shortcuts: Record<ActionId, Binding>;
+  /**
+   * Whether the file browser shows dot-files.
+   *
+   * Off by default and remembered. On for a developer more often than not — `.github`, `.env` and
+   * `.claude` are exactly what they are looking for — but a tree that opens with twelve dot-entries
+   * above `src` buries the thing they actually came to see.
+   */
+  filesShowHidden: boolean;
   /** Whether the HUD About dialog is open (transient — not persisted). */
   aboutOpen: boolean;
 
@@ -115,6 +123,7 @@ export interface UiState {
   /** Rebind one action. A binding the shell needs is refused, not stored. */
   setShortcut: (action: ActionId, binding: Binding) => void;
   resetShortcuts: () => void;
+  toggleFilesHidden: () => void;
   setAboutOpen: (v: boolean) => void;
 }
 
@@ -142,6 +151,7 @@ export const useUiStore = create<UiState>()(
       statusLayout: defaultLayout(),
       locale: DEFAULT_LOCALE,
       shortcuts: defaultBindings(),
+      filesShowHidden: false,
       aboutOpen: false,
 
       setView: (view) => set({ view }),
@@ -158,6 +168,7 @@ export const useUiStore = create<UiState>()(
       setShortcut: (action, binding) =>
         set((s) => ({ shortcuts: sanitiseBindings({ ...s.shortcuts, [action]: binding }) })),
       resetShortcuts: () => set({ shortcuts: defaultBindings() }),
+      toggleFilesHidden: () => set((s) => ({ filesShowHidden: !s.filesShowHidden })),
       setAboutOpen: (aboutOpen) => set({ aboutOpen }),
     }),
     {
@@ -179,6 +190,7 @@ export const useUiStore = create<UiState>()(
         statusLayout: s.statusLayout,
         locale: s.locale,
         shortcuts: s.shortcuts,
+        filesShowHidden: s.filesShowHidden,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
