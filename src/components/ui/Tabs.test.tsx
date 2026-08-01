@@ -351,7 +351,7 @@ it("marks a tab that is asking for attention, without out-shouting the selected 
       label="Terminals"
       items={[
         { id: "a", label: "one" },
-        { id: "b", label: "two", attention: true },
+        { id: "b", label: "two", attention: "action" as const },
       ]}
       activeId="a"
       onSelect={vi.fn()}
@@ -360,4 +360,46 @@ it("marks a tab that is asking for attention, without out-shouting the selected 
 
   expect(screen.getByTestId("tab-attention-b")).toBeInTheDocument();
   expect(screen.queryByTestId("tab-attention-a")).toBeNull();
+});
+
+describe("the number in front of a tab", () => {
+  it("is the position, which is the key you press", () => {
+    // It used to be the backend's SESSION id, baked into the label: close one tab and the fifth tab
+    // read `Terminal 5` while ⌘4 selected it. A number that is not the key is worse than no number,
+    // because it gets read as one.
+    render(
+      <Tabs
+        label="Terminals"
+        items={[
+          { id: "a", label: "one" },
+          { id: "b", label: "two" },
+          { id: "c", label: "three" },
+        ]}
+        activeId="a"
+        onSelect={() => {}}
+      />,
+    );
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs[0]?.textContent).toBe("1one");
+    expect(tabs[1]?.textContent).toBe("2two");
+    expect(tabs[2]?.textContent).toBe("3three");
+  });
+
+  it("stops at nine, because that is where the shortcuts stop", () => {
+    // `selectTab1..9` is the whole set. A tenth tab labelled 10 would be the same lie again.
+    render(
+      <Tabs
+        label="Terminals"
+        items={Array.from({ length: 11 }, (_, n) => ({ id: `t${n}`, label: "x" }))}
+        activeId="t0"
+        onSelect={() => {}}
+      />,
+    );
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs[8]?.textContent).toBe("9x");
+    expect(tabs[9]?.textContent).toBe("x");
+    expect(tabs[10]?.textContent).toBe("x");
+  });
 });

@@ -69,15 +69,26 @@ export function AttentionPanel() {
       ) : null}
 
       {waiting.map((item, at) => (
-        <div key={`${item.cwd}:${at}`} className="flex items-start gap-1.5">
-          <BellRing size={11} className="text-gold mt-0.5 shrink-0" aria-hidden />
+        <div key={`${item.cwd}:${at}`} className="flex items-start gap-1.5" data-idle={item.idle}>
+          {/* Green for "finished", gold for "something is blocked on you" — the same two meanings the
+              tab's dot carries, from the same decision (`lib/bells`). */}
+          <BellRing
+            size={11}
+            className={`mt-0.5 shrink-0 ${item.idle ? "text-green" : "text-gold"}`}
+            aria-hidden
+          />
           <div className="min-w-0 flex-1">
             <p className="text-fg truncate font-mono text-[10px]" dir="rtl">
               {item.cwd}
             </p>
-            {item.message === null ? null : (
-              <p className="text-dim font-mono text-[10px]">{item.message}</p>
-            )}
+            {/* OUR wording for an idle prompt, not the harness's. It sends "Claude is waiting for
+                your input", which reads as a question and is not one — it is a timer noticing the
+                prompt has sat empty since the agent finished. Repeating it verbatim is how the panel
+                came to say "waiting for you" about something that wanted nothing. A real request
+                keeps its own message, because that one does say something. */}
+            <p className="text-dim font-mono text-[10px]">
+              {item.idle ? t("attention.finished") : (item.message ?? t("attention.asking"))}
+            </p>
           </div>
         </div>
       ))}

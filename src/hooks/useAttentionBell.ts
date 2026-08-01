@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useAgentAttention } from "./useAgentAttention";
 import { useTerminalStore } from "../store/terminal";
+import type { BellKind } from "../lib/bells";
 
 /**
  * Turn a harness's attention event into a mark on the tab it came from.
@@ -30,11 +31,19 @@ export function useAttentionBell() {
   // mark would return the instant a visit cleared it); and when the question resolves, only a mark
   // this hook set may be taken off again — a terminal bell is somebody else's signal.
   const marked = useRef(new Map<string, string[]>());
+  // What each directory was last marked WITH. An agent that finishes and then asks for a permission
+  // has changed what it wants from you, and a mark left at the old colour would be answering last
+  // minute's question — so the kind is part of the transition, not just the presence.
+  const kinds = useRef(new Map<string, BellKind>());
 
   useEffect(() => {
-    const asking = new Set(
-      waiting.filter((item) => item.event === "Notification").map((item) => item.cwd),
-    );
+    const asking = new Map<string, BellKind>();
+    for (const item of waiting) {
+      if (item.event !== "Notification") continue;
+      // `idle` is the backend's decision, made in one place so an unfamiliar kind from a future
+      // harness resolves the same way everywhere: not idle, therefore worth your attention.
+      asking.set(item.cwd, item.idle ? "done" : "action");
+    }
 
     // Resolved: the backend drops a directory the moment its agent carries on
     // (`hooks::waiting_now`), so this is the answer arriving, not a timeout. Unlike a `\a`, this
@@ -43,13 +52,15 @@ export function useAttentionBell() {
       if (asking.has(cwd)) continue;
       for (const key of keys) clearBell(key);
       marked.current.delete(cwd);
+      kinds.current.delete(cwd);
     }
 
-    for (const cwd of asking) {
-      if (marked.current.has(cwd)) continue;
+    for (const [cwd, kind] of asking) {
+      if (marked.current.has(cwd) && kinds.current.get(cwd) === kind) continue;
       const keys = panes.filter((pane) => pane.cwd === cwd).map((pane) => pane.key);
       marked.current.set(cwd, keys);
-      for (const key of keys) ringBell(key);
+      kinds.current.set(cwd, kind);
+      for (const key of keys) ringBell(key, kind);
     }
   }, [waiting, panes, ringBell, clearBell]);
 }

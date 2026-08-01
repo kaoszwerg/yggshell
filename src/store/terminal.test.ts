@@ -222,7 +222,7 @@ describe("the bell", () => {
     });
 
     useTerminalStore.getState().ringBell("b");
-    expect(useTerminalStore.getState().panes.find((p) => p.key === "b")?.bell).toBe(true);
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "b")?.bell).toBe("action");
   });
 
   it("never marks the tab you are already looking at", () => {
@@ -231,28 +231,28 @@ describe("the bell", () => {
     useTerminalStore.setState({ panes: [pane({ key: "a" })], activeKey: "a" });
 
     useTerminalStore.getState().ringBell("a");
-    expect(useTerminalStore.getState().panes[0]?.bell).toBe(false);
+    expect(useTerminalStore.getState().panes[0]?.bell).toBeNull();
   });
 
   it("clears the mark when the tab is visited", () => {
     // The mark exists to say "look here" and has served its purpose the moment you do; needing a
     // second gesture to dismiss it would make it a chore.
     useTerminalStore.setState({
-      panes: [pane({ key: "a" }), pane({ key: "b", bell: true })],
+      panes: [pane({ key: "a" }), pane({ key: "b", bell: "action" })],
       activeKey: "a",
     });
 
     useTerminalStore.getState().setActive("b");
-    expect(useTerminalStore.getState().panes.find((p) => p.key === "b")?.bell).toBe(false);
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "b")?.bell).toBeNull();
   });
 
   it("leaves other tabs' marks alone when one is visited", () => {
     useTerminalStore.setState({
-      panes: [pane({ key: "a", bell: true }), pane({ key: "b", bell: true })],
+      panes: [pane({ key: "a", bell: "action" }), pane({ key: "b", bell: "action" })],
       activeKey: "c",
     });
 
     useTerminalStore.getState().setActive("b");
-    expect(useTerminalStore.getState().panes.find((p) => p.key === "a")?.bell).toBe(true);
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "a")?.bell).toBe("action");
   });
 });

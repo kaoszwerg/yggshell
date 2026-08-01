@@ -107,7 +107,12 @@ describe("AgentTool", () => {
     state({ session: null });
     attention({
       waiting: [
-        { cwd: "/repo/other", event: "Notification", message: "Claude is waiting for your input" },
+        {
+          cwd: "/repo/other",
+          event: "Notification",
+          message: "Claude is waiting for your input",
+          idle: false,
+        },
       ],
     });
     renderTool();

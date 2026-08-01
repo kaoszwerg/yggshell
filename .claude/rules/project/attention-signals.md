@@ -66,6 +66,45 @@ Each of these was real here, and each alone is enough to kill the feature.
 4. **Rendered where you would have to go looking.** A panel inside a collapsible tool is not a
    signal, it is a report. The signal is the **mark on the tab**.
 
+### The fifth way, found later: it reports a state that has already been answered
+
+The four above are about a signal that never arrives. This one is about a signal that arrives and
+then **stays after it stops being true**, which the maintainer hit head-on: *"aber es steht da und du
+hast garkeine frage gestellt oder um eine permission gebeten!"*
+
+Self-clearing was built on "when the user answers, the agent runs on and its next event replaces the
+question". True — but **`Stop` fires only at the END of a turn.** A permission prompt answered five
+minutes into a twenty-minute turn therefore sat on screen for the remaining fifteen. Measured: a
+notification whose transcript had since been written to for **592 seconds**, still shown as current.
+
+The harness payload carries no timestamp, so the event cannot be aged from itself, and the events
+file's mtime is no substitute — any event, from any project, moves it. Two things close it:
+
+- **Our own hook script stitches in `recorded_at`.** It is the one link in the chain we own.
+- **The agent's transcript is the finer clock.** It grows with every tool call and stops growing
+  precisely while the agent is blocked. Written to since `recorded_at` (past a two-second margin, for
+  `date +%s` truncation and write ordering) → answered (`hooks::has_moved_on`).
+
+**And a copy in the user's home is not updated by an update.** The hook script is copied to
+`~/.local/bin` on purpose, so it survives a rebuild — which means a fix to it reaches only whoever
+presses the button again, and nobody presses a button for a problem they have not been told about.
+The app therefore rewrites it at every start when it differs (`refresh_hook_script`), exactly as it
+re-registers its Finder service. **A mechanism that needs the user to re-run something has not
+shipped.**
+
+### And the wording is not the harness's to choose
+
+Two very different things arrive as `Notification`, and only `notification_type` separates them:
+`permission_prompt` blocks on you, `idle_prompt` is a timer noticing the prompt has gone quiet. The
+second arrives worded *"Claude is waiting for your input"* — which reads as a question and is not
+one. Repeating a harness's wording verbatim is how a panel comes to say "waiting for you" about
+something that wants nothing. **A real request keeps its own message, because that one does say
+something; anything informational gets ours** (`attention.finished`).
+
+The colour carries it too: gold means blocked on you, green means finished. A bare terminal `\a` is
+gold, because it carries nothing that could say which — claiming "finished" would be a guess. One
+mark meaning both made the user open the tab to find out, which is the work the mark exists to save.
+
 ## The rules
 
 - **Poll at the shell root**, never inside the component that displays it. `useAttentionBell` runs in

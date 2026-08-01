@@ -702,6 +702,60 @@ fn hook_script(home: &std::path::Path) -> std::path::PathBuf {
     home.join(".local/bin/ygg-hook")
 }
 
+/// Bring an already-installed hook script up to date with the one this build ships.
+///
+/// **Called at startup, and the reason is that the script is a COPY.** `install_agent_hook` copies
+/// the bundled resource into `~/.local/bin` — deliberately, so the hook keeps working while the app
+/// is being rebuilt. The cost of that is a second copy that no update touches: a fix to the script
+/// would reach only the users who happened to press the button in Settings again, and nobody presses
+/// a button for a problem they have not been told about. That is the same trap `refresh_launch_
+/// services` exists for, and it is solved the same way — the app repairs itself on every launch.
+///
+/// It only ever overwrites a script that is **already there**. Not installing one is a decision the
+/// user made, and startup is not the place to reverse it.
+///
+/// Every failure is logged and swallowed: this must never be a reason the app does not start
+/// (rule:crash-handling — a last-resort path reports, it does not take the process with it).
+pub fn refresh_hook_script(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let Ok(home) = app.path().home_dir() else {
+        return;
+    };
+    let script = hook_script(&home);
+    if !script.exists() {
+        return;
+    }
+    let Ok(source) = app.path().resolve(
+        "resources/cli/ygg-hook",
+        tauri::path::BaseDirectory::Resource,
+    ) else {
+        tracing::warn!("the hook script is missing from this build — leaving the installed one");
+        return;
+    };
+    let (Ok(shipped), Ok(installed)) = (
+        std::fs::read_to_string(&source),
+        std::fs::read_to_string(&script),
+    ) else {
+        return;
+    };
+    if shipped == installed {
+        return;
+    }
+    match std::fs::write(&script, &shipped) {
+        Ok(()) => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755));
+            }
+            tracing::info!(script = %script.display(), "refreshed the installed agent hook script");
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, script = %script.display(), "could not refresh the hook script")
+        }
+    }
+}
+
 /// Whether the agent hooks are in place, and what they have reported since last looked at.
 ///
 /// Read-only and cheap: a file read and a settings parse. The events themselves are appended by a
@@ -739,7 +793,25 @@ pub fn agent_attention(
     let waiting: Vec<crate::dto::AgentWaiting> =
         crate::agent::hooks::waiting_now(crate::agent::hooks::read_events(&events, 50))
             .into_iter()
+            // Answered, even though nothing has superseded it yet. `Stop` fires only at the END of a
+            // turn, so a permission prompt answered five minutes into a twenty-minute turn stayed on
+            // screen for the remaining fifteen — measured at 592 s of a transcript still growing
+            // behind a mark that said "needs your permission". The transcript is the finer clock:
+            // it grows with every tool call and stops precisely while the agent is blocked
+            // (`hooks::has_moved_on`).
+            .filter(|event| {
+                let moved_on =
+                    crate::agent::hooks::has_moved_on(event, crate::agent::hooks::modified_secs);
+                if moved_on {
+                    tracing::debug!(
+                        cwd = %event.cwd,
+                        "the agent has written since this event — dropping it as answered"
+                    );
+                }
+                !moved_on
+            })
             .map(|event| crate::dto::AgentWaiting {
+                idle: crate::agent::hooks::is_idle(&event),
                 cwd: event.cwd,
                 event: event.event,
                 message: event.message,

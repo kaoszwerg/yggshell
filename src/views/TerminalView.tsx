@@ -339,7 +339,11 @@ function Pane({
           sessionId.current = id;
           setSessionOpen(true);
           onSession(paneKey, id);
-          setTitle(paneKey, `Terminal ${id + 1}`);
+          // NOT `Terminal ${id + 1}`: that was the backend's session id, which counts every session
+          // ever opened — so after one tab was closed the fifth tab was labelled 5 and reached with
+          // ⌘4. The position is drawn by the strip itself, where it cannot go stale, and the label is
+          // left for the shell to fill in with something that actually says what is running.
+          setTitle(paneKey, "Terminal");
           // Recorded so a restart can return this tab to the same tmux session — the one kind of
           // session that genuinely survives us.
           setPaneTmuxSession(paneKey, opened.tmux_session);
@@ -420,7 +424,9 @@ function Pane({
   // state that never settles stops being a signal. Driven from the event rather than from an effect,
   // because that is what it is.
   // A program rang the bell. The tab is marked unless it is the one in front — see `ringBell`.
-  const onBell = useCallback(() => ringBell(paneKey), [ringBell, paneKey]);
+  // A bare `\a` carries nothing that says WHICH kind it is, so it takes the default — "something
+  // wants you". Calling it "finished" would be a guess about somebody else's program.
+  const onBell = useCallback(() => ringBell(paneKey, "action"), [ringBell, paneKey]);
 
   const onActivity = useCallback(
     (next: Activity) => {

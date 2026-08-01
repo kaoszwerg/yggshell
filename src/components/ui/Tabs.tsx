@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { hudButtonClass } from "./hudButton";
+import { bellDotClass, type BellKind } from "../../lib/bells";
 import { IconButton } from "./IconButton";
 
 /** One tab. `id` is the identity handed back to every callback; `label` is what the user reads.
@@ -17,7 +18,7 @@ interface TabItem {
    * A mark rather than a recolouring: the selected tab must stay the loudest thing in the strip, and
    * a tab that changes colour competes with it.
    */
-  attention?: boolean;
+  attention?: BellKind;
 }
 
 export interface TabsProps {
@@ -223,7 +224,7 @@ export function Tabs({
           : "snap-x snap-mandatory items-center overflow-x-auto"
       } ${vertical ? className : "flex-1"}`.trim()}
     >
-      {items.map((item) => {
+      {items.map((item, index) => {
         const active = item.id === activeId;
         return (
           <div
@@ -252,13 +253,17 @@ export function Tabs({
               vertical ? "w-full" : "max-w-[13rem] min-w-[5.5rem] shrink snap-start"
             }`}
           >
-            {item.attention === true ? (
+            {item.attention !== undefined ? (
               // A dot, not a colour change: it says "here" without competing with the selected tab,
-              // which must stay the loudest thing in the strip.
+              // which must stay the loudest thing in the strip. The COLOUR carries the one thing the
+              // dot could not: gold means something is blocked on you, green means it finished and
+              // nobody came back. One dot that meant both made you open the tab to find out — the
+              // work the mark existed to save (`lib/bells`).
               <span
                 aria-hidden
                 data-testid={`tab-attention-${item.id}`}
-                className="bg-gold ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                data-attention={item.attention}
+                className={`${bellDotClass(item.attention)} ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full`}
               />
             ) : null}
             <button
@@ -278,6 +283,18 @@ export function Tabs({
                 vertical ? "flex-1 px-3 py-1.5 text-left" : "px-2 py-0.5"
               }`}
             >
+              {/* The tab's own number, and it is the SHORTCUT — not a count.
+                  It used to be in the label: `Terminal 5` was the backend's session id, so after one
+                  tab was closed the fifth tab was reached with the fourth key and nothing said so.
+                  A number that is not the key you press is worse than no number, because it is read
+                  as one.
+                  Only the first nine carry it, because only the first nine have a key
+                  (`selectTab1..9`). A tenth tab showing `10` would be the same lie again. */}
+              {index < 9 ? (
+                <span aria-hidden className="text-dim/70 mr-1 tabular-nums">
+                  {index + 1}
+                </span>
+              ) : null}
               {item.label}
             </button>
             {onClose ? (

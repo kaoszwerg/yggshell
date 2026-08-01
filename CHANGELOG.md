@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **An attention mark no longer outlives the thing it reported.** Reported head-on: *"aber es steht
+  da und du hast garkeine frage gestellt"*. Self-clearing was built on the next event replacing the
+  question — but `Stop` fires only at the **end of a turn**, so a permission prompt answered five
+  minutes into a twenty-minute turn stayed on screen for the remaining fifteen. Measured: a
+  notification whose transcript had since been written to for **592 seconds**, still shown as current.
+
+  The payload carries no timestamp, so our own hook script now stitches one in, and an event is
+  dropped as answered once the agent's **transcript** has been written to past it. The transcript is
+  the finer clock: it grows with every tool call and stops growing precisely while the agent is
+  blocked.
+
+  The script is a copy in `~/.local/bin`, so an update would never have reached it — the app now
+  rewrites it at every start when it differs, the way it already re-registers its Finder service. No
+  button to press.
+
+- **"Claude is waiting for your input" is not a question, and no longer looks like one.** Two
+  different things arrive as `Notification`: `permission_prompt` blocks on you, `idle_prompt` is a
+  timer noticing the prompt has gone quiet. `notification_type` was being dropped, so both reached
+  you as one gold mark wearing the harness's own wording. An idle prompt now carries **our** wording
+  and a **green** mark; a real request keeps its message and stays **gold**, because that message
+  does say something. A bare terminal `\a` stays gold — it carries nothing that could say which, and
+  calling it "finished" would be a guess.
+
+- **A tab's number is now the key you press.** The label said `Terminal 5` using the backend's
+  *session* id, which counts every session ever opened — so after one tab was closed the fifth tab was
+  selected with ⌘4 and nothing said so. The position is now drawn by the tab strip itself, where it
+  cannot go stale, and only for the first nine, because only those have a shortcut. A tenth tab
+  labelled `10` would be the same lie again.
+
+### Added
+
+- **The shortcut list is gated, not merely maintained.** The Settings list *is* the help — there is no
+  second page to go stale — but that only holds if it can name everything. `t(\`keys.action.${id}\`)`
+  is a template literal, so a missing message is a runtime hole rather than a type error. A test now
+  walks every action and asserts a name in both languages, and asserts the reverse too: a message left
+  behind after an action was removed is a row that can never appear, which the next reader takes as
+  proof the feature exists.
+
 ### Added
 
 - **Attaching to a tmux session is now something you ask for.** Right-click the tab strip: alongside

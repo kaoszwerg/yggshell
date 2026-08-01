@@ -182,6 +182,18 @@ pub struct AgentWaiting {
     pub event: String,
     /// What it said, when it said anything.
     pub message: Option<String>,
+    /// True when the harness is reporting an **idle prompt** rather than asking for anything.
+    ///
+    /// **The distinction the message itself refuses to make.** An idle prompt arrives worded *"Claude
+    /// is waiting for your input"* — which reads as a question, and is not one: it is a timer
+    /// noticing the prompt has sat empty since the agent finished. A permission request names what it
+    /// wants and genuinely blocks. Both are `Notification`, and shipping them as one mark meant the
+    /// panel could not answer "does anything actually want something from me?".
+    ///
+    /// The decision is made here rather than handed over as a raw kind, so an unfamiliar kind from a
+    /// future harness resolves the same way on every surface: not idle, therefore worth your
+    /// attention (`hooks::is_idle`).
+    pub idle: bool,
 }
 
 /// One usage limit and how full it is.

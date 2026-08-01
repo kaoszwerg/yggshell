@@ -74,6 +74,7 @@ describe("AttentionPanel", () => {
           cwd: "/repo/api",
           event: "Notification",
           message: "Claude needs your permission to use Bash",
+          idle: false,
         },
       ],
     });
@@ -97,7 +98,7 @@ describe("AttentionPanel", () => {
     expect(screen.queryByRole("button", { name: "Mark as seen" })).toBeNull();
     unmount();
 
-    state({ waiting: [{ cwd: "/repo", event: "Stop", message: null }] });
+    state({ waiting: [{ cwd: "/repo", event: "Stop", message: null, idle: false }] });
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
     // `mutate` dispatches; the call lands on the next tick.

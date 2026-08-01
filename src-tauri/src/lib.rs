@@ -224,6 +224,10 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let tray_enabled = app.state::<AppState>().settings.get().minimize_to_tray;
     tray::set_enabled(app.handle(), tray_enabled);
     apply_saved_zoom(app);
+    // The agent hook is a COPY in ~/.local/bin, so an update never reaches it on its own — and
+    // nobody presses "install" again for a problem they have not been told about. Repaired here, the
+    // way the Finder registration is (`services::refresh_launch_services`).
+    commands::refresh_hook_script(app.handle());
     tracing::info!("startup complete");
     Ok(())
 }

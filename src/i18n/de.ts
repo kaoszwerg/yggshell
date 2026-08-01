@@ -44,6 +44,8 @@ export const de: Translations = {
   "attention.install": "Hook installieren",
   "attention.nextSession":
     "Installiert. Wirksam ab der nächsten Claude-Code-Session — Hooks werden beim Sessionstart gelesen.",
+  "attention.finished": "Fertig — es wurde nichts von dir verlangt",
+  "attention.asking": "Wartet auf eine Antwort",
   "attention.none": "Nichts wartet auf dich.",
   "attention.clear": "Als gesehen markieren",
   "statusbar.item.bells": "Wartende Tabs",

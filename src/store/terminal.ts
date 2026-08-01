@@ -17,6 +17,7 @@
 // (`cargo watch` is not running any more), a backend session id, an open diff.
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { BellKind } from "../lib/bells";
 import type { ActivityState } from "../lib/osc133";
 import type { GitDetail } from "./ui";
 
@@ -36,7 +37,7 @@ export interface TerminalPane {
    * and nothing more, which is why it marks a tab rather than raising a notification: a bell is also
    * rung by an ambiguous completion, and a system notification that cries wolf gets turned off.
    */
-  bell: boolean;
+  bell: BellKind | null;
   /**
    * The backend session this tab is talking to, once the PTY is open.
    *
@@ -159,8 +160,15 @@ export interface TerminalState {
   setPaneTmuxSession: (key: string, session: string | null) => void;
   /** Record (or clear) the backend session this tab is talking to. */
   setPaneSession: (key: string, sessionId: number | null) => void;
-  /** A program in this tab rang the bell. Ignored for the tab that is already in front. */
-  ringBell: (key: string) => void;
+  /**
+   * Mark this tab. Ignored for the tab that is already in front.
+   *
+   * `kind` says what the mark MEANS, and therefore what colour it is. It defaults to `"action"`
+   * because that is what a bare terminal `\a` is: something happened and nothing says what, so
+   * claiming "finished" would be a guess. A caller that KNOWS — the harness hook, which is told
+   * whether an agent is blocked or merely idle — passes it.
+   */
+  ringBell: (key: string, kind?: BellKind) => void;
   /**
    * Take the mark off a tab without visiting it, because what caused it has resolved.
    *
@@ -220,7 +228,7 @@ export const useTerminalStore = create<TerminalState>()(
               key,
               title: "Terminal",
               sessionId: null,
-              bell: false,
+              bell: null,
               cwd,
               profileId,
               themeId: null,
@@ -253,7 +261,7 @@ export const useTerminalStore = create<TerminalState>()(
         // purpose the moment you do. Anything else would need a second gesture to dismiss.
         set((s) => ({
           activeKey,
-          panes: s.panes.map((p) => (p.key === activeKey && p.bell ? { ...p, bell: false } : p)),
+          panes: s.panes.map((p) => (p.key === activeKey && p.bell ? { ...p, bell: null } : p)),
         })),
 
       setTitle: (key, title) =>
@@ -314,19 +322,23 @@ export const useTerminalStore = create<TerminalState>()(
           ),
         })),
 
-      ringBell: (key) =>
+      ringBell: (key, kind = "action") =>
         set((s) => ({
           // Never the active tab: you are looking at it, so a mark you would clear in the same
           // breath is noise. Everything else keeps its mark until it is visited.
+          //
+          // A newer kind REPLACES an older one rather than being dropped as "already marked": an
+          // agent that finishes and then asks for a permission has changed what it wants from you,
+          // and a tab still showing the old colour would be answering last minute's question.
           panes:
             s.activeKey === key
               ? s.panes
-              : s.panes.map((p) => (p.key === key && !p.bell ? { ...p, bell: true } : p)),
+              : s.panes.map((p) => (p.key === key && p.bell !== kind ? { ...p, bell: kind } : p)),
         })),
 
       clearBell: (key) =>
         set((s) => ({
-          panes: s.panes.map((p) => (p.key === key && p.bell ? { ...p, bell: false } : p)),
+          panes: s.panes.map((p) => (p.key === key && p.bell ? { ...p, bell: null } : p)),
         })),
 
       setPaneSession: (key, sessionId) =>
@@ -374,7 +386,7 @@ export const useTerminalStore = create<TerminalState>()(
             key: p.key,
             title: "Terminal",
             sessionId: null,
-            bell: false,
+            bell: null,
             cwd: typeof p.cwd === "string" ? p.cwd : null,
             profileId: typeof p.profileId === "string" ? p.profileId : null,
             themeId: typeof p.themeId === "string" ? p.themeId : null,

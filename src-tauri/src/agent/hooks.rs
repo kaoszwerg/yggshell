@@ -155,7 +155,33 @@ pub struct AgentEvent {
     pub event: String,
     pub cwd: String,
     pub message: Option<String>,
+    /// Which KIND of notification — `permission`, `idle_prompt`, whatever the harness adds next.
+    ///
+    /// **Two very different things arrive as `Notification` and this is the only thing that tells
+    /// them apart.** `permission` is work blocked on an answer; `idle_prompt` is the harness noticing
+    /// that its prompt has sat empty — the agent finished and nobody came back. It was dropped at
+    /// first, so both reached the user as one mark, wearing the harness's own wording: *"Claude is
+    /// waiting for your input"*, which reads as a question and is not one. Reported by the
+    /// maintainer, who could not tell from the panel whether anything was actually asked of them.
+    ///
+    /// `None` for a `Stop`, and for a `Notification` from a harness that does not send it.
+    pub kind: Option<String>,
+    /// Unix seconds, stitched in by our own hook script — the payload carries no time of its own.
+    ///
+    /// `None` for a line written by a script installed before this existed. Such a line is simply
+    /// never aged, which is the safe direction: it keeps behaving exactly as it did.
+    pub recorded_at: Option<u64>,
+    /// The agent's transcript. **This is what ages an event**: if it has been written to since
+    /// `recorded_at`, the agent has produced something, and whatever it was asking for is answered.
+    pub transcript: Option<String>,
 }
+
+/// The `notification_type` of an idle prompt: finished and unattended, nothing asked.
+///
+/// The one this app keys on, and the only one it needs to name: everything else — `permission_prompt`
+/// today, whatever a later harness adds — is "worth your attention", which is the safe default. Both
+/// strings here are **measured** from a real events file, not taken from documentation.
+pub const IDLE_PROMPT: &str = "idle_prompt";
 
 /// How much of the end of the events file is read per poll.
 ///
@@ -226,7 +252,73 @@ pub fn parse_event(line: &str) -> Option<AgentEvent> {
             .get("message")
             .and_then(Value::as_str)
             .map(str::to_string),
+        kind: value
+            .get("notification_type")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        recorded_at: value.get("recorded_at").and_then(Value::as_u64),
+        transcript: value
+            .get("transcript_path")
+            .and_then(Value::as_str)
+            .map(str::to_string),
     })
+}
+
+/// How far the transcript may run past an event before the event is considered answered.
+///
+/// Not zero, and both reasons matter. `date +%s` truncates to the second, so an event recorded at
+/// `T.9` is written down as `T` — a transcript flushed at `T.95`, *before* the prompt appeared, would
+/// otherwise look like progress made after it. And the harness writes the tool call, then shows the
+/// prompt, then runs the hook, so the two are only microseconds apart by design.
+///
+/// Two seconds is far below the time any prompt survives (a human answering) and far above the
+/// ordering jitter. It errs toward keeping a mark: a signal shown a little too long is a nuisance,
+/// one cleared while the agent is still blocked is the feature failing silently.
+const PROGRESS_MARGIN_SECS: u64 = 2;
+
+/// Whether the agent has carried on since this event, which makes the event answered.
+///
+/// **The hole this closes.** Self-clearing was built on "the next event for that directory replaces
+/// this one" — and the next event is a `Stop`, which fires only at the END of a turn. A permission
+/// prompt answered five minutes into a twenty-minute turn therefore sat on screen, reading "Claude
+/// needs your permission", for the remaining fifteen. Measured: a notification whose transcript had
+/// since been written to for **592 seconds**, still shown as current. That is exactly the "veraltet"
+/// this signal exists not to be.
+///
+/// The transcript is the finer-grained clock the harness does not give us directly: it grows with
+/// every tool call and every line of output, and it stops growing precisely while the agent is
+/// blocked waiting for an answer.
+///
+/// `modified` is passed in so this is testable without a filesystem — and so the caller decides how
+/// a missing or unreadable transcript is treated (as "no information", never as "answered").
+pub fn has_moved_on(event: &AgentEvent, modified: impl Fn(&str) -> Option<u64>) -> bool {
+    let (Some(recorded_at), Some(transcript)) = (event.recorded_at, event.transcript.as_deref())
+    else {
+        // A line from an older script, or a harness that names no transcript. Nothing to compare, so
+        // nothing is claimed: the event stands until something supersedes it, as before.
+        return false;
+    };
+    modified(transcript).is_some_and(|at| at > recorded_at + PROGRESS_MARGIN_SECS)
+}
+
+/// The mtime of `path` in unix seconds, or `None` when it cannot be read.
+pub fn modified_secs(path: &str) -> Option<u64> {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_secs())
+}
+
+/// Whether this event is the harness saying "finished and unattended" rather than asking anything.
+///
+/// The distinction the UI needs and the wording cannot give it: an `idle_prompt` arrives carrying
+/// *"Claude is waiting for your input"*, which reads as a question. It is not one — it is a timer
+/// noticing the prompt has been empty. A `permission` event names what it wants, and is the one that
+/// actually blocks.
+pub fn is_idle(event: &AgentEvent) -> bool {
+    event.kind.as_deref() == Some(IDLE_PROMPT)
 }
 
 /// Forget every event recorded so far.
@@ -338,12 +430,104 @@ mod tests {
     #[test]
     fn an_event_is_read_with_the_directory_that_places_it() {
         // `cwd` is what matches an event to a tab — an event without one is worth nothing.
-        let line = r#"{"hook_event_name":"Notification","session_id":"s","cwd":"/repo","transcript_path":"/t","message":"Claude needs your permission to use Bash","notification_type":"permission"}"#;
+        let line = r#"{"hook_event_name":"Notification","session_id":"s","cwd":"/repo","transcript_path":"/t","message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}"#;
         let event = parse_event(line).expect("an event");
 
         assert_eq!(event.event, "Notification");
         assert_eq!(event.cwd, "/repo");
         assert!(event.message.as_deref().unwrap().contains("permission"));
+        assert_eq!(event.kind.as_deref(), Some("permission_prompt"));
+    }
+
+    #[test]
+    fn an_event_the_agent_has_worked_past_is_answered() {
+        // THE staleness fix. `Stop` fires only at the end of a turn, so a permission prompt answered
+        // five minutes into a twenty-minute turn used to stay on screen for the remaining fifteen —
+        // measured at 592 seconds of a transcript still growing behind a mark that said "needs your
+        // permission". The transcript is the finer clock: it grows with every tool call, and it stops
+        // growing precisely while the agent is blocked.
+        let event = AgentEvent {
+            event: "Notification".into(),
+            cwd: "/repo".into(),
+            message: Some("Claude needs your permission".into()),
+            kind: Some("permission_prompt".into()),
+            recorded_at: Some(1_000),
+            transcript: Some("/t".into()),
+        };
+
+        assert!(has_moved_on(&event, |_| Some(1_600)), "ten minutes of work");
+        assert!(!has_moved_on(&event, |_| Some(1_000)), "still blocked");
+        assert!(
+            !has_moved_on(&event, |_| Some(1_002)),
+            "inside the margin — the harness writes the tool call, shows the prompt, then runs the \
+             hook, so the two are microseconds apart and `date +%s` truncates to the second"
+        );
+        assert!(has_moved_on(&event, |_| Some(1_003)), "past the margin");
+    }
+
+    #[test]
+    fn an_event_that_cannot_be_aged_is_left_alone() {
+        // A line written by a script installed before the timestamp existed, or a transcript that has
+        // been moved away. Nothing to compare, so nothing is claimed — it behaves exactly as it did
+        // before, rather than being cleared on a guess (rule:no-guessing).
+        let base = AgentEvent {
+            event: "Notification".into(),
+            cwd: "/repo".into(),
+            message: None,
+            kind: None,
+            recorded_at: None,
+            transcript: Some("/t".into()),
+        };
+        assert!(!has_moved_on(&base, |_| Some(9_999)), "no timestamp");
+
+        let no_transcript = AgentEvent {
+            recorded_at: Some(1),
+            transcript: None,
+            ..base.clone()
+        };
+        assert!(!has_moved_on(&no_transcript, |_| Some(9_999)));
+
+        let gone = AgentEvent {
+            recorded_at: Some(1),
+            ..base
+        };
+        assert!(!has_moved_on(&gone, |_| None), "transcript unreadable");
+    }
+
+    #[test]
+    fn the_recorded_time_and_the_transcript_survive_the_parse() {
+        // Both come from OUR hook script stitching them in — the harness payload carries no time.
+        let line = r#"{"recorded_at":1785615639,"hook_event_name":"Notification","cwd":"/repo","transcript_path":"/t.jsonl","message":"x","notification_type":"permission_prompt"}"#;
+        let event = parse_event(line).unwrap();
+        assert_eq!(event.recorded_at, Some(1_785_615_639));
+        assert_eq!(event.transcript.as_deref(), Some("/t.jsonl"));
+    }
+
+    #[test]
+    fn the_kind_of_notification_survives_the_parse() {
+        // Two very different things arrive as `Notification`, and this field is the only thing that
+        // separates them. Dropping it — which is what shipped — meant work blocked on an answer and a
+        // prompt that had merely gone quiet reached the user as the same mark.
+        let permission = r#"{"hook_event_name":"Notification","cwd":"/repo","message":"Claude needs your permission to use Bash","notification_type":"permission_prompt"}"#;
+        let idle = r#"{"hook_event_name":"Notification","cwd":"/repo","message":"Claude is waiting for your input","notification_type":"idle_prompt"}"#;
+
+        let permission = parse_event(permission).unwrap();
+        let idle = parse_event(idle).unwrap();
+
+        assert_eq!(permission.kind.as_deref(), Some("permission_prompt"));
+        assert!(!is_idle(&permission), "a permission request blocks");
+        assert!(is_idle(&idle), "an idle prompt asks for nothing");
+    }
+
+    #[test]
+    fn a_notification_without_a_kind_is_treated_as_asking() {
+        // A harness that does not send `notification_type`, or a future kind we have not met. The
+        // safe default is the one that gets the user's attention: missing a real request is worse
+        // than one line that turns out to have been informational.
+        let line = r#"{"hook_event_name":"Notification","cwd":"/repo","message":"something"}"#;
+        let event = parse_event(line).unwrap();
+        assert_eq!(event.kind, None);
+        assert!(!is_idle(&event));
     }
 
     #[test]
@@ -396,6 +580,9 @@ mod tests {
 
     fn event(name: &str, cwd: &str) -> AgentEvent {
         AgentEvent {
+            kind: None,
+            recorded_at: None,
+            transcript: None,
             event: name.to_string(),
             cwd: cwd.to_string(),
             message: None,

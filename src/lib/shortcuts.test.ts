@@ -1,3 +1,5 @@
+import { en } from "../i18n/en";
+import { de } from "../i18n/de";
 import { describe, it, expect } from "vitest";
 import {
   ACTIONS,
@@ -62,6 +64,30 @@ describe("the defaults", () => {
       expect(bindingFor(mac, action), `mac default for ${action}`).toBeDefined();
       expect(bindingFor(other, action), `default for ${action}`).toBeDefined();
     }
+  });
+
+  it("gives every action a name in every language, so the list can say what it does", () => {
+    // The Settings list IS the help (rule:shortcuts) — there is no second page listing defaults,
+    // precisely so it cannot go stale when somebody rebinds one. That only holds if the list can
+    // NAME everything: an action with no message renders as a raw key or as nothing, which is a
+    // shortcut the user has no way to discover and no way to rebind.
+    //
+    // The compiler cannot catch this. `t(`keys.action.${action}`)` is a template literal, so a
+    // missing key is a runtime hole rather than a type error — which is exactly why it is checked
+    // here (rule:knowledge-handover: if it can be checked, check it).
+    for (const action of ACTIONS) {
+      expect(Object.keys(en), `English name for ${action}`).toContain(`keys.action.${action}`);
+      expect(Object.keys(de), `German name for ${action}`).toContain(`keys.action.${action}`);
+    }
+  });
+
+  it("has a name for every action and no name for an action that is gone", () => {
+    // The other direction: a message left behind after an action was renamed or removed is a row
+    // that can never appear, and the next person reads it as proof the feature exists.
+    const named = Object.keys(en)
+      .filter((key) => key.startsWith("keys.action."))
+      .map((key) => key.slice("keys.action.".length));
+    expect([...named].sort()).toEqual([...ACTIONS].sort());
   });
 
   it("never hands the shell's keys away", () => {

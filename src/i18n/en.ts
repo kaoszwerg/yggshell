@@ -47,6 +47,8 @@ export const en = {
   "attention.install": "Install the hook",
   "attention.nextSession":
     "Installed. It takes effect in the next Claude Code session — hooks are read when a session starts.",
+  "attention.finished": "Finished — nothing was asked of you",
+  "attention.asking": "Waiting for an answer",
   "attention.none": "Nothing is waiting for you.",
   "attention.clear": "Mark as seen",
   "statusbar.item.bells": "Waiting tabs",

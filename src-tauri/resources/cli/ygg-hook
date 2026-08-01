@@ -33,9 +33,21 @@ esac
 
 mkdir -p "$dir"
 
-# One line, appended. `>>` on a short write is atomic enough that two agents finishing at the same
-# moment cannot interleave halfway through a line, which is the only interleaving that would matter.
-# `cat` rather than `read`: the payload is one line, but a shell `read` would strip a backslash.
-cat >>"$dir/agent-events.jsonl"
+# One line, appended, with the time it was recorded stitched in.
+#
+# WHY THE TIMESTAMP: the payload has none, and without one an event cannot be aged. That is not a
+# nicety — `Stop` fires only at the END of a turn, so a permission prompt answered five minutes into
+# a twenty-minute turn stayed on screen as "Claude needs your permission" for the remaining fifteen.
+# The app resolves it by asking whether the agent's own transcript has been written to SINCE this
+# moment; it needs this moment to ask.
+#
+# The events file's mtime is not a substitute: any event, from any project, moves it.
+#
+# `sed` on the FIRST line only, inserting after the opening brace — the payload is one JSON object,
+# so this stays valid JSON without needing a JSON tool the user may not have. `>>` on a short write
+# is atomic enough that two agents finishing at the same moment cannot interleave halfway through a
+# line, which is the only interleaving that would matter. `sed` rather than a shell `read`: the
+# payload is one line, but `read` would strip a backslash.
+sed "1s/^{/{\"recorded_at\":$(date +%s),/" >>"$dir/agent-events.jsonl"
 
 exit 0

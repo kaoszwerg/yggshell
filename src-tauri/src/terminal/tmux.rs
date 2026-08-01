@@ -622,10 +622,19 @@ mod tests {
         // binary the function correctly returns the shell instead.
         let Some(_) = find_tmux() else { return };
         let launch = launch(TmuxMode::AttachOrCreate, "  ", "/bin/zsh", &[], None);
-        assert_eq!(
-            launch.args,
-            vec!["new-session", "-A", "-s", DEFAULT_SESSION],
-            "without -s there is nothing for -A to match, so every terminal would start its own"
+
+        // The SHAPE, not the exact name — and that is the change, not a weakened assertion. A new tab
+        // now takes the first name free in this app AND on the tmux server, so which of the series it
+        // lands on depends on what happens to be running. Pinning `yggshell` made this test pass or
+        // fail depending on the developer's own sessions, which is a defect in a test, not a finding
+        // (rule:testing). What must hold is invariant: a name from the series is always passed, so
+        // `-A` has something to match and every terminal does not start its own.
+        assert_eq!(launch.args.len(), 4);
+        assert_eq!(&launch.args[..3], &["new-session", "-A", "-s"]);
+        assert!(
+            in_series(DEFAULT_SESSION, &launch.args[3]),
+            "expected a name from the {DEFAULT_SESSION} series, got {:?}",
+            launch.args[3]
         );
     }
 
