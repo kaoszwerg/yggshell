@@ -83,6 +83,7 @@ pub fn run() {
             commands::install_agent_hook,
             commands::clear_agent_attention,
             commands::list_containers,
+            commands::container_stats,
             commands::container_logs,
             commands::reveal_in_file_manager,
             commands::list_terminal_themes,
@@ -221,8 +222,39 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     tray::install_close_handler(app.handle());
     let tray_enabled = app.state::<AppState>().settings.get().minimize_to_tray;
     tray::set_enabled(app.handle(), tray_enabled);
+    apply_saved_zoom(app);
     tracing::info!("startup complete");
     Ok(())
+}
+
+/// Put the user's UI scale on the webview **here**, before it has painted anything.
+///
+/// **The frontend cannot do this without a visible jump, however fast it is.** `ui_scale` is the
+/// *native* WebView zoom (ADR-APP-021), not CSS — so applying it means calling `setZoom`, and from
+/// React that call can only happen in an effect, i.e. after a frame has already been laid out and
+/// shown at 100 %. The window then visibly resizes its contents on every single launch. Seeding the
+/// settings query from cache fixes the DOM half of that (`hooks/useSettings`) and cannot fix this
+/// half at all: the zoom is not a React value.
+///
+/// Rust already has the settings — it loaded them a few lines above to decide the tray — so it can
+/// set the zoom while the webview is still starting up. The frontend keeps its own `setZoom` for
+/// *changes* made in Settings; this is only about the first frame.
+///
+/// A failure is logged and shrugged off (rule:logging): starting at 100 % is a cosmetic problem, and
+/// refusing to start over it would be a far worse one.
+fn apply_saved_zoom(app: &tauri::App) {
+    use tauri::Manager;
+    let scale = app.state::<AppState>().settings.get().ui_scale;
+    if (scale - 1.0).abs() < f64::EPSILON {
+        return;
+    }
+    match app.get_webview_window("main") {
+        Some(window) => match window.set_zoom(scale) {
+            Ok(()) => tracing::debug!(scale, "applied the saved UI scale before the first frame"),
+            Err(error) => tracing::warn!(%error, scale, "could not apply the saved UI scale"),
+        },
+        None => tracing::warn!("no main window to apply the saved UI scale to"),
+    }
 }
 
 #[cfg(test)]

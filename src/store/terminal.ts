@@ -154,6 +154,16 @@ export interface TerminalState {
   /** A program in this tab rang the bell. Ignored for the tab that is already in front. */
   ringBell: (key: string) => void;
   /**
+   * Take the mark off a tab without visiting it, because what caused it has resolved.
+   *
+   * **Only the agent signal may use this, and only for a mark it set itself** (`useAttentionBell`).
+   * A terminal bell has no resolution — a `\a` carries nothing that could later say "never mind", so
+   * it stays until it has been looked at. An agent's question does: the harness's next event is the
+   * proof that it carried on. Leaving the dot up then means pointing at a tab where nothing is
+   * waiting, which is the busywork this signal exists to avoid.
+   */
+  clearBell: (key: string) => void;
+  /**
    * Record what this tab is doing.
    *
    * `command` is only ever known inside tmux (`#{pane_current_command}`); outside it OSC 133 says
@@ -302,6 +312,11 @@ export const useTerminalStore = create<TerminalState>()(
             s.activeKey === key
               ? s.panes
               : s.panes.map((p) => (p.key === key && !p.bell ? { ...p, bell: true } : p)),
+        })),
+
+      clearBell: (key) =>
+        set((s) => ({
+          panes: s.panes.map((p) => (p.key === key && p.bell ? { ...p, bell: false } : p)),
         })),
 
       setPaneSession: (key, sessionId) =>

@@ -274,6 +274,27 @@ pub struct ContainerInfo {
     pub project: Option<String>,
 }
 
+/// What one running container is currently consuming.
+///
+/// Separate from [`ContainerInfo`] because it costs something to obtain: `docker stats` samples
+/// twice to compute a CPU delta and takes ~2 s regardless of how many containers there are (measured
+/// on six). The listing is cheap and always available; this is only fetched while the tool is on
+/// screen (`components/tools/DockerTool`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct ContainerStats {
+    /// Matches [`ContainerInfo::id`] — both are fetched with `--no-trunc`, or they would not join.
+    pub id: String,
+    /// Percent of one core, as docker reports it: >100 on a container using several.
+    pub cpu_percent: f64,
+    /// Bytes in use, resolved from docker's human-readable form.
+    pub mem_used: f64,
+    /// The container's memory limit in bytes, or the host's total when it has none.
+    pub mem_limit: f64,
+    /// Percent of the limit above. Taken from docker rather than divided here, so the two agree.
+    pub mem_percent: f64,
+}
+
 /// One process under a terminal tab.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

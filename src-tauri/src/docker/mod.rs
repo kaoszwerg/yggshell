@@ -155,6 +155,95 @@ pub fn is_container_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+/// What the running containers are consuming right now.
+///
+/// **Deliberately separate from [`containers`], because it is not free.** `docker stats` computes a
+/// CPU percentage from a delta, so it samples twice and returns after ~2 s no matter how many
+/// containers exist — measured at 1.9–2.0 s for six. The listing costs milliseconds. Joining them
+/// into one call would make opening the panel feel broken and would keep paying that price for a
+/// panel nobody has open, so the caller fetches this only while the tool is on screen and at an
+/// interval well above the call's own duration (`components/tools/DockerTool`).
+///
+/// `--no-stream` is what makes it a single answer instead of a live feed: a feed would be a process
+/// running for as long as the app is open, which is the kind of permanent cost this app measures
+/// before it accepts (mem:open-work-backlog).
+pub fn stats() -> Vec<crate::dto::ContainerStats> {
+    let Some(docker) = crate::terminal::environment::which("docker") else {
+        return Vec::new();
+    };
+    let format = "{{.ID}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}";
+    let Ok(output) = Command::new(docker)
+        .args(["stats", "--no-stream", "--no-trunc", "--format", format])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        tracing::debug!("docker stats returned non-zero — the daemon is probably not running");
+        return Vec::new();
+    }
+    let stats = parse_stats(&String::from_utf8_lossy(&output.stdout));
+    tracing::debug!(count = stats.len(), "read docker container stats");
+    stats
+}
+
+/// Parse the tab-separated stats listing.
+///
+/// Split from the command for the same reason as [`parse`]: the format string is the contract with
+/// `docker`, and it can be checked against real output without a daemon.
+pub fn parse_stats(text: &str) -> Vec<crate::dto::ContainerStats> {
+    text.lines()
+        .filter_map(|line| {
+            let mut f = line.split('\t');
+            let id: String = f.next()?.trim().chars().take(12).collect();
+            if id.is_empty() {
+                return None;
+            }
+            let cpu_percent = percent(f.next()?)?;
+            // `679.5MiB / 2GiB` — the limit is the host's total when the container has none.
+            let usage = f.next()?;
+            let (used, limit) = usage.split_once('/')?;
+            let mem_percent = percent(f.next().unwrap_or("0%")).unwrap_or(0.0);
+            Some(crate::dto::ContainerStats {
+                id,
+                cpu_percent,
+                mem_used: bytes(used)?,
+                mem_limit: bytes(limit)?,
+                mem_percent,
+            })
+        })
+        .collect()
+}
+
+/// `23.47%` -> `23.47`. A value docker could not compute (`--`) is not a zero, it is no value.
+fn percent(text: &str) -> Option<f64> {
+    text.trim().trim_end_matches('%').trim().parse().ok()
+}
+
+/// `679.5MiB` -> bytes. Docker writes binary units here; the decimal spellings are accepted too
+/// because the same field has used them, and being wrong by 2.4 % is better than showing nothing.
+fn bytes(text: &str) -> Option<f64> {
+    let text = text.trim();
+    let split = text.find(|c: char| !c.is_ascii_digit() && c != '.')?;
+    let (number, unit) = text.split_at(split);
+    let value: f64 = number.trim().parse().ok()?;
+    let scale = match unit.trim().to_ascii_lowercase().as_str() {
+        "b" => 1.0,
+        "kib" => 1024.0,
+        "kb" => 1000.0,
+        "mib" => 1024.0 * 1024.0,
+        "mb" => 1_000_000.0,
+        "gib" => 1024.0 * 1024.0 * 1024.0,
+        "gb" => 1_000_000_000.0,
+        "tib" => 1024.0_f64.powi(4),
+        "tb" => 1e12,
+        _ => return None,
+    };
+    Some(value * scale)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,5 +324,52 @@ mod tests {
     #[test]
     fn logs_refuse_an_id_that_is_not_one() {
         assert_eq!(logs("not an id", 10), "");
+    }
+
+    /// Verbatim from `docker stats --no-stream --no-trunc` on this machine.
+    const STATS: &str = "e7297b70bd2a1f4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4\t23.47%\t679.5MiB / 2GiB\t33.18%
+b1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f900\t0.00%\t12.5MiB / 7.654GiB\t0.16%";
+
+    #[test]
+    fn cpu_and_memory_are_read_from_the_real_format() {
+        let s = parse_stats(STATS);
+
+        assert_eq!(s.len(), 2);
+        assert_eq!(s[0].cpu_percent, 23.47);
+        assert_eq!(s[0].mem_used, 679.5 * 1024.0 * 1024.0);
+        assert_eq!(s[0].mem_limit, 2.0 * 1024.0 * 1024.0 * 1024.0);
+        assert_eq!(s[0].mem_percent, 33.18);
+    }
+
+    #[test]
+    fn the_id_is_shortened_the_same_way_the_listing_shortens_it() {
+        // The two are joined on this in the frontend. Different lengths would mean no container ever
+        // shows a figure, and nothing would look broken enough to investigate.
+        assert_eq!(parse_stats(STATS)[0].id, "e7297b70bd2a");
+        assert_eq!(parse_stats(STATS)[0].id, parse(PS)[1].id);
+    }
+
+    #[test]
+    fn a_cpu_docker_could_not_compute_is_dropped_rather_than_shown_as_zero() {
+        // `--` appears for a container that is starting or has just stopped. Zero would be a claim.
+        assert!(parse_stats("abc\t--\t0B / 0B\t--").is_empty());
+    }
+
+    #[test]
+    fn both_binary_and_decimal_units_are_read() {
+        let s = parse_stats("abc\t1%\t1KiB / 1MB\t1%");
+        assert_eq!(s[0].mem_used, 1024.0);
+        assert_eq!(s[0].mem_limit, 1_000_000.0);
+    }
+
+    #[test]
+    fn a_malformed_stats_line_costs_that_line_and_nothing_else() {
+        let s = parse_stats(&format!("rubbish\n{STATS}"));
+        assert_eq!(s.len(), 2);
+    }
+
+    #[test]
+    fn no_containers_is_an_empty_list_not_a_failure() {
+        assert!(parse_stats("").is_empty());
     }
 }

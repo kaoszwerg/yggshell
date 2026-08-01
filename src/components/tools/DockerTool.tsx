@@ -8,9 +8,15 @@ import { useT } from "../../hooks/useT";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { stateColour } from "../../lib/containerState";
 import type { ContainerInfo } from "../../bindings/ContainerInfo";
+import type { ContainerStats } from "../../bindings/ContainerStats";
+import { Meter } from "../ui/Meter";
+import { humanSize } from "../../lib/humanSize";
 
 /** How many log lines to fetch. Enough to see what went wrong, not enough to fill the panel. */
 const LOG_LINES = 200;
+
+/** How often the live figures are refreshed. The call itself takes ~2 s — see the query. */
+const STATS_MS = 5_000;
 
 /**
  * The Docker tool: what is up, what is not, and what it publishes.
@@ -35,7 +41,29 @@ export function DockerTool() {
     staleTime: Number.POSITIVE_INFINITY,
   });
 
+  /**
+   * Live CPU and memory, polled **only while this panel is mounted** — which `ToolPanel` guarantees,
+   * because it renders exactly one tool and nothing when none is open.
+   *
+   * **The opposite decision to the attention signal, deliberately** (rule:attention-signals). That one
+   * has to keep polling while the window is hidden, because its whole job is to reach somebody who is
+   * looking elsewhere. This one is a monitor: a figure nobody is looking at is just heat. So it stops
+   * with the panel, and it stops again when the window is hidden — which is Query's default, and the
+   * one query in this app that overrides it is the other one.
+   *
+   * **Five seconds, and the number is not arbitrary:** the call itself takes ~2 s, because
+   * `docker stats` samples twice to work out a CPU delta. Anything under about four would mean a
+   * `docker` process running more often than not.
+   */
+  const stats = useQuery({
+    queryKey: ["docker-stats"],
+    queryFn: () => dockerApi.stats(),
+    refetchInterval: STATS_MS,
+    refetchOnWindowFocus: false,
+  });
+
   const containers = query.data ?? [];
+  const usage = new Map((stats.data ?? []).map((s) => [s.id, s]));
   const groups = new Map<string, ContainerInfo[]>();
   for (const container of containers) {
     const key = container.project ?? "";
@@ -82,7 +110,11 @@ export function DockerTool() {
                 {(project === "" ? t("docker.noProject") : project).toUpperCase()}
               </h3>
               {list.map((container) => (
-                <Container key={container.id} container={container} />
+                <Container
+                  key={container.id}
+                  container={container}
+                  usage={usage.get(container.id) ?? null}
+                />
               ))}
             </section>
           ))
@@ -92,7 +124,13 @@ export function DockerTool() {
   );
 }
 
-function Container({ container }: { container: ContainerInfo }) {
+function Container({
+  container,
+  usage,
+}: {
+  container: ContainerInfo;
+  usage: ContainerStats | null;
+}) {
   const t = useT();
   const [showLogs, setShowLogs] = useState(false);
   const logs = useQuery({
@@ -124,12 +162,46 @@ function Container({ container }: { container: ContainerInfo }) {
       <p className="text-dim/70 truncate px-2 pb-0.5 pl-7 font-mono text-[10px]">
         {container.status} · {container.image}
       </p>
+      {usage === null ? null : <Usage usage={usage} />}
       {showLogs ? (
         <pre className="bg-elevated text-dim mx-2 mb-1 max-h-40 overflow-auto p-1 font-mono text-[10px] whitespace-pre-wrap">
           {logs.isPending ? t("docker.readingLogs") : (logs.data ?? "") || t("docker.noLogs")}
         </pre>
       ) : null}
     </>
+  );
+}
+
+/**
+ * What one container is consuming, as two bars.
+ *
+ * **Bars rather than graphs, and no history** — the maintainer's call, and the cheap one: a series
+ * would need a buffer that survives tab switches, and the question a container monitor actually
+ * answers ("is this one eating the machine right now") is a current value, not a shape over time.
+ *
+ * **CPU is scaled against one core**, which is what docker reports: a container using two cores says
+ * 200 %. The bar clamps at 100 — the number beside it stays exact, so the bar never becomes the only
+ * source and never lies about a figure it cannot draw.
+ */
+function Usage({ usage }: { usage: ContainerStats }) {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-2 px-2 pb-1 pl-7">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="text-dim/70 shrink-0 font-mono text-[10px]">{t("docker.cpu")}</span>
+        <Meter percent={usage.cpu_percent} label={t("docker.cpu")} />
+        <span className="text-dim shrink-0 font-mono text-[10px] tabular-nums">
+          {usage.cpu_percent.toFixed(0)}%
+        </span>
+      </div>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="text-dim/70 shrink-0 font-mono text-[10px]">{t("docker.memory")}</span>
+        <Meter percent={usage.mem_percent} label={t("docker.memory")} />
+        <span className="text-dim shrink-0 font-mono text-[10px] tabular-nums">
+          {humanSize(usage.mem_used)}
+        </span>
+      </div>
+    </div>
   );
 }
 

@@ -520,6 +520,20 @@ pub fn list_containers() -> Vec<crate::dto::ContainerInfo> {
     containers
 }
 
+/// What the running containers are consuming right now.
+///
+/// **Separate from `list_containers`, and the split is the whole design.** This call takes ~2 s
+/// (measured on six containers): `docker stats` samples twice to compute a CPU delta, and that cost
+/// is per call, not per container. The listing costs milliseconds and is what the panel needs to draw
+/// anything at all — so the two are fetched independently, and this one only while the tool is
+/// actually on screen (`components/tools/DockerTool`). A monitor nobody is looking at is just heat.
+#[tauri::command]
+pub fn container_stats() -> Vec<crate::dto::ContainerStats> {
+    let stats = crate::docker::stats();
+    tracing::debug!(count = stats.len(), "container_stats");
+    stats
+}
+
 /// The last `lines` of a container's log.
 ///
 /// The id is validated as one before it reaches a process (rule:security), and the read is bounded:

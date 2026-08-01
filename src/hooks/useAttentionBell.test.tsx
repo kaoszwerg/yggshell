@@ -71,6 +71,33 @@ describe("useAttentionBell", () => {
     expect(useTerminalStore.getState().panes.find((p) => p.key === "other")?.bell).toBe(false);
   });
 
+  it("takes its own mark off again when the agent carries on", () => {
+    // Reported: "die attention von dsp ist weg, aber der gelbe kreis ist noch am tab von dsp". The
+    // terminal bell keeps its mark until the tab is visited because a `\a` carries nothing that could
+    // later say "never mind". An agent's question DOES: the harness's next event proves it carried
+    // on. Leaving the dot up then points at a tab where nothing is waiting.
+    waiting([NOTIFICATION]);
+    const { rerender } = renderHook(() => useAttentionBell());
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "other")?.bell).toBe(true);
+
+    waiting([]); // the agent is running again
+    rerender();
+
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "other")?.bell).toBe(false);
+  });
+
+  it("never takes off a mark it did not set", () => {
+    // A terminal bell is somebody else's signal and has no resolution to observe. Clearing it here
+    // would silently swallow a `\a` that nobody has looked at yet.
+    useTerminalStore.setState({
+      panes: useTerminalStore.getState().panes.map((p) => ({ ...p, bell: true })),
+    });
+    waiting([]);
+    renderHook(() => useAttentionBell());
+
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "other")?.bell).toBe(true);
+  });
+
   it("rings again for the next question once the last one was answered", () => {
     // The backend drops a directory from the list the moment its agent carries on, so "no longer
     // listed" IS the answer arriving. A second question after that has to ring again — a signal that

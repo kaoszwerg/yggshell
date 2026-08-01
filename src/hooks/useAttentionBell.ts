@@ -24,29 +24,32 @@ export function useAttentionBell() {
   const { waiting } = useAgentAttention();
   const panes = useTerminalStore((s) => s.panes);
   const ringBell = useTerminalStore((s) => s.ringBell);
-  // Which directories have already been rung for. The poll re-delivers the same state every three
-  // seconds, so this rings on the TRANSITION into asking, never on the state itself — otherwise the
-  // mark would come back the instant a visit cleared it.
-  const rung = useRef(new Set<string>());
+  const clearBell = useTerminalStore((s) => s.clearBell);
+  // The tabs THIS hook has marked, per directory. Two jobs: the poll re-delivers the same state every
+  // three seconds, so ringing happens on the TRANSITION into asking rather than on the state (or the
+  // mark would return the instant a visit cleared it); and when the question resolves, only a mark
+  // this hook set may be taken off again — a terminal bell is somebody else's signal.
+  const marked = useRef(new Map<string, string[]>());
 
   useEffect(() => {
     const asking = new Set(
       waiting.filter((item) => item.event === "Notification").map((item) => item.cwd),
     );
 
-    // Forgotten as soon as it stops asking — that is what lets the NEXT question ring. The backend
-    // drops a directory from this list the moment its agent carries on (`hooks::waiting_now`), so
-    // this is the answer arriving, not a timeout.
-    for (const cwd of rung.current) {
-      if (!asking.has(cwd)) rung.current.delete(cwd);
+    // Resolved: the backend drops a directory the moment its agent carries on
+    // (`hooks::waiting_now`), so this is the answer arriving, not a timeout. Unlike a `\a`, this
+    // signal knows it is over — so it clears up after itself instead of waiting to be visited.
+    for (const [cwd, keys] of marked.current) {
+      if (asking.has(cwd)) continue;
+      for (const key of keys) clearBell(key);
+      marked.current.delete(cwd);
     }
 
     for (const cwd of asking) {
-      if (rung.current.has(cwd)) continue;
-      rung.current.add(cwd);
-      for (const pane of panes) {
-        if (pane.cwd === cwd) ringBell(pane.key);
-      }
+      if (marked.current.has(cwd)) continue;
+      const keys = panes.filter((pane) => pane.cwd === cwd).map((pane) => pane.key);
+      marked.current.set(cwd, keys);
+      for (const key of keys) ringBell(key);
     }
-  }, [waiting, panes, ringBell]);
+  }, [waiting, panes, ringBell, clearBell]);
 }

@@ -4,9 +4,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DockerTool } from "./DockerTool";
 import { useUiStore } from "../../store/ui";
 import type { ContainerInfo } from "../../bindings/ContainerInfo";
+import type { ContainerStats } from "../../bindings/ContainerStats";
 
 vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
-vi.mock("../../api/docker", () => ({ dockerApi: { containers: vi.fn(), logs: vi.fn() } }));
+vi.mock("../../api/docker", () => ({
+  dockerApi: { containers: vi.fn(), logs: vi.fn(), stats: vi.fn() },
+}));
 
 import { dockerApi } from "../../api/docker";
 
@@ -53,6 +56,8 @@ describe("DockerTool", () => {
   beforeEach(() => {
     vi.mocked(dockerApi.containers).mockReset();
     vi.mocked(dockerApi.logs).mockReset();
+    vi.mocked(dockerApi.stats).mockReset();
+    vi.mocked(dockerApi.stats).mockResolvedValue([]);
     useUiStore.setState({ locale: "en" });
   });
 
@@ -127,5 +132,48 @@ describe("DockerTool", () => {
     await screen.findByText("app-nginx");
     const sized = container.querySelector<HTMLElement>("[style*='font-size']");
     expect(sized?.style.fontSize).toBe("17px");
+  });
+  it("shows live CPU and memory for a container that reports them", async () => {
+    // The monitor half. `docker stats` is a separate, ~2 s call, so it arrives independently of the
+    // listing — a container with no figures yet simply has no bars, never a zero.
+    const STATS: ContainerStats[] = [
+      {
+        id: "e7297b70bd2a",
+        cpu_percent: 23.47,
+        mem_used: 712_179_712,
+        mem_limit: 2_147_483_648,
+        mem_percent: 33.18,
+      },
+    ];
+    vi.mocked(dockerApi.containers).mockResolvedValue(CONTAINERS);
+    vi.mocked(dockerApi.stats).mockResolvedValue(STATS);
+    renderTool();
+
+    expect(await screen.findByText("23%")).toBeInTheDocument();
+    const meters = screen.getAllByRole("meter");
+    expect(meters.some((m) => m.getAttribute("aria-valuenow") === "33")).toBe(true);
+  });
+
+  it("draws no bars for a container docker reported nothing about", async () => {
+    // A stopped container has no figures. Drawing an empty bar would claim it is idle rather than
+    // gone, which is a different statement.
+    vi.mocked(dockerApi.containers).mockResolvedValue(CONTAINERS);
+    vi.mocked(dockerApi.stats).mockResolvedValue([]);
+    renderTool();
+
+    await screen.findByText("app-backend");
+    expect(screen.queryAllByRole("meter")).toHaveLength(0);
+  });
+
+  it("shows a CPU above one core exactly, even though the bar cannot", async () => {
+    // docker scales CPU against a single core: two cores busy reads 200 %. The bar clamps; the
+    // number must not, or the panel would quietly understate the thing you opened it to see.
+    vi.mocked(dockerApi.containers).mockResolvedValue(CONTAINERS);
+    vi.mocked(dockerApi.stats).mockResolvedValue([
+      { id: "e7297b70bd2a", cpu_percent: 240, mem_used: 1024, mem_limit: 2048, mem_percent: 50 },
+    ]);
+    renderTool();
+
+    expect(await screen.findByText("240%")).toBeInTheDocument();
   });
 });

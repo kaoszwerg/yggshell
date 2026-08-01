@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The Docker tool now shows what each container is consuming.** CPU and memory as bars, live, while
+  the panel is open. Three deliberate limits, decided with the maintainer: **no history** (a series
+  would need a buffer surviving tab switches, and "is this one eating the machine right now" is a
+  current value); **no disk figures** (`docker system df` is a separate, much slower call and belongs
+  on demand rather than in a live view); and **it polls only while the tool is on screen** — which
+  `ToolPanel` already guarantees by mounting exactly one tool. The interval is 5 s because the call
+  itself takes ~2 s: `docker stats` samples twice to compute a CPU delta, measured at 1.9–2.0 s for
+  six containers. Anything faster would mean a `docker` process running more often than not. CPU is
+  scaled against one core as docker reports it, so a container on two cores reads 200 % — the bar
+  clamps at 100, the number beside it stays exact.
+
+### Fixed
+
+- **The window still jumped on launch: the UI scale is not a React value.** `ui_scale` is the *native*
+  WebView zoom (ADR-APP-021), so the frontend can only apply it from an effect — after a frame has
+  been laid out and shown at 100 %. Seeding the settings query from cache fixed the DOM half and could
+  not touch this one. Rust now sets the zoom in `setup()`, before the webview has painted anything; it
+  already had the settings loaded there to decide the tray. The frontend keeps its own `setZoom` for
+  changes made in Settings.
+- **The tab's dot stayed up after the agent had carried on.** Reported: *"die attention von dsp ist
+  weg, aber der gelbe kreis ist noch am tab von dsp"*. The mark is shared with the terminal bell, and
+  a bell keeps its mark until the tab is visited — correctly, because a `\a` carries nothing that
+  could later say "never mind". An agent's question does: the harness's next event proves it carried
+  on. Pointing at a tab where nothing is waiting is exactly the busywork this signal exists to avoid,
+  so the agent signal now takes its own mark off again — and only its own, so a real terminal bell is
+  never swallowed with it.
+
 ### Fixed
 
 - **The interface painted the defaults first and jumped to your settings a moment later.** Settings

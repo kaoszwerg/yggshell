@@ -94,6 +94,10 @@ export const en = {
   "docker.noProject": "Not in a compose project",
   "docker.readingLogs": "Reading the log…",
   "docker.noLogs": "This container has written nothing.",
+  // Abbreviated on purpose: they label two bars in a narrow column, and both are the same word in
+  // every language this app speaks.
+  "docker.cpu": "CPU",
+  "docker.memory": "MEM",
   "nav.activity": "Activity",
   "activity.noSession": "This tab has no terminal running.",
   "activity.reading": "Reading…",

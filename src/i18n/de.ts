@@ -91,6 +91,8 @@ export const de: Translations = {
   "docker.noProject": "Nicht in einem Compose-Projekt",
   "docker.readingLogs": "Das Log wird gelesen…",
   "docker.noLogs": "Dieser Container hat nichts geschrieben.",
+  "docker.cpu": "CPU",
+  "docker.memory": "MEM",
   "nav.activity": "Aktivität",
   "activity.noSession": "In diesem Tab läuft kein Terminal.",
   "activity.reading": "Wird gelesen…",
