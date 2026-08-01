@@ -4,6 +4,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
 import type { TerminalOpened } from "../bindings/TerminalOpened";
+import type { TerminalActivity } from "../bindings/TerminalActivity";
 import type { TerminalStatus } from "../bindings/TerminalStatus";
 
 /** Backend session id. Allocated by the registry; meaningless outside this process. */
@@ -68,6 +69,14 @@ export const terminalApi = {
    * tmux instead.
    */
   status: (id: SessionId) => invoke<TerminalStatus>("terminal_status", { id }),
+
+  /**
+   * What this tab is running, and what it is listening on.
+   *
+   * On demand only — it spawns `ps` and `lsof`, which have no business on the status timer. The id
+   * names a *session*; no command line crosses this boundary (ADR-PROJ-001 §5).
+   */
+  activity: (id: SessionId) => invoke<TerminalActivity>("terminal_activity", { id }),
 
   /** End a session because its tab was closed. Takes the foreground process group with it. */
   close: (id: SessionId) => invoke<void>("terminal_close", { id }),

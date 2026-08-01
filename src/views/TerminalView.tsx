@@ -78,9 +78,17 @@ export function TerminalView() {
   /** Backend session id per pane, learned once the PTY is actually open. */
   const sessions = useRef(new Map<string, SessionId>());
 
-  const registerSession = useCallback((key: string, id: SessionId) => {
-    sessions.current.set(key, id);
-  }, []);
+  const setPaneSession = useTerminalStore((s) => s.setPaneSession);
+
+  const registerSession = useCallback(
+    (key: string, id: SessionId) => {
+      sessions.current.set(key, id);
+      // Mirrored into the store as well, because the sidebar tools ask "what is this tab running"
+      // from outside this view entirely, and a ref in a component is not reachable from there.
+      setPaneSession(key, id);
+    },
+    [setPaneSession],
+  );
 
   // One terminal is waiting the first time this view is reached. See `bootstrap`.
   useEffect(() => {
@@ -117,6 +125,9 @@ export function TerminalView() {
         for (const [key, id] of sessions.current) {
           if (id !== exit.id) continue;
           sessions.current.delete(key);
+          // The store has to forget it too, or a tool reading "what is this tab running" would keep
+          // asking the backend about a session that has ended.
+          setPaneSession(key, null);
           // Detaching from tmux is not the end of anything: the session keeps running, and the user
           // asked to be back in a terminal. Closing the tab took the window away instead — the one
           // thing they had not asked for. A tmux client that ended cleanly puts a plain shell in the
@@ -139,7 +150,7 @@ export function TerminalView() {
       cancelled = true;
       unlisten?.();
     };
-  }, [closePane, detachToShell]);
+  }, [closePane, detachToShell, setPaneSession]);
 
   if (panes.length === 0) {
     return (

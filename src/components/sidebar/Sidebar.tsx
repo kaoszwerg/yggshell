@@ -1,4 +1,11 @@
-import { FolderTree, GitBranch, ScrollText, Settings, TerminalSquare } from "lucide-react";
+import {
+  Activity,
+  FolderTree,
+  GitBranch,
+  ScrollText,
+  Settings,
+  TerminalSquare,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import type { HudAccent } from "../ui/hudButton";
@@ -16,6 +23,7 @@ const MAIN_NAV: NavItem[] = [{ id: "terminal", Icon: TerminalSquare, label: "nav
 const TOOLS: ToolItem[] = [
   { id: "git", Icon: GitBranch, label: "nav.git" },
   { id: "files", Icon: FolderTree, label: "nav.files" },
+  { id: "activity", Icon: Activity, label: "nav.activity" },
 ];
 
 const BOTTOM_NAV: NavItem[] = [

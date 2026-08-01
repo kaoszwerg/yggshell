@@ -98,6 +98,12 @@ struct Session {
     /// The program this session started, kept so "is something running" can be answered: tmux names
     /// the shell itself when a prompt is waiting, and the only way to know that is to know its name.
     shell: String,
+    /// The child's process id, when the platform reported one.
+    ///
+    /// Kept so the activity tool can walk what this tab is running. Outside tmux that child IS the
+    /// tab's shell and everything hangs off it; inside tmux it is only the client, which is why the
+    /// tool asks tmux for the pane pids instead (`procs`).
+    pid: Option<u32>,
     /// The terminal device this session's shell runs on, when it could be determined.
     ///
     /// Looked up ONCE, when the session opens, because it never changes and `ps` is a process. It is
@@ -351,6 +357,7 @@ impl TerminalRegistry {
                 pty: spawned.pty,
                 tmux_session: launch.tmux_session,
                 shell: shell.clone(),
+                pid: spawned.pid,
                 tty,
             },
         );
@@ -401,6 +408,55 @@ impl TerminalRegistry {
         session.pty.close();
         tracing::info!(session = id, "terminal session closed");
         Ok(())
+    }
+
+    /// What this tab is running, and what it is listening on.
+    ///
+    /// **The roots differ inside tmux**, which is the whole difficulty: a tab attached to tmux has
+    /// one child — the client — while the work runs under the tmux server, which is nobody's child.
+    /// So tmux is asked for its pane pids and those become the roots. Outside tmux the tab's own
+    /// child is the root and everything hangs off it.
+    pub fn activity(&self, id: SessionId) -> Result<crate::dto::TerminalActivity> {
+        let (session_name, pid) = {
+            let sessions = self.sessions.lock().map_err(poisoned)?;
+            match sessions.get(&id) {
+                // A poll can outlive the tab it was polling for. Not an error, just nothing to show.
+                None => {
+                    return Ok(crate::dto::TerminalActivity {
+                        processes: Vec::new(),
+                        ports: Vec::new(),
+                        via_tmux: false,
+                    })
+                }
+                Some(session) => (session.tmux_session.clone(), session.pid),
+            }
+        };
+
+        let (roots, via_tmux) = match session_name.as_deref() {
+            Some(name) => match tmux::pane_pids(name) {
+                pids if !pids.is_empty() => (pids, true),
+                // Attached to tmux but it would not say: fall back to our own child rather than
+                // showing nothing. One line reading "tmux" is still true.
+                _ => (pid.into_iter().collect(), false),
+            },
+            None => (pid.into_iter().collect(), false),
+        };
+
+        let processes = crate::procs::tree(&roots);
+        let pids: Vec<u32> = processes.iter().map(|p| p.pid).collect();
+        let ports = crate::procs::listening(&pids);
+        tracing::debug!(
+            session = id,
+            processes = processes.len(),
+            ports = ports.len(),
+            via_tmux,
+            "read a tab's activity"
+        );
+        Ok(crate::dto::TerminalActivity {
+            processes,
+            ports,
+            via_tmux,
+        })
     }
 
     /// Where this session's shell currently is, when the backend can answer it.

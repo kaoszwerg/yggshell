@@ -173,6 +173,41 @@ fn is_valid_session_name(name: &str) -> bool {
         && !name.chars().any(char::is_control)
 }
 
+/// The process ids of every pane in `session`.
+///
+/// **Why this is needed at all.** Everything a user runs inside tmux is a child of the tmux
+/// *server*, not of the client sitting on our PTY — so walking our own process tree finds exactly
+/// one thing, the client, and misses the build, the dev server and the agent entirely. tmux is the
+/// only one that knows, so tmux is asked.
+///
+/// Empty when there is no tmux, no server, or no such session — all of which mean "nothing to
+/// report" rather than an error.
+pub fn pane_pids(session: &str) -> Vec<u32> {
+    let Some(tmux) = crate::terminal::environment::which("tmux") else {
+        return Vec::new();
+    };
+    let Ok(output) = Command::new(tmux)
+        .args(["list-panes", "-t", session, "-F", "#{pane_pid}"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_pane_pids(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Parse one pid per line, ignoring anything that is not one.
+pub fn parse_pane_pids(listing: &str) -> Vec<u32> {
+    listing
+        .lines()
+        .filter_map(|line| line.trim().parse().ok())
+        .collect()
+}
+
 /// Every tmux client this app currently has attached, by terminal device.
 ///
 /// **Why a global.** A tab closing has its session in hand; the two cases that matter most do not:

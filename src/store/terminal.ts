@@ -29,6 +29,16 @@ export interface TerminalPane {
    *  without the hook never does, and guessing would point the Git tool at the wrong repository. */
   cwd: string | null;
   /**
+   * The backend session this tab is talking to, once the PTY is open.
+   *
+   * It used to live only inside the pane component, which was right while nothing outside needed
+   * it. A sidebar tool does: "what is this tab running" is a question asked from outside the
+   * terminal view entirely, and a ref in a component is not reachable from there. `null` until the
+   * PTY opens, and back to `null` when it goes — a stale id would have a tool reading another
+   * tab's processes.
+   */
+  sessionId: number | null;
+  /**
    * The profile this tab was opened with, or `null` for the Settings defaults.
    *
    * Fixed for the tab's life, and only because of what a profile decides at START time: which shell
@@ -130,6 +140,8 @@ export interface TerminalState {
   setPaneDetail: (key: string, detail: GitDetail | null) => void;
   /** Record which tmux session a tab ended up attached to, so a restart can return to it. */
   setPaneTmuxSession: (key: string, session: string | null) => void;
+  /** Record (or clear) the backend session this tab is talking to. */
+  setPaneSession: (key: string, sessionId: number | null) => void;
   /**
    * Record what this tab is doing.
    *
@@ -178,6 +190,7 @@ export const useTerminalStore = create<TerminalState>()(
             {
               key,
               title: "Terminal",
+              sessionId: null,
               cwd,
               profileId,
               themeId: null,
@@ -262,6 +275,13 @@ export const useTerminalStore = create<TerminalState>()(
             p.key === key && p.tmuxSession !== tmuxSession ? { ...p, tmuxSession } : p,
           ),
         })),
+
+      setPaneSession: (key, sessionId) =>
+        set((s) => ({
+          panes: s.panes.map((p) =>
+            p.key === key && p.sessionId !== sessionId ? { ...p, sessionId } : p,
+          ),
+        })),
     }),
     {
       name: "app-terminals",
@@ -292,6 +312,7 @@ export const useTerminalStore = create<TerminalState>()(
           .map((p) => ({
             key: p.key,
             title: "Terminal",
+            sessionId: null,
             cwd: typeof p.cwd === "string" ? p.cwd : null,
             profileId: typeof p.profileId === "string" ? p.profileId : null,
             themeId: typeof p.themeId === "string" ? p.themeId : null,

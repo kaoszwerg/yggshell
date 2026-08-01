@@ -13,6 +13,7 @@ pub mod files;
 mod git;
 pub mod launch;
 pub mod logging;
+pub mod procs;
 pub mod profile;
 pub mod services;
 pub mod settings;
@@ -89,6 +90,7 @@ pub fn run() {
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
             commands::terminal::terminal_status,
+            commands::terminal::terminal_activity,
             commands::git::git_snapshot,
             commands::git::git_fetch,
             commands::git::git_file_diff,

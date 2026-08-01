@@ -118,3 +118,17 @@ pub fn terminal_close(registry: State<'_, TerminalRegistry>, id: SessionId) -> R
     tracing::info!(session = id, "terminal_close");
     registry.close(id)
 }
+
+/// What a tab is running, and what it is listening on.
+///
+/// Read-only: nothing here starts or stops a process, and the frontend names a *session*, never a
+/// command (ADR-PROJ-001 §5). Called on demand rather than on a timer — it spawns `ps` and `lsof`,
+/// which have no business on a four-second interval.
+#[tauri::command]
+pub fn terminal_activity(
+    state: tauri::State<'_, TerminalRegistry>,
+    id: u32,
+) -> Result<crate::dto::TerminalActivity> {
+    tracing::debug!(session = id, "terminal_activity");
+    state.activity(id)
+}

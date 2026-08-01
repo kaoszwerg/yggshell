@@ -17,9 +17,9 @@ const VIEWS: ViewId[] = ["terminal", "logs", "settings"];
  * A tool is not a view: a view replaces what you are looking at, a tool sits next to it while the
  * terminal keeps running. That is the whole point of the column, so Logs and Settings stay views.
  */
-export type ToolId = "git" | "files";
+export type ToolId = "git" | "files" | "activity";
 
-const TOOLS: ToolId[] = ["git", "files"];
+const TOOLS: ToolId[] = ["git", "files", "activity"];
 
 /** Bounds of the tool column, in pixels. Below the minimum a file path is unreadable; above the
  *  maximum the terminal stops being the main thing on screen. */

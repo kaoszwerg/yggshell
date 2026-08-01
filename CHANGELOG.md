@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **An activity tool: what this tab is running, and what it is listening on.** A harness starts a dev
+  server, a watcher, a build; it scrolls away or the tab is closed, and nothing said any of it was
+  still there — until the next run failed on a port that was already taken, with an error naming
+  neither the process nor the tab. The tool shows the process tree with the whole command line
+  (`node` alone answers nothing) and the ports, with the address each is bound to, because `*` and
+  `127.0.0.1` are the difference between reachable from the network and not. **Inside tmux it shows
+  the session**, not the tab: everything a user runs there is a child of the tmux server, so walking
+  our own tree would find exactly one thing — the client. Read on demand rather than on a timer, and
+  it offers no way to end anything: the terminal is right there.
+
 - **A file browser in the sidebar.** The tree of the active tab's working directory — folders and
   files, expandable, following a `cd` the same way the Git tool does. One directory is read per
   open, never a recursive walk: a tree that fetched everything up front would read `node_modules`

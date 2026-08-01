@@ -162,6 +162,44 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// One process under a terminal tab.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct ProcessInfo {
+    pub pid: u32,
+    pub parent: u32,
+    /// How far below the tab's own shell this sits, so the view can indent without nesting the data.
+    pub depth: u32,
+    /// `ps` state letters — `R` running, `S` sleeping, `Z` a zombie nobody reaped.
+    pub state: String,
+    /// How long it has been alive, as `ps` formats it (`01:23:45`, `2-04:00:00`).
+    pub elapsed: String,
+    /// The whole command line, spaces included. `node` alone is not an answer.
+    pub command: String,
+}
+
+/// One TCP port a tab's processes are listening on.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct PortInfo {
+    pub port: u16,
+    pub pid: u32,
+    pub command: String,
+    /// `*`, `127.0.0.1`, `[::1]` — the difference between reachable from the network and not.
+    pub address: String,
+}
+
+/// What a terminal tab is running, and what it has open.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TerminalActivity {
+    pub processes: Vec<ProcessInfo>,
+    pub ports: Vec<PortInfo>,
+    /// True when the roots came from tmux rather than from the tab's own child — the tree then shows
+    /// the whole session, which is what the user means by "what is running here".
+    pub via_tmux: bool,
+}
+
 /// One entry in a directory, as the file browser draws it.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

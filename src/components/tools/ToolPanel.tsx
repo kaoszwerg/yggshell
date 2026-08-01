@@ -4,6 +4,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { repositoryName, useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { useT } from "../../hooks/useT";
 import type { MessageKey } from "../../i18n";
+import { ActivityTool } from "./ActivityTool";
 import { FilesTool } from "./FilesTool";
 import { GitTool } from "./GitTool";
 import { TOOL_WIDTH_MAX, TOOL_WIDTH_MIN, useUiStore, type ToolId } from "../../store/ui";
@@ -17,6 +18,8 @@ function toolLabelKey(tool: ToolId): MessageKey {
       return "nav.git";
     case "files":
       return "nav.files";
+    case "activity":
+      return "nav.activity";
   }
 }
 
@@ -83,6 +86,7 @@ export function ToolPanel() {
         <div className="min-h-0 flex-1 overflow-hidden">
           {activeTool === "git" ? <GitTool /> : null}
           {activeTool === "files" ? <FilesTool /> : null}
+          {activeTool === "activity" ? <ActivityTool /> : null}
         </div>
       </aside>
 
