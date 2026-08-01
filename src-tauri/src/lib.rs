@@ -126,6 +126,11 @@ pub fn run() {
             tracing::info!("exit requested — the app was asked to quit");
         }
         tauri::RunEvent::Exit => {
+            // Quitting the app does NOT close each tab — the process just ends, and a tmux client
+            // that loses its terminal that way takes the session with it (measured, see
+            // terminal::tmux::detach_client). Every attached client is handed back here, so ⌘Q with
+            // four tabs open leaves four resumable sessions rather than none.
+            terminal::tmux::detach_all();
             // Also the last chance to keep the window's size and position: the state plugin writes
             // its own file here, but only for a clean exit, and this is that moment.
             tray::save_geometry_on_exit(handle);

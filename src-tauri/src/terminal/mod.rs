@@ -336,6 +336,14 @@ impl TerminalRegistry {
         // simply absent, which is the honest outcome (rule:cross-platform).
         let tty = spawned.pid.and_then(attached::tty_of);
 
+        // Remembered so the app can detach it however it ends — including a crash, which never runs
+        // `close()` (tmux::detach_all). A session lost to an accidental quit is unrecoverable work.
+        if launch.tmux_session.is_some() {
+            if let Some(device) = tty.as_deref() {
+                tmux::remember(device);
+            }
+        }
+
         let tmux_session = launch.tmux_session.clone();
         self.sessions.lock().map_err(poisoned)?.insert(
             id,
@@ -381,6 +389,15 @@ impl TerminalRegistry {
             .map_err(poisoned)?
             .remove(&id)
             .ok_or_else(|| unknown(id))?;
+        // BEFORE the PTY goes: a tmux client that merely loses its terminal takes the session with
+        // it — measured against a real server, and the reason this call exists at all
+        // (tmux::detach_client). Closing a tab must never destroy work.
+        if session.tmux_session.is_some() {
+            if let Some(device) = session.tty.as_deref() {
+                tmux::detach_client(device);
+                tmux::forget(device);
+            }
+        }
         session.pty.close();
         tracing::info!(session = id, "terminal session closed");
         Ok(())

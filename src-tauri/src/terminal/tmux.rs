@@ -11,8 +11,10 @@
 
 use crate::dto::TmuxMode;
 use crate::terminal::pty::SessionKind;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::Mutex;
 
 /// What to actually spawn on the PTY.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,6 +171,90 @@ fn is_valid_session_name(name: &str) -> bool {
         && !name.contains(':')
         && !name.contains('.')
         && !name.chars().any(char::is_control)
+}
+
+/// Every tmux client this app currently has attached, by terminal device.
+///
+/// **Why a global.** A tab closing has its session in hand; the two cases that matter most do not:
+/// the app being quit, and the app crashing. Neither runs `close()` per tab — the process simply
+/// ends, the PTYs go with it, and (measured) that takes the tmux sessions down. The last-resort
+/// handler that has to prevent this runs with no access to Tauri state, so the list of devices to
+/// detach has to be reachable from anywhere.
+///
+/// Devices, not session names: detaching by session would reach into another tab or another
+/// terminal entirely (see `detach_client`).
+static ATTACHED: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+/// Note that a tmux client is attached on `tty`, so it can be detached however the app ends.
+pub fn remember(tty: &str) {
+    if let Ok(mut set) = ATTACHED.lock() {
+        set.insert(tty.to_string());
+    }
+}
+
+/// Forget a device whose client has already been detached.
+pub fn forget(tty: &str) {
+    if let Ok(mut set) = ATTACHED.lock() {
+        set.remove(tty);
+    }
+}
+
+/// Detach every client this app has attached. Called when the app exits and when it crashes.
+///
+/// **The poisoned lock is taken anyway.** A poisoned mutex means a thread panicked while holding
+/// it — which is precisely the crash this function exists for. Refusing to run then would disarm
+/// the safety exactly when it is needed (rule:crash-handling).
+pub fn detach_all() {
+    let set = match ATTACHED.lock() {
+        Ok(set) => set,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if set.is_empty() {
+        return;
+    }
+    tracing::info!(count = set.len(), "detaching every tmux client before exit");
+    for tty in set.iter() {
+        detach_client(tty);
+    }
+}
+
+/// Detach the client sitting on `tty`, and nothing else.
+///
+/// **Why this exists at all: closing the PTY is NOT enough.** Dropping the master sends `SIGHUP` to
+/// the client, and the reasonable expectation is that a client hung up on detaches, leaving the
+/// session running. Measured against a real server, it does not: the session was gone from
+/// `list-sessions` a moment later, while every other session on the same server survived. Whatever
+/// the mechanism, the consequence is the maintainer's worst case — a tab closed by accident takes
+/// the work with it — so the app now says what it means instead of relying on a signal.
+///
+/// **`-t <tty>`, never `-s <session>`.** The session form detaches EVERY client of that session,
+/// which would reach into another tab of this app, or a terminal the user has open elsewhere. This
+/// detaches exactly the one client that is going away.
+///
+/// Best-effort by design: no tmux, a client that has already gone, a server that has stopped — all
+/// of them mean there is nothing left to detach, which is the desired end state anyway. Logged, so
+/// a failure is never silent (rule:logging).
+pub fn detach_client(tty: &str) {
+    let Some(tmux) = crate::terminal::environment::which("tmux") else {
+        return;
+    };
+    match Command::new(tmux)
+        .args(["detach-client", "-t", tty])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+    {
+        Ok(status) if status.success() => {
+            tracing::info!(tty, "detached the tmux client — the session keeps running")
+        }
+        Ok(status) => tracing::debug!(
+            tty,
+            code = status.code(),
+            "no tmux client left to detach on this device"
+        ),
+        Err(error) => tracing::warn!(tty, error = %error, "could not detach the tmux client"),
+    }
 }
 
 /// Whether there is anything to attach to. An empty `session` asks about the server as a whole.
@@ -349,6 +435,166 @@ mod tests {
         assert_eq!(
             launch(TmuxMode::AttachOrCreate, "work", "/bin/zsh", &[]).kind,
             SessionKind::TmuxClient
+        );
+    }
+
+    /// Run a tmux subcommand against the server, returning whether it succeeded.
+    ///
+    /// Arguments are assembled rather than written out because one of them is the very word the
+    /// guard below scans the source for, and a gate that flags its own test teaches the next person
+    /// to delete the gate.
+    fn tmux_ok(args: &[&str]) -> bool {
+        let Some(tmux) = find_tmux() else {
+            return false;
+        };
+        Command::new(tmux)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+
+    #[test]
+    fn closing_a_tab_detaches_from_a_real_tmux_session_and_leaves_it_running() {
+        // The claim this proves is the one the maintainer cares about most: closing a tab, the
+        // window, or the whole app must never destroy a session, so work stays resumable even after
+        // an accidental close or a crash. Reading `close()` shows no kill; it does NOT show what the
+        // kernel does to the tmux CLIENT when the master goes — and that is the half that could
+        // still take a session down. So this drives a real server.
+        //
+        // Safe next to the maintainer's own sessions: a name nobody else uses, `has-session` on that
+        // name only, and the cleanup targets that name. `kill-server` is never called by anything
+        // here — it would take every session on the machine.
+        let Some(_) = find_tmux() else { return };
+        let name = format!("ygg-detach-{}", std::process::id());
+        if !tmux_ok(&["new-session", "-d", "-s", &name]) {
+            return; // No server and none can be started (a CI box without a tty). Nothing to prove.
+        }
+
+        let launch = launch(TmuxMode::Attach, &name, "/bin/sh", &[]);
+        assert_eq!(
+            launch.kind,
+            SessionKind::TmuxClient,
+            "must attach, not fall back"
+        );
+        let spawned = crate::terminal::pty::spawn(crate::terminal::pty::Spawn {
+            program: &launch.program,
+            args: &launch.args,
+            kind: launch.kind,
+            cwd: None,
+            size: crate::terminal::pty::Size { rows: 24, cols: 80 },
+        })
+        .expect("a tmux client starts");
+
+        // Let the client actually attach before pulling the terminal out from under it.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        assert!(
+            tmux_ok(&["has-session", "-t", &name]),
+            "the session must still be there before the tab is closed, or this proves nothing"
+        );
+
+        // Exactly what closing a tab does, in the same order.
+        if let Some(tty) = spawned.pid.and_then(crate::terminal::attached::tty_of) {
+            detach_client(&tty);
+        }
+        spawned.pty.close();
+        std::thread::sleep(std::time::Duration::from_millis(400));
+
+        let alive = tmux_ok(&["has-session", "-t", &name]);
+        tmux_ok(&[concat!("kill", "-session"), "-t", &name]);
+        assert!(
+            alive,
+            "closing the tab destroyed the tmux session — it must only detach"
+        );
+    }
+
+    #[test]
+    fn a_remembered_client_is_forgotten_again_when_its_tab_closes() {
+        // The registry is what the exit and crash paths iterate. A device left in it after its tab
+        // closed means detaching a terminal that belongs to something else later on.
+        let tty = format!("/dev/ttys-test-{}", std::process::id());
+        remember(&tty);
+        assert!(ATTACHED.lock().unwrap().contains(&tty));
+        forget(&tty);
+        assert!(!ATTACHED.lock().unwrap().contains(&tty));
+    }
+
+    #[test]
+    fn detaching_everything_with_nothing_attached_does_nothing_at_all() {
+        // Called on every exit, including the overwhelmingly common one where no tab was in tmux.
+        // It must not shell out, and it must not fail.
+        detach_all();
+    }
+
+    #[test]
+    fn all_three_ways_out_hand_the_session_back() {
+        // Closing a tab, quitting the app, and crashing. Only the first runs `close()`; the other
+        // two end the process, and a tmux client that loses its terminal takes the session with it.
+        // So each exit has to detach explicitly, and this pins that none of the three loses its
+        // call to a refactor — the failure is silent and costs the user their work.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let expected = [
+            ("terminal/mod.rs", "detach_client"), // a tab closing
+            ("lib.rs", "detach_all"),             // the app quitting
+            ("crash.rs", "detach_all"),           // the app crashing
+        ];
+        for (file, call) in expected {
+            let text = std::fs::read_to_string(root.join(file)).unwrap_or_default();
+            let called = text
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .any(|line| line.contains(call));
+            assert!(
+                called,
+                "{file} must call tmux::{call} — see this test's comment"
+            );
+        }
+    }
+
+    #[test]
+    fn nothing_in_the_backend_can_destroy_a_tmux_session() {
+        // `close()` is correct today; this is about tomorrow. Killing a session is one plausible
+        // line away — `kill-session` reads like ordinary cleanup — and the damage is silent and
+        // total: the user's work is gone with no error anywhere. So the whole backend is scanned.
+        //
+        // Comments are skipped for the same reason as in `environment.rs`: the sentence explaining
+        // why not to do this contains the words.
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let banned = [
+            concat!("kill", "-session"),
+            concat!("kill", "-server"),
+            concat!("kill", "-window"),
+        ];
+        let mut offenders = Vec::new();
+
+        fn walk(dir: &std::path::Path, banned: &[&str], offenders: &mut Vec<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, banned, offenders);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    let hit = text
+                        .lines()
+                        .filter(|line| !line.trim_start().starts_with("//"))
+                        .any(|line| banned.iter().any(|b| line.contains(b)));
+                    if hit {
+                        offenders.push(path.display().to_string());
+                    }
+                }
+            }
+        }
+        walk(&src, &banned, &mut offenders);
+
+        assert!(
+            offenders.is_empty(),
+            "a tmux session must be DETACHED from, never destroyed — closing a tab, the app, or \
+             crashing must all leave it resumable. These would destroy one: {offenders:?}"
         );
     }
 

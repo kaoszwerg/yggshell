@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Closing a tab, quitting, or crashing no longer destroys a tmux session.** It was believed that
+  letting the terminal go was enough — a client hung up on detaches, and the session keeps running.
+  Measured against a real server, it does not: the session was gone from `list-sessions` a moment
+  later while every other session survived. The app now detaches explicitly, by terminal device so
+  it can never reach into another tab or another terminal, and it does so on all three ways out —
+  the tab, `⌘Q`, and the crash handler, which hands the sessions back *before* it writes its report,
+  because a report can be written again and an unattached session cannot be resurrected.
+
 - **A diff and a commit are now really drawn in the scheme you chose.** The setting promises "the
   colours a terminal, a diff and a commit are drawn in", and each view kept half of that promise: the
   diff handed the scheme to the syntax highlighter and nothing else, so Alien Blood keywords sat on

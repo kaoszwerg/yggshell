@@ -256,6 +256,16 @@ fn show_message_box(title: &str, body: &str) {
 /// discharged in one place that cannot be forgotten or half-implemented at a call site.
 pub fn fatal(kind: &str, summary: &str, details: &str, code: i32) -> ! {
     tracing::error!(kind, summary, details, "fatal — terminating");
+    // FIRST, before anything that could itself fail: hand every tmux session back.
+    //
+    // A tmux client that merely loses its terminal takes the session down with it — measured, not
+    // assumed (terminal::tmux::detach_client). So a crash would destroy exactly the work the user
+    // put in a multiplexer to keep, and it is the one loss here that cannot be undone: a report can
+    // be written again, a window can be reopened, an unattached session cannot be resurrected.
+    //
+    // Deliberately ahead of the report and the message box. Both are useful; neither is worth a
+    // session.
+    crate::terminal::tmux::detach_all();
     let report = write_report(kind, details);
     // Flush the log file NOW: `process::exit` runs no destructors, so the appender's worker would
     // otherwise be killed mid-buffer and take the final records with it.
