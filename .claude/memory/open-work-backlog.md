@@ -8,6 +8,21 @@ triggers:
   [
     backlog,
     open,
+    performance,
+    slow,
+    sluggish,
+    latency,
+    cpu,
+    gpu,
+    profiling,
+    benchmark,
+    footprint,
+    repaint,
+    render,
+    rendering,
+    xterm,
+    coalescer,
+    throughput,
     follow-up,
     todo,
     gap,
@@ -103,6 +118,106 @@ later contradicted. The measurements are kept so the next agent does not pay for
   has tests. Measurements behind it, so nobody repeats them: `$COLUMNS`/`stty size` match the spawn
   size exactly (the column-mismatch-at-spawn theory in this file was wrong); xterm.js fed zsh's exact
   bytes leaves `%` at 80 real vs. 100 believed columns and nothing at 100 vs. 100.
+## Performance rounds — measured, and where they stopped (2026-08-01)
+
+**A resumable state, not a wish list.** Read the numbers before re-measuring anything; each cost
+real time. Round 1 landed in 0.34–0.35 and is closed. Rounds 2–4 are open, in priority order agreed
+with the maintainer.
+
+**The one methodological trap, and it invalidated a measurement here:** *"idle"* must mean idle. A
+baseline taken while a Claude session ran in one of the tabs read **30.5 %** (Rust 5.7 / GPU 13.1 /
+WebContent 11.8) — that is a terminal with a running animation, not an idle app, and it answers none
+of the questions below. A clean baseline needs a window with **no agent session running in any tab**.
+
+### Round 1 — closed, shipped in 0.34.x/0.35.0
+
+| Finding | Measurement |
+| --- | --- |
+| `.window-frame` painted the whole window at 60 fps | 27.7 % → **3.0 %** GPU (same instance, CSS hot-swapped) |
+| Events file read whole every 3 s, grows forever | O(usage) → constant (tail read) |
+| Transcript search bounded by file COUNT | lost against slash-command transcripts → byte budget |
+| `docker stats` polling | ~2 s per call → only while the tool is on screen |
+| Rust async paths | **0** async commands doing blocking work — the "we built it blocking" premise was wrong |
+| Polling inventory | `tmux display-message` 8.9 ms ×2 per 2 s (~0.9 %); `git_snapshot` ~25 ms per 4 s (~0.6 %) |
+
+### Round 2 — widget switching: React is NOT the cause (measured 2026-08-01)
+
+**Measured with React's `<Profiler>` around `ToolPanel`, dev build, real clicks through all five
+tools:**
+
+| tool | React render |
+| --- | --- |
+| git | 0–2 ms |
+| files | 2 ms |
+| docker | 0–3 ms |
+| agent | 0–1 ms |
+| activity | 0 ms |
+
+**0–3 ms, in the DEV build**, which is markedly slower than release. Rebuilding the component tree is
+therefore **not** what makes a tool switch feel slow. This kills the obvious fix before anyone builds
+it: keeping tools mounted (as `TerminalView.tsx:501` does for panes) would cost effort, would undo the
+maintainer's decision that the Docker monitor polls only while visible, and would buy **nothing**.
+
+**Two candidates remain, neither measured:**
+
+1. **Waiting for data.** Proven for one: opening Docker starts `container_stats`, which takes ~2 s —
+   the list is instant from cache, the bars arrive two seconds later. Files and Git unmeasured.
+2. **Layout, paint and compositing after React.** The profiler stops when React is done; nothing is on
+   screen yet. The HUD uses `clip-path` and glow shadows, and the GPU process is already busy with the
+   terminal. **This is the next thing to measure** — instrument with two nested
+   `requestAnimationFrame` calls inside `onRender` to get click-to-visible rather than click-to-React.
+
+**The measurement trap that ended this round, and it will happen again:** the machine was under load
+from Docker tests run by another agent — the VM alone at **188 % CPU**, and **WindowServer at 11.9 %**.
+WindowServer is the system compositor every window goes through, so the *whole desktop* was sluggish,
+not the app. Any number taken then is unreproducible. **Check `uptime` and the top consumers before
+trusting a UI-latency measurement**, and say so in the result.
+
+### Round 2b — original framing, kept for context
+
+**What is established:** every tool is unmounted and rebuilt on switch — `ToolPanel` renders
+`activeTool === "git" ? <GitTool/> : null`. The **terminals do it the other way** and are fast:
+`TerminalView.tsx:501` keeps inactive panes mounted behind `className={active ? … : "hidden"}`.
+
+**Known with certainty for one tool:** opening Docker starts `container_stats`, which takes ~2 s.
+The list is cached and instant; the bars arrive two seconds later.
+
+**Not established:** whether the other tools' cost is React mount or their queries. **Do not guess** —
+measure with React's `<Profiler onRender>` around `ToolPanel` (built in, exact, no dependency).
+
+**The constraint any fix must respect:** keeping tools mounted would keep their queries polling, which
+would undo the maintainer's explicit decision that the Docker monitor runs only while visible
+(rule:attention-signals contrasts the two). Mount-without-polling is possible but has side effects —
+decide it with a measurement in hand.
+
+### Round 3 — terminal rendering (~25 %, the largest remaining item)
+
+The hot path: PTY → `Coalescer` → Tauri `Channel` → `xterm.write()` → WebGL renderer.
+
+**The hypothesis to test first:** `FLUSH_INTERVAL` is **8 ms** (`terminal/mod.rs:40`), i.e. 125
+batches/s against a 60 Hz screen. The code justifies it as *"below what an eye resolves"* — which
+answers the wrong question. The question is whether every batch causes work (IPC message, `write()`,
+parse, render schedule) that is discarded at every second one. Compare 8 ms vs 16 ms under a defined
+load. `FLUSH_BYTES` is 64 KB.
+
+**Also unanswered:** does an *inactive* pane still cost? It stays mounted behind `hidden`, so
+`write()` and parsing certainly continue (the scrollback must stay current) — whether xterm also keeps
+requesting frames is unknown. And whether WebKit really hardware-accelerates `WebglAddon` or silently
+falls back.
+
+**Needs a defined load the maintainer runs** (the agent cannot type into their terminals): idle, then
+moderate (`seq 1 500000`), then a flood (`yes | head -c 20000000`), measuring CPU per process.
+
+### Round 4 — code-level analysis, measurement-led
+
+Worth doing, but **after** a measurement points at something, and it finds a different class:
+algorithmic complexity that only bites under load, memory growth over time (WebContent sat at
+219 MB — a snapshot, no trend), unnecessary work for invisible tabs.
+
+**Two suspicions already checked and DISMISSED — do not re-open them:** the status bar's one-second
+tick already stops when nothing runs, and the `s.panes` selectors only re-render on a real reference
+change.
+
 ## Defects with a diagnosis, not yet closed
 
 - **`zsh: locking failed for <appdata>/shell/.zsh_history: no such file or directory`** was seen once
