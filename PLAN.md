@@ -123,9 +123,17 @@ understands.
       tmux**, because everything the user runs there is a child of the tmux server; walking our own
       tree would find one thing, the client.
 - [x] **Docker** — containers grouped by compose project, the health verdict verbatim, only the ports
-      published to the host, and the last 200 log lines on demand.
+      published to the host, and the last 200 log lines on demand. **Live CPU and memory per running
+      container** (2026-08-01), polled only while the tool is on screen: `docker stats` costs ~2 s per
+      call regardless of container count, so the interval is 5 s and the panel stops polling the moment
+      it closes. No history and no disk figures — both deliberate, see `mem:open-work-backlog`.
 - [x] **Agent** — what the harness in this tab is doing, plus a status bar element with the context
       count. **No percentage**: the transcript never records the size of the window a turn went into.
+- [x] **An agent asking for something marks its tab** (2026-08-01). The Claude Code hook reports which
+      directory is waiting and why; that now rings the tab's own mark at the shell root rather than
+      rendering only inside the Agent tool — a signal has to reach you while you are looking elsewhere.
+      Only `Notification` marks (a finished turn is not a request), and answering clears it without a
+      click. See `rule:attention-signals` for what must never gate it again.
 - [x] **Claude accounts** — which one a project uses, and choosing, creating and applying one:
       writing the `.envrc`, approving it, installing direnv where it is missing.
 

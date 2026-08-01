@@ -146,6 +146,18 @@ an occluded window stops getting animation frames.
    `steps(60)` on 1920×1080, ~19–50 px at `steps(180)`. **We shipped `steps(60)`** — worth checking at
    the window size actually used before defending it.
 
+**Observation the upstream does not have, and it pushes back on their `steps(n)` objection.** They
+withdrew `steps(60)` and `steps(180)` as "not visually free", computing that a colour-stop boundary
+travels ~56 px at an edge midpoint and >150 px near a corner per step on 1920×1080. Recomputed for this
+app's actual default window (1280×832): ~44 px and ~127 px — smaller, still not nothing.
+
+**But the maintainer, running the shipped `steps(60)` build, reports the frame looks completely normal —
+no stutter, no visible jump.** The arithmetic measures how far a point of equal colour travels; it does
+not measure how *visible* that is. This gradient has **five stops across 360°, i.e. 90° apart**, so one
+6° step is **6.7 % of the transition between two adjacent colours** — a colour delta far below what the
+eye resolves on a 1.5 px line. The travel figure and the perceptibility are different quantities, and
+the objection conflates them. Report this back with the numbers; do not simply concede `steps(n)`.
+
 **Our own measurement, for the report:** 27.7 % → 3.0 % in the WebKit GPU process, same instance, CSS
 swapped by hot-reload, idle release build. That is the number the upstream does not have.
 
@@ -240,7 +252,57 @@ would undo the maintainer's explicit decision that the Docker monitor runs only 
 (rule:attention-signals contrasts the two). Mount-without-polling is possible but has side effects —
 decide it with a measurement in hand.
 
-### Round 3 — terminal rendering (~25 %, the largest remaining item)
+### Round 3 — MEASURED (2026-08-01): the app is quiet, the terminals are not
+
+**The idle baseline that was missing all day**, taken on a dev instance with **no agent session in any
+tab**, Docker stopped:
+
+| | idle window | same app, 2 Claude sessions running |
+| --- | --- | --- |
+| Rust backend | 3.1 % | 6.2 % |
+| WebKit.GPU | **2.2 %** | **15.9 %** |
+| WebContent | 2.4 % | 13.0 % |
+| **total** | **7.8 %** | **35.0 %** |
+
+**YggShell itself costs 7.8 % idle** — and a remote-desktop session (RustDesk, ~38 %) was running
+throughout, so part of even that is not ours. The remaining 27 points are terminal rendering under live
+output: the GPU process rises by a factor of **seven** the moment terminals emit text. The window frame
+is no longer a factor — the harness measured `steps(60)` at +0.1 points over control.
+
+**So the framing changes:** there is no idle-cost problem left to fix. What remains is the cost of
+rendering output, which is the app's actual job.
+
+**The `FLUSH_INTERVAL` hypothesis is DEAD — measured, 2026-08-01.** 8 ms vs 16 ms, same dev build, same
+`yes` flood, same machine: **66.4 % vs 66.3 %**, with WebContent identical at 44.5 % in both. Idle 10.5 %
+vs 10.1 %. There is nothing there.
+
+The reason is in the code: under a flood the **byte threshold** fires, not the timer — `FLUSH_BYTES` is
+64 KB and `yes` fills it long before 8 ms elapse. The interval only governs the *quiet* case, where the
+cost is zero anyway. **Do not re-open this**; raising the interval buys nothing and costs latency on
+short bursts.
+
+**What the load profile actually says** (Prod build, `perf` tmux tab, 15 s each):
+
+| | Rust | GPU | WebContent | total |
+| --- | --- | --- | --- | --- |
+| idle | 4.8 % | 3.2 % | 3.7 % | 11.7 % |
+| moderate (~2k lines/s) | 8.2 % | 13.9 % | 16.4 % | 38.5 % |
+| flood (`yes`) | 11.1 % | 8.5 % | **42.0 %** | 61.6 % |
+
+**Under a flood the bottleneck is WebContent — xterm's parser — not the GPU**, which actually *drops*
+from 13.9 % to 8.5 % because xterm skips frames when it cannot keep up. So the remaining cost is the
+parse of the bytes themselves, which is the app doing its job. There is no cheap win left in this path;
+anything further means changing what xterm does with the data, not how it is delivered.
+
+**Superseded — the original hypothesis, kept so nobody re-derives it:** 8 ms is 125 flushes/s; this machine's display runs
+at **60 Hz** (measured via the harness: `current` triggers exactly 60.0/s). So the backend hands the
+webview roughly **two batches per rendered frame**, each costing an IPC message, an `xterm.write()`, a
+parse and a render schedule. Testing it needs terminal load inside an instance the agent can drive —
+the dev instance ships `tmux_mode: off`, so there is no send-keys route in. Either switch the dev
+settings to tmux and script `tmux send-keys`, or have the maintainer run `seq 1 500000` and
+`yes | head -c 20000000` while the agent samples.
+
+### Round 3 (original framing) — terminal rendering
 
 The hot path: PTY → `Coalescer` → Tauri `Channel` → `xterm.write()` → WebGL renderer.
 
