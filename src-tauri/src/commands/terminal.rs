@@ -175,3 +175,18 @@ fn home_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     use tauri::Manager;
     app.path().home_dir().ok()
 }
+
+/// How much of the subscription this tab's account has used.
+///
+/// **Free to ask** — measured: `total_cost_usd: 0`, `num_turns: 0`. The slash command is handled
+/// inside Claude Code and never reaches a model, which is what makes it usable at all; the same
+/// figures cannot be derived from the transcript, which records tokens and never limits.
+///
+/// Runs with the account the project declares, or the numbers would be somebody else's.
+#[tauri::command]
+pub fn agent_usage(cwd: String) -> Result<Option<crate::dto::UsageSummary>> {
+    tracing::debug!(%cwd, "agent_usage");
+    let project = std::path::Path::new(&cwd);
+    let home = crate::agent::declared_home(project);
+    Ok(crate::agent::usage::read(home.as_deref(), project))
+}

@@ -6,7 +6,12 @@ import { ColorField } from "../ui/ColorField";
 import { PreviewCard } from "../ui/PreviewCard";
 import { IconButton } from "../ui/IconButton";
 import { TextField } from "../ui/TextField";
-import { BUILTIN_THEME_NAME, HUD_TERMINAL_THEME, resolveTheme } from "../../lib/terminalTheme";
+import {
+  BUILTIN_THEME_ID,
+  BUILTIN_THEME_NAME,
+  HUD_TERMINAL_THEME,
+  resolveTheme,
+} from "../../lib/terminalTheme";
 import { useT } from "../../hooks/useT";
 import {
   useDeleteTerminalTheme,
@@ -264,6 +269,14 @@ function SchemeChoice({
         <Button aria-pressed={chosen === ""} active={chosen === ""} onClick={() => onChoose("")}>
           {followsLabel}
         </Button>
+        {/* Yggdrasil belongs here as much as anywhere, and its absence was a real gap: with the
+            terminal on another scheme there was no way to say "but draw diffs in Yggdrasil" — only
+            "follow the terminal". The two are different answers, which is exactly why the built-in
+            scheme has an id of its own: `""` follows the chain, `yggdrasil` pins it. */}
+        <BuiltinCard
+          selected={chosen === BUILTIN_THEME_ID}
+          onChoose={() => onChoose(BUILTIN_THEME_ID)}
+        />
         {themes.map((theme) => (
           <SchemeCard
             key={theme.id}

@@ -2,6 +2,7 @@ import { Bot, Clock, GitBranch, Hash, Home } from "lucide-react";
 import { useAgentSession } from "../../hooks/useAgentSession";
 import { useNow } from "../../hooks/useNow";
 import { EnvironmentPanel } from "./EnvironmentPanel";
+import { UsageBars } from "./UsageBars";
 import { useT } from "../../hooks/useT";
 import { formatTokens, sinceLabel } from "../../lib/tokens";
 
@@ -69,6 +70,8 @@ export function AgentTool() {
           value={sinceLabel(session.last_at, now) || "—"}
         />
       </dl>
+
+      <UsageBars />
 
       <p className="text-dim/60 px-2 pb-2 font-mono text-[9px] leading-relaxed">
         {t("agent.disclaimer")}

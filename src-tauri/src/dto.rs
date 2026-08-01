@@ -162,6 +162,28 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// One usage limit and how full it is.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct UsageLimit {
+    /// `Current session`, `Current week (all models)` — Anthropic's wording, kept verbatim.
+    pub label: String,
+    pub percent: u8,
+    /// When it resets, as reported. Absent for a limit that does not say.
+    pub resets: Option<String>,
+}
+
+/// How much of the subscription is used up, as Claude Code reports it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct UsageSummary {
+    /// A list rather than named fields: the categories are Anthropic's to change, and a struct with
+    /// three of them would silently drop a fourth.
+    pub limits: Vec<UsageLimit>,
+    pub requests_24h: Option<u32>,
+    pub sessions_24h: Option<u32>,
+}
+
 /// One Claude home on this machine.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

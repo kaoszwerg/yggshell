@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Subscription usage, as bars.** How full the session and weekly limits are, read from Claude Code
+  itself (`/usage`) — which answers for **free**: no turn, no API call, measured. The transcript
+  cannot answer this at all, because it records tokens and never limits, which is why the context
+  count still has no bar and the usage does.
+
+### Fixed
+
+- **The built-in Yggdrasil scheme can now be chosen for diffs and commits too.** It was offered only
+  for the terminal, so with the terminal on another scheme there was no way to say "but draw diffs in
+  Yggdrasil" — only "follow the terminal". Those are different answers.
+- **A diff no longer ends in a second background.** The scroll container kept the panel's own colour,
+  so a file shorter than the panel showed the scheme down to its last line and `bg-elevated` below
+  it — two backgrounds meeting mid-view.
+
 ### Fixed
 
 - **The file browser had no context menu at all.** `Row` does not forward props it has not named, so

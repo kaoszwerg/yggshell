@@ -92,6 +92,10 @@ export function DiffView({
   }
 
   return (
+    // Keeps the surface class even though its scroll container also has one: nested is harmless
+    // (identical colour), and this component is used on its own elsewhere. What the container adds
+    // is the REST of the height — a diff shorter than the panel used to leave the panel's own
+    // `bg-elevated` showing below the last line, which is two backgrounds meeting mid-view.
     <div className="scheme-surface font-mono leading-[1.5]" style={surfaceStyle(scheme, fontSize)}>
       {diff.hunks.map((hunk, index) => {
         const key = `${hunk.old_start}:${hunk.new_start}`;

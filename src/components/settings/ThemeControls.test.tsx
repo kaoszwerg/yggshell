@@ -281,3 +281,15 @@ describe("choosing a scheme by what it looks like", () => {
     expect(marked).toHaveLength(1);
   });
 });
+
+it("offers the built-in scheme for diffs and commits, not only for the terminal", async () => {
+  // The gap: with the terminal on another scheme there was no way to say "but draw diffs in
+  // Yggdrasil" — only "follow the terminal". Those are different answers, which is exactly why the
+  // built-in scheme has an id of its own: "" follows the chain, "yggdrasil" pins it.
+  render(<ThemeControls />);
+
+  const groups = await screen.findAllByRole("group");
+  const diffs = groups.find((g) => g.getAttribute("aria-label")?.startsWith("Diffs"));
+  expect(diffs).toBeDefined();
+  expect(within(diffs as HTMLElement).getByRole("button", { name: /Yggdrasil/ })).toBeDefined();
+});

@@ -24,6 +24,7 @@
 //! crash. If it changes, this tool goes quiet — the app does not.
 
 pub mod direnv;
+pub mod usage;
 
 use crate::dto::AgentSession;
 use std::path::{Path, PathBuf};

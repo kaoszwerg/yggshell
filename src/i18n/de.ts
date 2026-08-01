@@ -37,6 +37,10 @@ export const de: Translations = {
   "nav.primary": "Hauptnavigation",
   "nav.terminal": "Terminal",
   "nav.git": "Git",
+  "usage.title": "Abonnement",
+  "usage.reading": "Claude Code wird gefragt…",
+  "usage.resets": "setzt {when} zurück",
+  "usage.last24h": "Letzte 24 h · {requests} Anfragen · {sessions} Sessions",
   "env.title": "Claude-Konto für dieses Projekt",
   "env.explain":
     "Ein Projekt wählt sein Konto über CLAUDE_CONFIG_DIR in einer .envrc, die direnv beim Betreten des Ordners lädt.",

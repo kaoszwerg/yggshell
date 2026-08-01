@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
 import type { TerminalOpened } from "../bindings/TerminalOpened";
 import type { AgentSession } from "../bindings/AgentSession";
+import type { UsageSummary } from "../bindings/UsageSummary";
 import type { TerminalActivity } from "../bindings/TerminalActivity";
 import type { TerminalStatus } from "../bindings/TerminalStatus";
 
@@ -90,6 +91,14 @@ export const terminalApi = {
    */
   agentSession: (id: SessionId, cwd: string) =>
     invoke<AgentSession | null>("agent_session", { id, cwd }),
+
+  /**
+   * How much of the subscription this tab's account has used.
+   *
+   * Free to ask — the slash command is handled inside Claude Code and never reaches a model — but
+   * it does spawn a process, so it is polled slowly and never on every render.
+   */
+  agentUsage: (cwd: string) => invoke<UsageSummary | null>("agent_usage", { cwd }),
 
   /** End a session because its tab was closed. Takes the foreground process group with it. */
   close: (id: SessionId) => invoke<void>("terminal_close", { id }),

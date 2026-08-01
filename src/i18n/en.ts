@@ -40,6 +40,10 @@ export const en = {
   "nav.primary": "Primary",
   "nav.terminal": "Terminal",
   "nav.git": "Git",
+  "usage.title": "Subscription",
+  "usage.reading": "Asking Claude Code…",
+  "usage.resets": "resets {when}",
+  "usage.last24h": "Last 24h · {requests} requests · {sessions} sessions",
   "env.title": "Claude account for this project",
   "env.explain":
     "A project chooses its account with CLAUDE_CONFIG_DIR in an .envrc, which direnv loads on entering the directory.",

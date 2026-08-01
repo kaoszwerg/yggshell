@@ -100,6 +100,7 @@ pub fn run() {
             commands::terminal::terminal_status,
             commands::terminal::terminal_activity,
             commands::terminal::agent_session,
+            commands::terminal::agent_usage,
             commands::git::git_snapshot,
             commands::git::git_fetch,
             commands::git::git_file_diff,

@@ -210,13 +210,19 @@ function DiffContent({
           </IconButton>
         }
       />
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div
+        className="scheme-surface min-h-0 flex-1 overflow-auto"
+        // The SCROLL container carries the scheme, not just the diff inside it. A diff shorter than
+        // the panel left the rest showing the panel's own `bg-elevated` — two different backgrounds
+        // meeting at the last line of the file, which is exactly what it looked like.
+        style={surfaceStyle(scheme)}
+      >
         {query.isPending ? (
-          <p className="text-dim p-4 font-mono text-xs">{t("git.readingDiff")}</p>
+          <p className="scheme-dim p-4 font-mono text-xs">{t("git.readingDiff")}</p>
         ) : query.isError ? (
-          <p className="text-danger p-4 font-mono text-xs">{String(query.error)}</p>
+          <p className="scheme-mark-del p-4 font-mono text-xs">{String(query.error)}</p>
         ) : query.data === null || query.data === undefined ? (
-          <p className="text-dim p-4 font-mono text-xs">{t("diff.fileGone")}</p>
+          <p className="scheme-dim p-4 font-mono text-xs">{t("diff.fileGone")}</p>
         ) : (
           <DiffView diff={query.data} split={split} scheme={scheme} fontSize={fontSize} />
         )}
