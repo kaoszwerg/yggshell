@@ -12,7 +12,6 @@
 
 use crate::error::{AppError, Result};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 /// What the script is called. Both names, because both were asked for and neither is the "real" one.
 pub const NAMES: [&str; 2] = ["ygg", "yggshell"];
@@ -57,36 +56,6 @@ pub fn is_on_path(dir: &Path, path_var: &str) -> bool {
     path_var
         .split(':')
         .any(|entry| entry.trim_end_matches('/') == needle)
-}
-
-/// Whether an interactive shell can actually find one of the launchers.
-///
-/// **Why this exists, and why the `PATH` check above is not enough.** The `PATH` we can read is a
-/// LOGIN shell's, built by `.zprofile` and friends. A great many people put their `~/.local/bin` in
-/// `.zshrc` instead — the INTERACTIVE configuration — and the maintainer is one of them. The panel
-/// then said "that directory is not on your PATH" about a directory from which `ygg` runs perfectly
-/// every single time they type it, because every shell they open is interactive.
-///
-/// Rather than model which file sets what, this asks the question the user actually cares about:
-/// *when I type `ygg`, will my shell find it?* `command -v` is the shell's own answer, and it is
-/// right by construction.
-///
-/// Costly enough to be worth avoiding on a timer — an interactive shell loads the whole prompt
-/// framework — which is why it is only consulted when the cheap check has already said no.
-pub fn interactive_shell_finds_it() -> bool {
-    let shell = crate::terminal::pty::default_shell();
-    let Ok(output) = Command::new(&shell)
-        .args(["-i", "-c", "command -v ygg >/dev/null 2>&1"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-    else {
-        return false;
-    };
-    let found = output.status.success();
-    tracing::debug!(shell = %shell, found, "asked an interactive shell whether it finds ygg");
-    found
 }
 
 /// Pick the directory to install into: the first candidate that exists and is writable, else the

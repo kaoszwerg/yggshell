@@ -51,6 +51,15 @@ triggers:
     theme,
     itermcolors,
     profile,
+    path,
+    which,
+    claude,
+    zshrc,
+    zprofile,
+    login-shell,
+    interactive,
+    environment,
+    not-found,
   ]
 applies-to:
   [
@@ -133,10 +142,26 @@ later contradicted. The measurements are kept so the next agent does not pay for
 
 ## Things that are true and will bite you
 
-- **A GUI app has almost no `PATH`.** launchd hands it `/usr/bin:/bin:/usr/sbin:/sbin`;
-  `launchctl getenv PATH` is empty. `terminal::environment` captures a login shell's environment once
-  and every terminal starts from it. **None of this reproduces in `tauri dev`**, where the app
-  inherits the launching terminal — so a bug of this class is invisible until a real build is run.
+- **A GUI app has almost no `PATH` — and the login shell is only HALF the fix.** This cost three
+  separate defects that looked unrelated, on three different days:
+  1. the launcher panel read the *process* `PATH` → "not on your PATH" about a directory in constant
+     use;
+  2. it then read a **login** shell's (`zsh -l`) → the same message, because `~/.local/bin` is added
+     in **`.zshrc`**, which only an *interactive* shell reads;
+  3. the usage bars stayed empty, because `claude` lives in that same `~/.local/bin` and
+     `which("claude")` therefore found nothing.
+
+  **The capture is `-l -i`** (`terminal::environment`). Measured: 110 ms, once, cached, behind the
+  timeout that already existed — the old comment's objection ("prompt frameworks, for an answer that
+  does not depend on any of it") was simply wrong here, because the answer depends on it entirely.
+  Two tests hold it now: one scans this module for the `-i`, the other scans the WHOLE backend for
+  `Command::new("name")` with a bare program name, which searches the process `PATH` and finds
+  nothing a user installed. Use `environment::which()` or an absolute path; the exception list in
+  that test is for OS-shipped tools only and `claude`/`docker`/`direnv`/`tmux` will never join it.
+  **Also true, and unchanged:** `launchctl getenv PATH` is empty, and **none of this reproduces in
+  `tauri dev`** — there the app inherits the launching terminal's environment, so a defect of this
+  class is invisible in development and total in an installed build.
+
 - **Killing the app with a signal loses window geometry.** The window-state plugin only writes on a
   clean `RunEvent::Exit`; `pkill` never triggers it. `tray.rs::save_geometry` covers the × button,
   hide-to-tray and the tray's Quit. If you restart the app with `pkill` while testing, do not read

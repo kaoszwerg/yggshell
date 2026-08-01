@@ -2,6 +2,7 @@ import { Bot, Clock, GitBranch, Hash, Home } from "lucide-react";
 import { useAgentSession } from "../../hooks/useAgentSession";
 import { useNow } from "../../hooks/useNow";
 import { EnvironmentPanel } from "./EnvironmentPanel";
+import { AttentionPanel } from "./AttentionPanel";
 import { UsageBars } from "./UsageBars";
 import { useT } from "../../hooks/useT";
 import { formatTokens, sinceLabel } from "../../lib/tokens";
@@ -70,6 +71,8 @@ export function AgentTool() {
           value={sinceLabel(session.last_at, now) || "—"}
         />
       </dl>
+
+      <AttentionPanel />
 
       <UsageBars />
 

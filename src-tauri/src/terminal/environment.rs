@@ -97,11 +97,22 @@ fn capture() -> HashMap<String, String> {
 
 fn capture_blocking() -> HashMap<String, String> {
     let shell = super::pty::default_shell();
-    // `-l` for the profile files where PATH is actually built; deliberately NOT `-i`, which would
-    // also run the interactive configuration — prompt frameworks, completion systems, everything —
-    // for an answer that does not depend on any of it.
+    // `-l -i`, and the `-i` is not optional — it was, and the assumption behind leaving it out was
+    // simply wrong.
+    //
+    // The old comment said an interactive shell "would run prompt frameworks and completion systems
+    // for an answer that does not depend on any of it". Measured on the maintainer's machine, the
+    // answer depends on it completely: `~/.local/bin` is added in `.zshrc`, which only an
+    // interactive shell reads. Without `-i` that directory does not exist as far as this app is
+    // concerned — and `claude`, `ygg` and anything else installed there are invisible. The panel
+    // said "not on your PATH" about a directory the user uses constantly, twice, and the usage bars
+    // stayed empty because `claude` could not be found. Same root, three symptoms.
+    //
+    // The cost was measured too, since that was the objection: 110 ms, once, cached for the life of
+    // the process, behind a five-second timeout. `.zshrc` files that print or prompt are the reason
+    // the timeout exists, and it already did.
     let output = match Command::new(&shell)
-        .args(["-l", "-c", "/usr/bin/env -0"])
+        .args(["-l", "-i", "-c", "/usr/bin/env -0"])
         .output()
     {
         Ok(out) if out.status.success() => out,
@@ -195,6 +206,109 @@ mod tests {
         );
     }
     use super::*;
+
+    #[test]
+    fn the_captured_shell_is_interactive_and_must_stay_that_way() {
+        // THREE separate defects came from this one flag being absent, and they looked unrelated:
+        // "that directory is not on your PATH" about a directory in constant use, twice, and empty
+        // usage bars because `claude` could not be found. All three were `~/.local/bin`, which is
+        // added in `.zshrc` — a file only an INTERACTIVE shell reads.
+        //
+        // The argument for leaving `-i` out was that an interactive shell runs prompt frameworks
+        // "for an answer that does not depend on any of it". Measured, the answer depends on it
+        // entirely; the cost of including it is 110 ms, once, behind a timeout that already exists.
+        //
+        // A source scan rather than a behavioural test, because the failure is invisible at runtime:
+        // everything keeps working, and a program installed in the wrong half of the user's
+        // configuration simply stops existing.
+        let source = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/terminal/environment.rs"),
+        )
+        .expect("this file");
+        let captures = source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .any(|line| line.contains("\"-l\", \"-i\", \"-c\""));
+
+        assert!(
+            captures,
+            "the login environment must be captured from an INTERACTIVE login shell (-l -i): \
+             without -i, anything the user added in .zshrc — very commonly ~/.local/bin — does not \
+             exist as far as this app is concerned"
+        );
+    }
+
+    #[test]
+    fn nothing_looks_up_a_program_without_going_through_here() {
+        // The other half of the same rule that cost three defects. `which()` searches the CAPTURED
+        // environment; a bare `Command::new("docker")` searches the PROCESS PATH, which on macOS is
+        // launchd's four entries — so it finds nothing the user installed, silently, and the feature
+        // simply looks broken. An absolute path is fine: it is not a lookup.
+        //
+        // Programs the operating system itself ships are exempt. They live in a directory every
+        // process has, they cannot be missing for the reason this test exists, and two of them run
+        // inside the crash handler where spawning a login shell is the last thing to attempt. The
+        // list is short and explicit on purpose: adding to it is a decision, and anything the USER
+        // installed — `claude`, `docker`, `direnv`, `tmux` — will never belong on it.
+        const ALLOWED: [&str; 6] = [
+            "osascript",
+            "explorer",
+            "xdg-open",
+            "zenity",
+            "kdialog",
+            // The deliberate edge: `/usr/bin/git` exists wherever git exists at all, and `git fetch`
+            // does not care which build answers.
+            "git",
+        ];
+
+        fn walk(dir: &std::path::Path, offenders: &mut Vec<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, offenders);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap_or_default();
+                for (at, line) in text.lines().enumerate() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("//") {
+                        continue;
+                    }
+                    let Some(rest) = trimmed.split("Command::new(\"").nth(1) else {
+                        continue;
+                    };
+                    let Some(program) = rest.split('"').next() else {
+                        continue;
+                    };
+                    if program.starts_with('/') || program.is_empty() {
+                        continue;
+                    }
+                    if ALLOWED.contains(&program) {
+                        continue;
+                    }
+                    offenders.push(format!("{}:{} — {program}", path.display(), at + 1));
+                }
+            }
+        }
+
+        let mut offenders = Vec::new();
+        walk(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut offenders,
+        );
+
+        assert!(
+            offenders.is_empty(),
+            "these look up a program on the PROCESS PATH, which a GUI app does not have — use \
+             terminal::environment::which(), or an absolute path: {offenders:?}"
+        );
+    }
 
     #[test]
     fn a_login_shell_knows_more_than_this_process_might() {

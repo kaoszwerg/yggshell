@@ -162,6 +162,28 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// Whether the agent hooks are in place, and what they have reported.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct AgentAttention {
+    /// True when this project's Claude home runs our hook for every event we listen to.
+    pub installed: bool,
+    /// The directories that have asked for attention since the last time they were looked at.
+    pub waiting: Vec<AgentWaiting>,
+}
+
+/// One directory whose agent is asking for something.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct AgentWaiting {
+    /// Matches a tab by its working directory — the whole reason the hook is better than a bell.
+    pub cwd: String,
+    /// `Notification` (it wants an answer) or `Stop` (it has finished).
+    pub event: String,
+    /// What it said, when it said anything.
+    pub message: Option<String>,
+}
+
 /// One usage limit and how full it is.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

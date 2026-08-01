@@ -40,6 +40,14 @@ export const en = {
   "nav.primary": "Primary",
   "nav.terminal": "Terminal",
   "nav.git": "Git",
+  "attention.title": "Attention",
+  "attention.explain":
+    "With a hook installed, Claude Code tells this app when it is waiting for you — which tab, and why. The terminal bell alone can only say that something happened.",
+  "attention.install": "Install the hook",
+  "attention.nextSession":
+    "Installed. It takes effect in the next Claude Code session — hooks are read when a session starts.",
+  "attention.none": "Nothing is waiting for you.",
+  "attention.clear": "Mark as seen",
   "statusbar.item.bells": "Waiting tabs",
   "statusbar.item.bells.hint": "How many tabs rang and have not been looked at",
   "statusbar.bells": "{count} tabs are waiting for you",

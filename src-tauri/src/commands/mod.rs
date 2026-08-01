@@ -224,8 +224,7 @@ pub fn cli_status(app: tauri::AppHandle) -> Result<Option<crate::cli_install::Cl
     // (`terminal::environment`, which exists for exactly this class of confusion).
     let path_var = crate::terminal::environment::path().unwrap_or_default();
     let status =
-        crate::cli_install::status(&crate::cli_install::default_candidates(&home), &path_var)
-            .map(confirm_with_the_shell);
+        crate::cli_install::status(&crate::cli_install::default_candidates(&home), &path_var);
     tracing::debug!(installed = status.is_some(), "cli_status");
     Ok(status)
 }
@@ -262,11 +261,11 @@ pub fn install_cli(app: tauri::AppHandle) -> Result<crate::cli_install::CliInsta
     // entries a developer actually has only exist after a login shell has run.
     let path_var = crate::terminal::environment::path().unwrap_or_default();
 
-    let result = confirm_with_the_shell(crate::cli_install::install(
+    let result = crate::cli_install::install(
         &script,
         &crate::cli_install::default_candidates(&home),
         &path_var,
-    )?);
+    )?;
     tracing::info!(directory = %result.directory, on_path = result.on_path, "install_cli ok");
     Ok(result)
 }
@@ -655,29 +654,96 @@ pub fn install_direnv() -> Result<String> {
     crate::agent::direnv::install()
 }
 
-/// Give the shell the last word on whether it can find the launcher.
+/// Where the hook script lives once installed, beside the launcher.
+fn hook_script(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".local/bin/ygg-hook")
+}
+
+/// Whether the agent hooks are in place, and what they have reported since last looked at.
 ///
-/// **The defect this closes.** The `PATH` the backend can read is a LOGIN shell's, and the
-/// maintainer — like a great many people — puts `~/.local/bin` in `.zshrc`, the INTERACTIVE
-/// configuration. The panel therefore announced "that directory is not on your PATH" about a
-/// directory from which `ygg` runs every time they type it, because every shell they open is
-/// interactive. Twice now, which is why it is no longer a string comparison that decides.
+/// Read-only and cheap: a file read and a settings parse. The events themselves are appended by a
+/// script running inside the user's own sessions, so they are there whether or not this app was
+/// open when they happened.
+#[tauri::command]
+pub fn agent_attention(app: tauri::AppHandle, cwd: String) -> Result<crate::dto::AgentAttention> {
+    use tauri::Manager;
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(format!("no app data directory: {e}")))?;
+    let script = hook_script(&home);
+
+    let claude_home = crate::agent::declared_home(std::path::Path::new(&cwd))
+        .unwrap_or_else(|| home.join(".claude"));
+    let waiting = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 50)
+        .into_iter()
+        .map(|event| crate::dto::AgentWaiting {
+            cwd: event.cwd,
+            event: event.event,
+            message: event.message,
+        })
+        .collect();
+
+    Ok(crate::dto::AgentAttention {
+        installed: crate::agent::hooks::is_installed(&claude_home, &script),
+        waiting,
+    })
+}
+
+/// Install the hook into this project's Claude home.
 ///
-/// Only asked when the cheap check has already said no: an interactive shell loads the user's whole
-/// prompt framework, and that is not something to do for an answer already in hand.
+/// Two steps, and the second is the one worth naming: the script is copied next to the launcher, and
+/// an entry pointing at it is added to `settings.json` — the user's file, so it is parsed, extended
+/// and written back whole, with a backup first.
 ///
-/// At the command layer rather than inside `cli_install`, so the library stays a pure function of
-/// its arguments — a test of it must not depend on what happens to be installed on the machine
-/// running the test (rule:testing).
-fn confirm_with_the_shell(
-    mut install: crate::cli_install::CliInstall,
-) -> crate::cli_install::CliInstall {
-    if !install.on_path && crate::cli_install::interactive_shell_finds_it() {
-        tracing::info!(
-            directory = %install.directory,
-            "not on the login PATH, but an interactive shell finds it — reporting it as available"
-        );
-        install.on_path = true;
+/// **Claude Code reads `hooks` when a SESSION STARTS**, so this takes effect in the next session and
+/// never in the one running. The interface says so; without that the button looks broken.
+#[tauri::command]
+pub fn install_agent_hook(app: tauri::AppHandle, cwd: String) -> Result<String> {
+    use tauri::Manager;
+    tracing::info!(%cwd, "install_agent_hook");
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
+
+    let source = app
+        .path()
+        .resolve(
+            "resources/cli/ygg-hook",
+            tauri::path::BaseDirectory::Resource,
+        )
+        .map_err(|e| AppError::Other(format!("the hook script is missing from the app: {e}")))?;
+    let script = hook_script(&home);
+    if let Some(parent) = script.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| AppError::io(parent.display().to_string(), e))?;
     }
-    install
+    std::fs::copy(&source, &script).map_err(|e| AppError::io(script.display().to_string(), e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| AppError::io(script.display().to_string(), e))?;
+    }
+
+    let claude_home = crate::agent::declared_home(std::path::Path::new(&cwd))
+        .unwrap_or_else(|| home.join(".claude"));
+    let settings = crate::agent::hooks::install(&claude_home, &script)?;
+    Ok(settings.to_string_lossy().to_string())
+}
+
+/// Forget every attention event recorded so far.
+#[tauri::command]
+pub fn clear_agent_attention(app: tauri::AppHandle) -> Result<()> {
+    use tauri::Manager;
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::Other(format!("no app data directory: {e}")))?;
+    crate::agent::hooks::clear(&crate::agent::hooks::events_path(&data))
 }

@@ -1,0 +1,41 @@
+#!/bin/sh
+# YggShell's Claude Code hook.
+#
+# Claude Code runs this on `Notification` and `Stop`, handing it one JSON object on stdin:
+#
+#   { "hook_event_name": "Notification", "session_id": "…", "cwd": "…",
+#     "transcript_path": "…", "message": "…", "notification_type": "…" }
+#
+# All it does is append that line to a file YggShell watches. The app then knows WHICH tab is asking
+# and WHY — `cwd` is what matches an event to a tab — where the terminal bell can only say that
+# something, somewhere, happened.
+#
+# WHY A FILE AND NOT A SOCKET OR AN HTTP CALL: a hook runs whether or not YggShell is open, in any
+# terminal, possibly over ssh. A file append cannot fail because the app is closed, needs no port,
+# no listener and no permission, and is atomic for a single short line on every platform this runs
+# on. When the app opens, the events are simply there.
+#
+# WHY IT WRITES AND NEVER READS OR DECIDES: this runs inside the user's own agent session. It must
+# not be able to alter it, block it, or slow it down. It appends and exits — a hook that hangs is a
+# harness that hangs.
+#
+# Installed from Settings; a copy, so it keeps working while the app is being rebuilt.
+
+set -eu
+
+# The app's own data directory, per platform. Never a path from the environment: this is the one
+# place the file may go, and taking it from a variable would let anything redirect it.
+case "$(uname -s)" in
+Darwin) dir="$HOME/Library/Application Support/com.kaoszwerg.yggshell" ;;
+Linux) dir="${XDG_DATA_HOME:-$HOME/.local/share}/com.kaoszwerg.yggshell" ;;
+*) dir="$HOME/.yggshell" ;;
+esac
+
+mkdir -p "$dir"
+
+# One line, appended. `>>` on a short write is atomic enough that two agents finishing at the same
+# moment cannot interleave halfway through a line, which is the only interleaving that would matter.
+# `cat` rather than `read`: the payload is one line, but a shell `read` would strip a backslash.
+cat >>"$dir/agent-events.jsonl"
+
+exit 0

@@ -8,6 +8,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The agent can now say what it wants, not just that something happened.** A Claude Code hook,
+  installable from the Agent tool, reports which directory is waiting and why — a permission, an
+  answer, a finished run. The terminal bell stays for everything else: it is the only signal that
+  survives tmux, but it can never say more than "somewhere, something". The hook writes to a file, so
+  events recorded while the app was closed are simply there when it opens. It takes effect in the
+  **next** Claude Code session, which the panel says out loud.
+
+### Fixed
+
+- **`~/.local/bin` was invisible to the app — the root of three separate defects.** The launcher
+  panel said "not on your PATH" about a directory in constant use (twice, for two different reasons),
+  and the usage bars stayed empty because `claude` lives there and could not be found. The
+  environment is now captured from an **interactive** login shell, which is the only kind that reads
+  `.zshrc` — measured at 110 ms, once, cached. Two tests hold it: one requires the `-i`, the other
+  refuses any backend lookup of a program that does not go through the captured environment.
+
+### Added
+
 - **The terminal bell is no longer thrown away.** A tab that rings while you are somewhere else gets
   a mark, and the status bar can show how many are waiting — the mark says *which*, the counter says
   *whether*, which matters when the strip is scrolled and the tab in question is off screen. The bell

@@ -37,6 +37,14 @@ export const de: Translations = {
   "nav.primary": "Hauptnavigation",
   "nav.terminal": "Terminal",
   "nav.git": "Git",
+  "attention.title": "Aufmerksamkeit",
+  "attention.explain":
+    "Mit installiertem Hook meldet Claude Code dieser App, wenn es auf dich wartet — welcher Tab und warum. Die Terminalglocke allein kann nur sagen, dass etwas war.",
+  "attention.install": "Hook installieren",
+  "attention.nextSession":
+    "Installiert. Wirksam ab der nächsten Claude-Code-Session — Hooks werden beim Sessionstart gelesen.",
+  "attention.none": "Nichts wartet auf dich.",
+  "attention.clear": "Als gesehen markieren",
   "statusbar.item.bells": "Wartende Tabs",
   "statusbar.item.bells.hint": "Wie viele Tabs geklingelt haben und noch nicht angesehen wurden",
   "statusbar.bells": "{count} Tabs warten auf dich",
