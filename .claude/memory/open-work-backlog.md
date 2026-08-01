@@ -144,9 +144,15 @@ later contradicted. The measurements are kept so the next agent does not pay for
   backgrounds meeting: `#0a0a0f` (the app's deep) and `#1a1a2e` (`bg-elevated`, a panel) — both
   accounted for and one of them fixed (the diff's scroll container now carries the scheme) — plus a
   **light grey block, roughly `#eceef0`, that matches no colour in the palette**. The crop was too
-  small to place it and the maintainer was not asked in time. If it turns up again: it is not a HUD
-  colour, so the candidates are a browser default on an element nobody styled, or a light colour
-  scheme being drawn where a dark one was expected.
+  small to place it and the maintainer was not asked in time.
+
+  **Narrowed since.** The maintainer guessed the tmux status bar; the arithmetic rules that out on
+  its own — the lightest colour that bar requests is `colour8`, which is `#6a6a8c` in Yggdrasil and
+  `#3c4812` in Alien Blood, nowhere near. But `status-style bg=default` means "the terminal's
+  background", so the guess points somewhere useful: a **light scheme drawn where a dark one was
+  expected**. Three bundled ones land almost exactly on the observed colour — `fimbulwinter`
+  `#f2f5f8`, `ayu-light` `#f8f9fa`, `catppuccin-latte` `#eff1f5`. Look for a surface taking its
+  scheme from the wrong tab, or a per-tab theme where the tab is not the one being drawn.
 
 ## Things that are true and will bite you
 
