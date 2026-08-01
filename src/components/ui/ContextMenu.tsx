@@ -38,6 +38,14 @@ export interface ContextMenuProps {
   items: ContextMenuEntry[];
   /** The single element whose right-click opens the menu. */
   children: ReactElement;
+  /**
+   * Called each time the menu is about to open.
+   *
+   * For a menu whose rows are live data. `items` is built during render, so without this the list is
+   * whatever it was when something last happened to re-render the trigger — and a menu offering a
+   * thing that is no longer there is worse than one that offers nothing.
+   */
+  onOpen?: () => void;
 }
 
 /** Props the menu chains onto its trigger — an existing handler is preserved, not overwritten. */
@@ -65,7 +73,7 @@ const EDGE = 8;
  * keys move over enabled rows only (a disabled row is announced but never a stop), Home/End jump,
  * Enter/Space activate, Escape closes and gives focus back to the trigger.
  */
-export function ContextMenu({ label, items, children }: ContextMenuProps) {
+export function ContextMenu({ label, items, children, onOpen }: ContextMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
@@ -150,6 +158,8 @@ export function ContextMenu({ label, items, children }: ContextMenuProps) {
       setTriggerEl(e.currentTarget as HTMLElement);
       setPos({ top: e.clientY, left: e.clientX });
       setOpen(true);
+      // After the guard above, so a menu with nothing in it does not refresh anything either.
+      onOpen?.();
     },
   });
 

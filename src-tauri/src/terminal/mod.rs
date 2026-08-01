@@ -222,11 +222,7 @@ impl TerminalRegistry {
                 .collect()
         };
         let launch = tmux::launch(
-            if plain {
-                crate::dto::TmuxMode::Off
-            } else {
-                settings.tmux_mode
-            },
+            tmux::effective_mode(plain, profile, settings.tmux_mode),
             &settings.tmux_session,
             &shell,
             &taken,

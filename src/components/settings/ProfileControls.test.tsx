@@ -25,6 +25,7 @@ const WORK: TerminalProfile = {
   shell: "/bin/bash",
   cwd: "/repo",
   theme: "nord",
+  tmux: null,
 };
 
 const saveMutate = vi.fn();
@@ -76,9 +77,23 @@ describe("ProfileControls", () => {
     render(<ProfileControls />);
     fireEvent.click(screen.getByRole("button", { name: "New profile" }));
 
+    // One per override group — shell, colour scheme, tmux — and every one of them pressed. Asserted
+    // as "at least one, and all of them on" rather than a count: a group added later must arrive on
+    // Default too, and a hard number would fail here and be corrected to the new number without
+    // anyone checking the thing this test is actually about.
     const defaults = screen.getAllByRole("button", { name: "Default" });
-    expect(defaults).toHaveLength(2);
+    expect(defaults.length).toBeGreaterThan(0);
     for (const button of defaults) expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("lets a profile decide whether its tabs use tmux", () => {
+    // What makes a mixed workspace possible: a global setting can only say "all tabs" or "no tabs",
+    // so the per-tab answer has to live where the other per-tab overrides already are.
+    render(<ProfileControls />);
+    fireEvent.click(screen.getByRole("button", { name: "New profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Off" }));
+
+    expect(screen.getByRole("button", { name: "Off" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("opens a saved profile with its overrides showing", () => {

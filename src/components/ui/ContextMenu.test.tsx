@@ -156,4 +156,32 @@ describe("ContextMenu", () => {
     open();
     expect(screen.queryByRole("menu")).toBeNull();
   });
+
+  it("says when it opens, so rows that are live data can be refreshed", () => {
+    // `items` is built during render. Without this, a menu listing something that changes outside the
+    // app — running tmux sessions, connected devices — shows whatever was true when the trigger last
+    // happened to re-render, and offering a thing that is gone is worse than offering nothing.
+    const onOpen = vi.fn();
+    render(
+      <ContextMenu label="Terminal actions" items={entries()} onOpen={onOpen}>
+        <div data-testid="terminal">output</div>
+      </ContextMenu>,
+    );
+
+    open();
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("does not refresh anything for a menu that would not open", () => {
+    // The empty-menu guard runs first: nothing is shown, so nothing needs to be current.
+    const onOpen = vi.fn();
+    render(
+      <ContextMenu label="Terminal actions" items={[]} onOpen={onOpen}>
+        <div data-testid="terminal">output</div>
+      </ContextMenu>,
+    );
+
+    open();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
 });

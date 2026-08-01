@@ -6,6 +6,47 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Attaching to a tmux session is now something you ask for.** Right-click the tab strip: alongside
+  "New terminal" and the saved profiles, every session the tmux server is running is offered, and
+  picking one opens a tab attached to it. The list is asked for when the menu opens, not left at
+  whatever the last render happened to see.
+
+  This is also the way back into tmux after a detach, which had no counterpart at all — and since
+  `plain` now survives a restart, a detached tab had no way home.
+
+- **A profile can decide whether its tabs use tmux** (`TerminalProfile::tmux`). A global setting can
+  only say "all tabs" or "no tabs"; a mixed workspace needs a per-tab answer, and the profile is where
+  every other per-tab override already lives. Left on *Default* it follows the setting, so profiles
+  written before this field behave exactly as they did — and no "default profile" is needed, because
+  Settings already plays that role (ADR-CORE-005).
+
+### Fixed
+
+- **A new terminal is now genuinely new.** `new-session -A` attaches when the name exists, and the
+  numbering only ever consulted *this app's* open tabs — so a name free here could be occupied in tmux.
+  Close three tabs today, press ⌘T tomorrow, and the first name in the series was free again while the
+  session behind it was still running: you were dropped into yesterday's work without asking. The
+  numbering now skips what the tmux server holds as well.
+
+  **The cost, stated plainly:** the first tab no longer lands in a session you already have. That was
+  deliberate behaviour, and it is now the picker's job — which is the point, since "open a terminal"
+  and "go back to what I was doing" were never the same request.
+
+  A *restored* tab is deliberately exempt from the skip: it must land in its own session precisely
+  because that session is still there.
+
+### Changed
+
+- **The boundary check on a session name widened, on the record** (ADR-PROJ-001 §5). `tmux::may_name`
+  accepts a name that is in the tab's own series **or** that the server actually has, where the
+  previous rule allowed the series alone. The series was sufficient while the only caller was a
+  restored tab handing back a name this backend minted; it stops being sufficient once attaching is a
+  feature the user asks for. Invalid names are still refused before the existence question is asked, so
+  nothing can address a window or pane inside another session. The tighter design — opaque per-session
+  handles — was considered and rejected with its reasoning.
+
 ### Fixed
 
 - **A tab that was NOT in tmux now comes back that way too.** The other half of the restore above, and

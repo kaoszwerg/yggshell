@@ -917,7 +917,7 @@
       ],
       "supersededBy": null,
       "path": "docs/adr/project/proj-001-terminal-architecture.md",
-      "hash": "681d01d7d3ddb131"
+      "hash": "0858f323fd43d4c1"
     },
     {
       "id": "ADR-PROJ-002",

@@ -7,7 +7,7 @@ import { Tabs } from "../ui/Tabs";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
 import { readPrimarySelection } from "../../lib/primarySelection";
 import { pasteInto } from "../../lib/terminalHandles";
-import { useTerminalProfiles } from "../../hooks/useSettings";
+import { useTerminalProfiles, useTmuxSessions } from "../../hooks/useSettings";
 import { useT } from "../../hooks/useT";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
@@ -30,6 +30,13 @@ export function TitleBar() {
   const openPane = useTerminalStore((s) => s.openPane);
   const profiles = useTerminalProfiles();
   const closePane = useTerminalStore((s) => s.closePane);
+  const sessions = useTmuxSessions();
+  // A session another tab is already showing is left out rather than disabled: attaching to it would
+  // give a second view of the same window, not a second terminal, and the backend refuses it anyway
+  // (`tmux::launch`). An entry that cannot do what it says is worse than no entry.
+  const attachable = (sessions.data ?? []).filter(
+    (name) => !panes.some((p) => p.tmuxSession === name),
+  );
   const setView = useUiStore((s) => s.setView);
   const t = useT();
 
@@ -88,18 +95,30 @@ export function TitleBar() {
             {APP_TAGLINE}
           </span>
         ) : (
-          // Right-click the strip to start a terminal from a profile. The `+` stays a one-click
-          // "new terminal" with the Settings defaults, because that is what it is for and what it
-          // does today; the menu is the way to reach a profile without turning the common case into
-          // two clicks. Profiles are also listed in Settings, which is where they are discovered.
+          // Right-click the strip to start a terminal from a profile, or to ATTACH to a tmux session
+          // that is still running. The `+` stays a one-click "new terminal" with the Settings
+          // defaults, because that is what it is for; the menu is the way to reach a profile without
+          // turning the common case into two clicks.
+          //
+          // **The session rows are what makes "new" mean new.** A new tab is now given a session
+          // nobody is using, so pressing `+` can no longer drop you into yesterday's work by
+          // accident — which means reaching that work has to be something you can ask for. This is
+          // where you ask, and it is also the only way back into tmux after a detach.
           <ContextMenu
             label={t("titlebar.newTerminal")}
+            onOpen={() => void sessions.refetch()}
             items={[
               { id: "default", label: t("titlebar.newTerminal"), onSelect: () => show(openPane()) },
               ...(profiles.data ?? []).map((profile) => ({
                 id: profile.id,
                 label: profile.name,
                 onSelect: () => show(openPane(profile.id)),
+              })),
+              ...(attachable.length > 0 ? [{ separator: true as const }] : []),
+              ...attachable.map((name) => ({
+                id: `tmux:${name}`,
+                label: t("titlebar.attachTo", { session: name }),
+                onSelect: () => show(openPane(null, null, name)),
               })),
             ]}
           >

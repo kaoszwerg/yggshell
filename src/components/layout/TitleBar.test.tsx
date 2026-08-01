@@ -19,10 +19,25 @@ vi.mock("../../api/commands", () => ({
   },
 }));
 
+/** The build info every test in this file passes through unchanged. */
+const BUILD = {
+  version: "0.1.0",
+  channel: "dev",
+  debug: true,
+  git_sha: "abc1234",
+  git_dirty: false,
+  commit_date: "2026-07-31T00:00:00Z",
+};
+
+/** Sessions the fake tmux is running. A test names what it needs before rendering. */
+let running: string[] = [];
+const refetchSessions = vi.fn(() => Promise.resolve({ data: running }));
+
 vi.mock("../../hooks/useSettings", () => ({
   useTerminalProfiles: () => ({
-    data: [{ id: "work", name: "Work", shell: null, cwd: null, theme: null }],
+    data: [{ id: "work", name: "Work", shell: null, cwd: null, theme: null, tmux: null }],
   }),
+  useTmuxSessions: () => ({ data: running, refetch: refetchSessions }),
 }));
 
 const minimize = vi.fn();
@@ -55,6 +70,7 @@ const devBuild: BuildInfo = {
 
 describe("TitleBar", () => {
   beforeEach(() => {
+    running = [];
     minimize.mockReset();
     toggleMaximize.mockReset();
     close.mockReset();
@@ -258,6 +274,57 @@ describe("TitleBar", () => {
       const panes = useTerminalStore.getState().panes;
       expect(panes).toHaveLength(2);
       expect(panes.at(-1)?.profileId).toBe("work");
+    });
+
+    it("offers the tmux sessions that are running, and opens a tab attached to one", async () => {
+      // The counterpart to a new tab being genuinely new. Since the backend now hands a new tab a
+      // session nobody is using, reaching one that outlived its tab has to be something the user can
+      // ASK for — and this is also the only way back into tmux after a detach.
+      running = ["yggshell", "deploy"];
+      useTerminalStore.setState({
+        panes: [pane({ key: "a", title: "Terminal 1", cwd: null })],
+        activeKey: "a",
+      });
+      renderTitleBar(BUILD);
+
+      fireEvent.contextMenu(screen.getByRole("tablist", { name: "Terminals" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Attach to deploy" }));
+
+      const panes = useTerminalStore.getState().panes;
+      expect(panes).toHaveLength(2);
+      expect(panes.at(-1)?.tmuxSession).toBe("deploy");
+      expect(panes.at(-1)?.plain).toBe(false);
+    });
+
+    it("leaves out a session a tab is already showing", async () => {
+      // Two clients on one session share ONE view of it — same window, same scrollback. The backend
+      // refuses it, so an entry offering it would be a row that cannot do what it says.
+      running = ["yggshell", "deploy"];
+      useTerminalStore.setState({
+        panes: [pane({ key: "a", title: "Terminal 1", cwd: null, tmuxSession: "deploy" })],
+        activeKey: "a",
+      });
+      renderTitleBar(BUILD);
+
+      fireEvent.contextMenu(screen.getByRole("tablist", { name: "Terminals" }));
+
+      expect(await screen.findByRole("menuitem", { name: "Attach to yggshell" })).toBeTruthy();
+      expect(screen.queryByRole("menuitem", { name: "Attach to deploy" })).toBeNull();
+    });
+
+    it("asks tmux again each time the menu opens", async () => {
+      // `items` is built during render, so a list left to the last render is a list of sessions that
+      // were running whenever something else happened to change.
+      running = ["yggshell"];
+      useTerminalStore.setState({
+        panes: [pane({ key: "a", title: "Terminal 1", cwd: null })],
+        activeKey: "a",
+      });
+      renderTitleBar(BUILD);
+
+      fireEvent.contextMenu(screen.getByRole("tablist", { name: "Terminals" }));
+      await screen.findByRole("menuitem", { name: "Attach to yggshell" });
+      expect(refetchSessions).toHaveBeenCalled();
     });
   });
 

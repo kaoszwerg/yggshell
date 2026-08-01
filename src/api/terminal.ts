@@ -65,6 +65,13 @@ export const terminalApi = {
     });
   },
 
+  /**
+   * Every tmux session running on this machine, for the attach picker.
+   *
+   * An empty list is the ordinary answer — no tmux, no server, nothing started — not a failure.
+   */
+  sessions: () => invoke<string[]>("tmux_sessions"),
+
   /** Send input — keystrokes, a paste, a control sequence. */
   write: (id: SessionId, data: string) => invoke<void>("terminal_write", { id, data }),
 

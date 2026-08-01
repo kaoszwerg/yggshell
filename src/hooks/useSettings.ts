@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/commands";
+import { terminalApi } from "../api/terminal";
 import type { SettingsDto } from "../bindings/SettingsDto";
 import type { TerminalProfile } from "../bindings/TerminalProfile";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
@@ -139,6 +140,24 @@ export function useTerminalProfiles() {
   return useQuery({
     queryKey: ["terminal-profiles"],
     queryFn: api.listTerminalProfiles,
+  });
+}
+
+/**
+ * Every tmux session running on this machine — the list behind the attach picker.
+ *
+ * **Not polled.** It is only ever read to fill a menu the user just opened, and the menu asks for it
+ * then (`ContextMenu`'s `onOpen` → `refetch`). A timer would spend a process spawn every few seconds
+ * to keep a list current that nobody is looking at — the opposite trade from the attention signal,
+ * which polls precisely because nobody is looking (rule:attention-signals).
+ */
+export function useTmuxSessions() {
+  return useQuery({
+    queryKey: ["tmux-sessions"],
+    queryFn: terminalApi.sessions,
+    // The menu refetches on open, so what is cached only ever fills the first paint of a list the
+    // user is about to see replaced.
+    staleTime: 5_000,
   });
 }
 

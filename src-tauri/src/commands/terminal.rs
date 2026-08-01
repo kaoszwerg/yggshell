@@ -217,3 +217,30 @@ pub async fn agent_usage(cwd: String) -> Result<Option<crate::dto::UsageSummary>
     .await
     .map_err(|e| AppError::Other(format!("reading the usage summary failed: {e}")))
 }
+
+/// Every tmux session currently running on this machine.
+///
+/// **What makes "attach" an action the user takes rather than a side effect of opening a tab.** A new
+/// terminal is now genuinely new — the naming skips anything tmux already holds — so reaching a
+/// session that outlived its tab has to be something you can *ask* for. This is the list you ask from.
+///
+/// The result is also what the boundary check accepts: a name from here may be attached to even
+/// though it is outside the tab's own series (`tmux::may_name`, ADR-PROJ-001 §5).
+///
+/// An empty list is the ordinary answer, not a failure: no tmux installed, no server running, or
+/// nothing started yet all mean the same thing to a caller.
+///
+/// **`async` + `spawn_blocking`** — it starts `tmux list-sessions`, and a synchronous command runs on
+/// the main thread (rule:rust-conventions, `scripts/project/check-blocking-commands.mjs`).
+#[tauri::command]
+pub async fn tmux_sessions() -> Result<Vec<String>> {
+    let names = tauri::async_runtime::spawn_blocking(|| {
+        crate::terminal::tmux::session_names()
+            .into_iter()
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| AppError::Other(format!("listing tmux sessions failed: {e}")))?;
+    tracing::debug!(count = names.len(), "tmux_sessions");
+    Ok(names)
+}

@@ -126,7 +126,15 @@ export interface TerminalState {
    */
   bootstrap: () => void;
   /** Open a tab and focus it, optionally with a profile and a starting directory. Returns its key. */
-  openPane: (profileId?: string | null, cwd?: string | null) => string;
+  /**
+   * Open a tab.
+   *
+   * `tmuxSession` is what separates **attaching** from **opening**: without it the backend gives the
+   * tab a session no one is using, so a new terminal is genuinely new. Naming one is how the user
+   * reaches a session that outlived its tab — the picker in the title bar, and the only way back into
+   * tmux after a detach.
+   */
+  openPane: (profileId?: string | null, cwd?: string | null, tmuxSession?: string | null) => string;
   /**
    * Open a tab that starts in a named directory — `ygg <dir>`, Finder's "Open With".
    *
@@ -203,7 +211,7 @@ export const useTerminalStore = create<TerminalState>()(
         get().openPane();
       },
 
-      openPane: (profileId = null, cwd = null) => {
+      openPane: (profileId = null, cwd = null, tmuxSession = null) => {
         const key = `term-${nextKey++}`;
         set((s) => ({
           panes: [
@@ -219,7 +227,9 @@ export const useTerminalStore = create<TerminalState>()(
               plain: false,
               generation: 0,
               detail: null,
-              tmuxSession: null,
+              // Picked up once when the pane mounts, by exactly the path a restored tab uses — the
+              // two are the same request ("open me in THIS session"), so they are one mechanism.
+              tmuxSession,
               activity: "idle",
               command: null,
               activitySince: null,

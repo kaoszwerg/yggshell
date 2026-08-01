@@ -128,23 +128,34 @@ pub fn launch(
             Launch::tmux(tmux, args, session.to_string())
         }
 
-        // `new-session -A` is attach-or-create in one call. The FIRST tab gets the configured name,
-        // so a session the user already has is the one they land in; every tab after that gets its
-        // own suffixed session, because sharing one would mean sharing one view of it.
+        // `new-session -A` is attach-or-create in one call, and the name decides which of the two
+        // happens. Two different intentions arrive here and they are told apart by `remembered`:
+        //
+        // - **Recover** — a restored tab, or a session the user picked out of the list. It names the
+        //   session it wants and gets it, whether that means attaching or recreating it.
+        // - **New** — a tab that names nothing. It gets a name free BOTH in this app and in tmux, so
+        //   `-A` has nothing to attach to and a genuinely new session is created.
+        //
+        // The second half of that used to be untrue, and it was the whole confusion: the numbering
+        // consulted only this app's open tabs, so closing three tabs and pressing ⌘T tomorrow picked
+        // `base` again and `-A` dropped the user straight into yesterday's session. New meant
+        // recover, silently, and there was no way to ask for either on purpose. Attaching is now the
+        // picker's job — an action the user takes, not a side effect of opening a tab.
         TmuxMode::AttachOrCreate => {
             let base = if session.is_empty() {
                 DEFAULT_SESSION
             } else {
                 session
             };
-            // The remembered name first, when it is one this backend could have minted and no other
-            // tab is showing it. Otherwise the positional name, exactly as before.
+            // A named session wins — that is the recover case, and it deliberately ignores the
+            // "is it already running" question the new-tab path now asks: a restored tab MUST land in
+            // its own session precisely because that session is still there.
             let name = remembered
                 .map(str::trim)
-                .filter(|name| in_series(base, name))
+                .filter(|name| may_name(base, name, |n| has_session(&tmux, n)))
                 .filter(|name| !taken.iter().any(|t| t == name))
                 .map(str::to_string)
-                .unwrap_or_else(|| first_free(base, taken));
+                .unwrap_or_else(|| first_free(base, taken, &session_names()));
             tracing::info!(session = %name, "attaching to or creating a tmux session");
             Launch::tmux(
                 tmux,
@@ -160,6 +171,25 @@ pub fn launch(
     }
 }
 
+/// Which tmux mode a tab actually opens with — the Settings default, unless something overrides it.
+///
+/// Two overrides, in order, and they answer different questions:
+///
+/// - `plain` — "put me back in a terminal", set when a tab drops out of tmux. It wins over
+///   everything: a detach that a profile could undo would not be a detach.
+/// - the profile's own `tmux` — "this KIND of tab does not use tmux" (or does). This is what lets one
+///   workspace hold both, which no global setting can express.
+pub fn effective_mode(
+    plain: bool,
+    profile: Option<&crate::dto::TerminalProfile>,
+    settings_mode: TmuxMode,
+) -> TmuxMode {
+    if plain {
+        return TmuxMode::Off;
+    }
+    profile.and_then(|p| p.tmux).unwrap_or(settings_mode)
+}
+
 /// Used when the user asked for attach-or-create without naming a session.
 const DEFAULT_SESSION: &str = "yggshell";
 
@@ -169,17 +199,38 @@ const DEFAULT_SESSION: &str = "yggshell";
 /// be long — but an unbounded search over a list someone else controls is a habit worth not having.
 const MAX_SESSIONS: usize = 64;
 
-/// Whether `name` is one this app could have handed out for `base` — `base` itself, or `base-N`.
+/// Whether the caller may name `name` — the boundary check on a session the frontend asks for.
 ///
-/// **The check that lets a tab restore a session without being able to pick one.** A remembered name
-/// arrives from the webview, and a name is not a program, so it does not widen *what runs*
-/// (ADR-PROJ-001 §5) — but an unchecked one would widen *what can be joined* to every tmux session on
-/// the machine, including the ones the user is running for something else. Constraining it to the
-/// series the settings define means the webview can only ask for what it was already given.
-fn in_series(base: &str, name: &str) -> bool {
+/// Two ways to qualify, and they are the two legitimate reasons to name a session at all:
+///
+/// - **it is in `base`'s series** (`base`, `base-N`) — a name this backend minted for this tab, handed
+///   back when the tab is restored. It need not exist: recreating it under the same name is the right
+///   answer for a tab whose session did not survive.
+/// - **the tmux server actually has it** — a session the user picked out of the list this backend
+///   itself produced (`session_names`).
+///
+/// **This is deliberately wider than the series alone, because attaching to an arbitrary session is
+/// now a feature rather than an accident** (ADR-PROJ-001 §5). It is not unbounded: the name is still
+/// validated, so it cannot address a window or a pane inside something else, and a name that neither
+/// exists nor belongs to the series is refused and the caller is numbered instead.
+///
+/// The tighter alternative — the backend minting an opaque handle per listed session and accepting
+/// only handles — was considered and not built. It defends against a webview naming a session the
+/// user never saw, and that webview can already type into every session the app has open
+/// (`terminal_write`); the machinery would not raise the real floor.
+///
+/// `exists` is passed in rather than asked here so this can be tested at all: the alternative is a
+/// test that creates real tmux sessions on the machine running it, which would collide with the
+/// maintainer's own (rule:testing — a test that can disturb the developer's state is a defect).
+fn may_name(base: &str, name: &str, exists: impl Fn(&str) -> bool) -> bool {
     if !is_valid_session_name(name) {
         return false;
     }
+    in_series(base, name) || exists(name)
+}
+
+/// Whether `name` is one this app could have handed out for `base` — `base` itself, or `base-N`.
+fn in_series(base: &str, name: &str) -> bool {
     if name == base {
         return true;
     }
@@ -188,22 +239,61 @@ fn in_series(base: &str, name: &str) -> bool {
         .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
 }
 
-/// The first session name in the `base`, `base-2`, `base-3`, … series that no other tab holds.
+/// The first name in the `base`, `base-2`, `base-3`, … series that is free for a **new** session.
+///
+/// Free means free in **both** places, and the second one is the fix: `taken` is what this app's
+/// other tabs hold, `existing` is what the tmux server holds. Consulting only the first meant a name
+/// could be free here and occupied there — and since the caller runs `new-session -A`, "occupied
+/// there" silently became "attach to it". A user who closed their tabs yesterday and opened a new one
+/// today landed in yesterday's session without asking.
 ///
 /// Falls back to the base when every candidate is taken; at that point sixty-four terminals are open
 /// and a shared view is a smaller problem than refusing to open one.
-fn first_free(base: &str, taken: &[String]) -> String {
-    if !taken.iter().any(|t| t == base) {
+fn first_free(base: &str, taken: &[String], existing: &BTreeSet<String>) -> String {
+    let free = |name: &str| !taken.iter().any(|t| t == name) && !existing.contains(name);
+    if free(base) {
         return base.to_string();
     }
     for n in 2..=MAX_SESSIONS {
         let candidate = format!("{base}-{n}");
-        if !taken.contains(&candidate) {
+        if free(&candidate) {
             return candidate;
         }
     }
     tracing::warn!(base, "every tmux session name in the series is taken");
     base.to_string()
+}
+
+/// Every session the tmux server currently has.
+///
+/// Empty when there is no tmux, no server or no session — all of which mean "nothing is running",
+/// which is not an error and is by far the most common answer.
+pub fn session_names() -> BTreeSet<String> {
+    let Some(tmux) = find_tmux() else {
+        return BTreeSet::new();
+    };
+    let Ok(output) = Command::new(tmux)
+        .args(["list-sessions", "-F", "#{session_name}"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return BTreeSet::new();
+    };
+    if !output.status.success() {
+        return BTreeSet::new();
+    }
+    parse_session_names(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pick the names out of `tmux list-sessions -F '#{session_name}'`.
+fn parse_session_names(stdout: &str) -> BTreeSet<String> {
+    stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 /// tmux treats `:` and `.` as target separators (`session:window.pane`), so a name containing them
@@ -407,14 +497,30 @@ fn find_tmux() -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    /// `tmux list-sessions` said nothing — the ordinary case, and the one that must not be special.
+    fn nothing_running() -> BTreeSet<String> {
+        BTreeSet::new()
+    }
+
+    fn running(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|n| n.to_string()).collect()
+    }
+
     #[test]
     fn the_first_tab_gets_the_configured_session_and_the_next_gets_its_own() {
         // Two tabs on one tmux session share ONE view of it — same window, same scrollback — so a
         // second tab appeared to do nothing at all. A tab is a terminal; it gets a session of its own.
-        assert_eq!(first_free("work", &[]), "work");
-        assert_eq!(first_free("work", &["work".to_string()]), "work-2");
+        assert_eq!(first_free("work", &[], &nothing_running()), "work");
         assert_eq!(
-            first_free("work", &["work".to_string(), "work-2".to_string()]),
+            first_free("work", &["work".to_string()], &nothing_running()),
+            "work-2"
+        );
+        assert_eq!(
+            first_free(
+                "work",
+                &["work".to_string(), "work-2".to_string()],
+                &nothing_running()
+            ),
             "work-3"
         );
     }
@@ -423,9 +529,43 @@ mod tests {
     fn a_gap_in_the_series_is_reused_rather_than_skipped() {
         // Closing the second of three tabs must not leave a hole that never fills.
         assert_eq!(
-            first_free("work", &["work".to_string(), "work-3".to_string()]),
+            first_free(
+                "work",
+                &["work".to_string(), "work-3".to_string()],
+                &nothing_running()
+            ),
             "work-2"
         );
+    }
+
+    #[test]
+    fn a_new_tab_skips_a_session_that_is_still_running_without_a_tab() {
+        // THE new-versus-recover fix. Closing every tab does not stop the tmux sessions — so a name
+        // free in this app can be occupied in tmux, and the caller runs `new-session -A`, which turns
+        // "occupied" into "attach". Yesterday's work, reopened by pressing ⌘T. A new tab must be new;
+        // reaching an old session is the picker's job now.
+        assert_eq!(first_free("work", &[], &running(&["work"])), "work-2");
+        assert_eq!(
+            first_free("work", &[], &running(&["work", "work-2"])),
+            "work-3"
+        );
+        // Free in tmux but held by a tab, or the other way round — either alone is enough to skip it.
+        assert_eq!(
+            first_free("work", &["work-2".to_string()], &running(&["work"])),
+            "work-3"
+        );
+    }
+
+    #[test]
+    fn a_session_list_is_read_as_names_and_an_empty_answer_is_not_an_error() {
+        assert_eq!(
+            parse_session_names("work\nwork-2\n"),
+            running(&["work", "work-2"])
+        );
+        // No server running: tmux exits non-zero and says nothing. Nobody is in tmux, which is the
+        // common case and not a failure.
+        assert_eq!(parse_session_names(""), nothing_running());
+        assert_eq!(parse_session_names("  \n\n"), nothing_running());
     }
 
     #[test]
@@ -545,35 +685,110 @@ mod tests {
         assert_eq!(launch.tmux_session, Some("work".to_string()));
     }
 
-    #[test]
-    fn a_remembered_name_outside_the_configured_series_is_refused() {
-        // THE security property. The webview may restore a name the backend itself minted — it may
-        // not choose one. Without the series check, a compromised or buggy frontend could attach to
-        // any tmux session on the machine, including one the user is running for something else
-        // entirely (ADR-PROJ-001 §5).
-        let Some(_) = find_tmux() else { return };
-        for stranger in [
-            "someone-else",
-            "work:1",
-            "work.0",
-            "workshop",
-            "work-",
-            "work-2x",
-            "",
-        ] {
-            let launch = launch(
-                TmuxMode::AttachOrCreate,
-                "work",
-                "/bin/zsh",
-                &[],
-                Some(stranger),
-            );
-            assert_eq!(
-                launch.tmux_session,
-                Some("work".to_string()),
-                "{stranger:?} must not be attachable"
-            );
+    fn profile(tmux: Option<TmuxMode>) -> crate::dto::TerminalProfile {
+        crate::dto::TerminalProfile {
+            id: "p".into(),
+            name: "P".into(),
+            shell: None,
+            cwd: None,
+            theme: None,
+            tmux,
         }
+    }
+
+    #[test]
+    fn a_profile_decides_whether_its_tabs_use_tmux() {
+        // What makes a MIXED workspace possible. A global setting can only say "all tabs" or "no
+        // tabs"; the per-tab answer has to come from somewhere, and the profile is where every other
+        // per-tab override already lives.
+        let with = profile(Some(TmuxMode::AttachOrCreate));
+        let without = profile(Some(TmuxMode::Off));
+        assert_eq!(
+            effective_mode(false, Some(&with), TmuxMode::Off),
+            TmuxMode::AttachOrCreate
+        );
+        assert_eq!(
+            effective_mode(false, Some(&without), TmuxMode::AttachOrCreate),
+            TmuxMode::Off
+        );
+    }
+
+    #[test]
+    fn a_profile_that_says_nothing_takes_the_setting() {
+        // Every field of a profile is an override and Settings holds the defaults — so a profile
+        // written before this field existed keeps behaving exactly as it did (ADR-CORE-005).
+        let quiet = profile(None);
+        assert_eq!(
+            effective_mode(false, Some(&quiet), TmuxMode::AttachOrCreate),
+            TmuxMode::AttachOrCreate
+        );
+        assert_eq!(
+            effective_mode(false, None, TmuxMode::Attach),
+            TmuxMode::Attach
+        );
+    }
+
+    #[test]
+    fn a_detach_beats_the_profile_and_the_setting_alike() {
+        // "Put me back in a terminal" is the user acting now; a profile that could undo it would mean
+        // the tab silently rejoined the session they just left.
+        let with = profile(Some(TmuxMode::AttachOrCreate));
+        assert_eq!(
+            effective_mode(true, Some(&with), TmuxMode::AttachOrCreate),
+            TmuxMode::Off
+        );
+    }
+
+    #[test]
+    fn a_name_is_allowed_when_it_is_ours_or_when_it_really_exists() {
+        // The boundary on what the frontend may name. Two legitimate reasons, and nothing else:
+        //
+        //  - it belongs to this base's series — a name this backend minted, handed back by a restored
+        //    tab. It need NOT exist: recreating it is the right answer for a session that did not
+        //    survive.
+        //  - tmux actually has it — the user picked it out of the list this backend produced.
+        //
+        // Wider than the series alone on purpose (ADR-PROJ-001 §5): attaching to an arbitrary session
+        // is a feature now, not an accident. Still bounded — a name that is neither is refused, and an
+        // invalid one is refused whatever tmux says.
+        let none = |_: &str| false;
+        assert!(may_name("work", "work", none));
+        assert!(may_name("work", "work-7", none));
+        assert!(may_name("work", "someone-else", |n| n == "someone-else"));
+
+        assert!(!may_name("work", "someone-else", none));
+        assert!(!may_name("work", "workshop", none));
+        assert!(!may_name("work", "work-", none));
+        assert!(!may_name("work", "work-2x", none));
+        assert!(!may_name("work", "", none));
+    }
+
+    #[test]
+    fn a_name_that_addresses_something_else_is_refused_even_if_tmux_answers_for_it() {
+        // `session:window.pane` — these do not name what the user typed, they name something inside
+        // another session. The validity check runs BEFORE the existence question for exactly that
+        // reason: a tmux that happily answers must not be able to talk this into accepting one.
+        let anything = |_: &str| true;
+        assert!(!may_name("work", "work:1", anything));
+        assert!(!may_name("work", "work.0", anything));
+        assert!(!may_name("work", "bad\nname", anything));
+        assert!(!may_name("work", &"x".repeat(65), anything));
+    }
+
+    #[test]
+    fn a_stranger_falls_back_to_being_numbered_rather_than_refused_outright() {
+        // A tab that names something it may not have is not an error — it is numbered, like any new
+        // tab. Refusing to open a terminal over a stale name would be the worse answer.
+        let Some(_) = find_tmux() else { return };
+        let launch = launch(
+            TmuxMode::AttachOrCreate,
+            "work",
+            "/bin/zsh",
+            &[],
+            Some("work:1"),
+        );
+        assert!(launch.tmux_session.is_some());
+        assert_ne!(launch.tmux_session, Some("work:1".to_string()));
     }
 
     #[test]

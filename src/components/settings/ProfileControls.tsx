@@ -12,6 +12,20 @@ import {
   useTerminalThemes,
 } from "../../hooks/useSettings";
 import type { TerminalProfile } from "../../bindings/TerminalProfile";
+import type { TmuxMode } from "../../bindings/TmuxMode";
+import type { MessageKey } from "../../i18n";
+
+/**
+ * The tmux choices a profile can make, in the same order and wording as Settings.
+ *
+ * A profile is where "this KIND of tab uses tmux, that one does not" is said — no global setting can
+ * express a mixed workspace, because something has to decide per tab.
+ */
+const TMUX_MODES: { id: TmuxMode; label: MessageKey }[] = [
+  { id: "off", label: "settings.tmux.mode.off" },
+  { id: "attach", label: "settings.tmux.mode.attach" },
+  { id: "attach-or-create", label: "settings.tmux.mode.attachOrCreate" },
+];
 
 /** A profile that overrides nothing — every field falls through to Settings. */
 const blank = (): TerminalProfile => ({
@@ -20,6 +34,7 @@ const blank = (): TerminalProfile => ({
   shell: null,
   cwd: null,
   theme: null,
+  tmux: null,
 });
 
 /**
@@ -107,7 +122,7 @@ function ProfileEditor({
             active={profile.shell === null}
             onClick={() => onEdited({ ...profile, shell: null })}
           >
-            Default
+            {t("common.default")}
           </Button>
           {choices.map((choice) => (
             <Button
@@ -130,7 +145,7 @@ function ProfileEditor({
             active={profile.theme === null}
             onClick={() => onEdited({ ...profile, theme: null })}
           >
-            Default
+            {t("common.default")}
           </Button>
           {(themes.data ?? []).map((theme) => (
             <Button
@@ -140,6 +155,29 @@ function ProfileEditor({
               onClick={() => onEdited({ ...profile, theme: theme.id })}
             >
               {theme.name}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-dim text-xs">{t("profiles.tmux")}</span>
+        <div className="flex flex-wrap gap-1">
+          <Button
+            aria-pressed={profile.tmux === null}
+            active={profile.tmux === null}
+            onClick={() => onEdited({ ...profile, tmux: null })}
+          >
+            {t("common.default")}
+          </Button>
+          {TMUX_MODES.map((mode) => (
+            <Button
+              key={mode.id}
+              aria-pressed={profile.tmux === mode.id}
+              active={profile.tmux === mode.id}
+              onClick={() => onEdited({ ...profile, tmux: mode.id })}
+            >
+              {t(mode.label)}
             </Button>
           ))}
         </div>

@@ -166,19 +166,55 @@ did not ask for.**
   frontend supplies.
 - A supplied working directory is canonicalised and must be an existing directory; anything else is
   rejected at the boundary ([rule:security](../../../.claude/rules/security.md)).
-- **A supplied tmux session name is a *restore*, never a choice.** A restored tab hands back the session
-  it was in before the app last stopped, and `tmux::in_series` accepts it only if it belongs to the
-  series the *settings* define (`base`, `base-2`, …) — so the frontend can name a session this backend
-  minted for it, and nothing else. This does not widen *what runs*: attaching joins a session the user
-  already started, and creating one runs the configured shell either way. What the check prevents is
-  widening *what can be joined* to every tmux session on the machine, including ones the user is running
-  for something entirely unrelated.
+- **A supplied tmux session name is bounded by `tmux::may_name`.** Two ways to qualify, and nothing
+  else: the name belongs to the tab's own series (`base`, `base-2`, …), or the tmux server actually has
+  it. Anything else is refused and the tab is numbered instead — a stale name is never a reason to fail
+  to open a terminal.
 
-  It exists because tmux's survival was true but unreachable. The sessions live through a crash on their
-  own; a tab that returned merely *numbered* — the backend counts the tabs already open — landed
-  wherever its position put it. Close one tab before the crash and the numbering has shifted: the tab
-  opens somebody else's session while the one holding the build runs on with nothing in the interface
-  pointing at it. Pinned by `a_remembered_name_outside_the_configured_series_is_refused`.
+  This does not widen *what runs*: attaching joins a session the user already started, and creating one
+  runs the configured shell either way. It is nonetheless **wider than the first version of this rule**,
+  which allowed the series alone, and the reason is worth stating rather than leaving as a diff.
+
+  The series alone was right while the only legitimate caller was a *restored tab* handing back a name
+  this backend had minted for it. Attaching to an arbitrary session was then, correctly, something no
+  frontend needed to be able to ask for. That changed when attaching became a **feature**: a new tab is
+  now given a session nobody is using, so reaching one that outlived its tab has to be something the
+  user can ask for — the picker in the title bar, filled by `tmux_sessions`, which is this same backend
+  producing the list. The frontend still cannot invent a target: an invalid name is refused before the
+  existence question is even asked, so it can never address a window or pane inside something else.
+
+  The tighter design — the backend minting an opaque handle per listed session and accepting only
+  handles — was considered and not built. It would defend against a webview naming a session the user
+  never saw; that webview can already type into every session the app has open (`terminal_write`), so
+  the machinery would raise the nominal floor and not the real one (ADR-CORE-039 on defensible, not
+  maximal-literal).
+
+  **Why any of this exists.** tmux's survival was true but unreachable. Its sessions live through a
+  crash on their own; a tab that returned merely *numbered* — the backend counted the tabs already open
+  — landed wherever its position put it. Close one tab before the crash and the numbering has shifted:
+  the tab opens somebody else's session while the one holding the build runs on with nothing in the
+  interface pointing at it.
+
+  Pinned by `a_name_is_allowed_when_it_is_ours_or_when_it_really_exists` and
+  `a_name_that_addresses_something_else_is_refused_even_if_tmux_answers_for_it`.
+
+- **Opening a tab and attaching to a session are separate acts, and the interface says so.** They used
+  to be one: `new-session -A` attaches when the name exists, and the numbering consulted only this
+  app's open tabs — so a name free here could be occupied in tmux, and pressing `+` after closing
+  yesterday's tabs dropped the user straight back into yesterday's session. Nobody decided that; it fell
+  out of positional naming. `first_free` now skips what the tmux server holds as well, so a new terminal
+  is new, and the picker is where you go when you want the other thing.
+
+  The cost is explicit: the first tab no longer lands in a session the user already has. That was
+  deliberate behaviour and it is now the picker's job.
+
+- **A profile may override the tmux mode** (`TerminalProfile::tmux`). A global setting cannot express a
+  workspace where some tabs use tmux and some do not — something has to choose per tab, and the profile
+  is where every other per-tab override already lives. `None` means "use the Settings default", so a
+  profile stored before this field existed behaves exactly as it did. It is still a *reference* the
+  backend resolves; the webview names a profile, never a mode. A detach (`plain`) outranks it, because
+  a profile that could undo a detach would mean the tab silently rejoined the session the user just
+  left.
 - The child inherits a curated environment. No secret is ever placed in it.
 - Both PTY file descriptors are `CLOEXEC` (the crate does this — `unix.rs:64-65`), so nothing leaks into
   the child.

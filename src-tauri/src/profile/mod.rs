@@ -127,6 +127,7 @@ mod tests {
             shell: None,
             cwd: None,
             theme: None,
+            tmux: None,
         }
     }
 

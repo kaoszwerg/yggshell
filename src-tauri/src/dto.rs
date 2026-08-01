@@ -400,6 +400,14 @@ pub struct TerminalProfile {
     pub cwd: Option<String>,
     /// A colour scheme id, as `TerminalTheme::id`.
     pub theme: Option<String>,
+    /// Whether a tab opened with this profile joins tmux, overriding the Settings default.
+    ///
+    /// **This is what makes a mixed workspace expressible.** A global setting cannot say "this tab
+    /// yes, that tab no" — something has to choose per tab, and the profile is where every other
+    /// per-tab override already lives. `None` means "use the Settings default", like every field
+    /// here, so a profile written before this existed keeps behaving exactly as it did.
+    #[serde(default)]
+    pub tmux: Option<TmuxMode>,
 }
 
 /// On by default: a Git tool that reports `↓0` because it never asked is worse than one that asks.

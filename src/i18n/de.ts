@@ -26,6 +26,7 @@ export const de: Translations = {
   "common.devChannel": "· dev",
 
   // ── Window chrome ────────────────────────────────────────────────────────────────────────────
+  "titlebar.attachTo": "An {session} anhängen",
   "titlebar.newTerminal": "Neues Terminal",
   "titlebar.terminals": "Terminals",
   "titlebar.scrollLeft": "Frühere Tabs zeigen",
@@ -401,6 +402,9 @@ export const de: Translations = {
   "profiles.new": "Neues Profil",
   "profiles.name": "Profilname",
   "profiles.scheme": "Farbschema",
+  "profiles.tmux": "tmux",
+  "profiles.tmuxHint":
+    "Was eine globale Einstellung nicht sagen kann: diese Art Tab benutzt tmux, jene nicht. Auf Standard folgt der Tab der Einstellung oben.",
   "profiles.startIn": "Starten in",
   "profiles.startInPlaceholder": "im Standard der Shell",
   "profiles.startInHint":

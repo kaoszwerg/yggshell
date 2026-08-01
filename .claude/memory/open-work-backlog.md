@@ -475,53 +475,39 @@ change.
 
 ## Defects with a diagnosis, not yet closed
 
-- **Opening a NEW tab can land you in an old session, because nothing distinguishes "new" from
-  "recover".** Awaiting the maintainer's decision — 2026-08-01, raised by them.
+- **Opening a NEW tab could land you in an old session — CLOSED in 0.37.0 (2026-08-01).** Raised by
+  the maintainer, and all three parts shipped as one change because they are the same question.
 
-  `taken` is built from *this app's* open tabs (`terminal/mod.rs:203-209`) and `first_free` never asks
-  tmux; `has_session` is consulted only in `Attach` mode. So `AttachOrCreate` runs one path for two
-  different intentions, and the only thing that branches it is whether a name was remembered:
+  `AttachOrCreate` ran ONE path for two intentions. `taken` came from this app's open tabs and
+  `first_free` never asked tmux, so a new tab counted to the next name free *here* while
+  `new-session -A` attached if the server held it *there*. Close three tabs, press ⌘T tomorrow, and
+  you were inside yesterday's session. For the first tab that was documented intent; for every tab
+  after it, a side effect of positional naming nobody decided.
 
-  - a **restored** tab hands back its own name and attaches to its session — correct, that *is* recover;
-  - a **new** tab counts to the next name free **in the app**, and `new-session -A` then attaches if
-    tmux happens to hold it — which is recover behaviour wearing a new tab's clothes.
+  What shipped:
+  1. `first_free` skips what the tmux server holds as well, so a new terminal is new. **This cost the
+     documented first-tab behaviour** — the maintainer's call, made explicitly.
+  2. Attaching is its own action: the title-bar menu lists running sessions (`tmux_sessions`), and
+     picking one opens a tab attached to it. That is also the only way back into tmux after a detach,
+     which had no counterpart at all. `ContextMenu` gained `onOpen` so the list is asked for when the
+     menu opens rather than being whatever the last render saw.
+  3. `TerminalProfile::tmux` — the per-tab override, where every other per-tab override already lives.
+     No "default profile" was needed: Settings plays that role by design (`dto.rs:384-386`,
+     ADR-CORE-005) and the picker already existed in the title bar.
 
-  Close three tabs, press ⌘T tomorrow: `first_free` sees no tabs, picks `yggshell`, and you are inside
-  yesterday's session. For the FIRST tab this is documented intent (`tmux.rs:113` — "so a session the
-  user already has is the one they land in"); for every tab after it, it is a side effect of positional
-  naming that nobody decided.
+  **The boundary check had to widen, and that is recorded rather than diffed.** `in_series` became
+  `may_name`: a name qualifies if it is in the tab's series **or** the server actually has it. The
+  series alone was right while the only caller was a restored tab handing back a minted name; it stops
+  being right the moment attaching is a feature the user asks for. Invalid names are still refused
+  before the existence question is asked. The tighter design — opaque handles per listed session — was
+  considered and rejected in ADR-PROJ-001 §5: a webview can already `terminal_write` into every open
+  session, so it would raise the nominal floor and not the real one.
 
-  Proposed, as one change, because the three pieces are the same question:
-  1. `first_free` also skips what **tmux** holds, so a new tab is genuinely new. **This costs the
-     documented first-tab behaviour — the maintainer's call, not an agent's.**
-  2. Attaching becomes its own action with a list of running sessions, instead of a side effect of ⌘T.
-     This also closes the gap that there is **no way back into tmux** today: only `detachToShell`
-     exists, and since `plain` now survives a restart (0.36.4) a detached tab stays plain until it is
-     closed.
-  3. `tmux: Option<TmuxMode>` on `TerminalProfile`, which is where a per-tab override belongs — the
-     profile already carries `shell`, `cwd` and `theme`, and its own doc comment already promises "its
-     tmux behaviour" without the field existing (`dto.rs:382-403`). A *global* third mode cannot express
-     "mixed": something has to choose per tab.
-
-     **And it needs NO "default profile" — asked and answered, 2026-08-01.** Settings already plays
-     that role by design, and `dto.rs:384-386` says so out loud: "there is no separate 'default profile'
-     document to keep in step (ADR-CORE-005)". A second document holding the same defaults is the
-     duplication that ADR forbids. The picker exists too — `TitleBar.tsx:98-102` offers "New Terminal"
-     (Settings) plus one entry per profile, via `openPane(profile.id)` — so a mixed workspace works
-     with no new mechanism, and works in EITHER direction: Settings `attach or create` + a "Plain
-     shell" profile, or Settings `Off` + a "tmux" profile.
-
-     The one real gap is smaller and has a different name: the **shortcut** ⌘T always opens the
-     Settings default (`useShortcuts.ts:76`); a profile is reachable only through the menu. The answer
-     to that is a shortcut per profile, or a Settings *pointer* at an existing profile — a reference,
-     not a second set of defaults.
-
-- **`zsh: locking failed for <appdata>/shell/.zsh_history: no such file or directory`** was seen once
-  in a probe. macOS' `/etc/zshrc` sets `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` and runs *between*
-  our generated `.zshenv` and `.zshrc`, which is why the repair line in `.zshrc` exists. Verified
-  working once (`HISTFILE=/Users/…/.zsh_history`, 2939 entries) — so this is either a probe artefact
-  or a path the repair misses. **Inside tmux the question no longer arises**: no rc file is generated
-  there at all any more. It can therefore only affect a plain shell session.
+  **The trap, if this area is touched again:** the new-tab skip must never apply to a remembered name.
+  A restored tab has to land in its session *precisely because that session still exists* — running the
+  "is it already running" check on it would make the restore skip past the thing it is restoring.
+  Pinned by `a_new_tab_skips_a_session_that_is_still_running_without_a_tab` next to
+  `a_restored_tab_returns_to_the_session_it_remembers`.
 
 ## Traps this session paid for — do not re-learn them
 
