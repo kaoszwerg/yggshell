@@ -11,11 +11,21 @@ import { pane } from "../test/panes";
  */
 let measure: ((rows: number, cols: number) => void) | undefined;
 
+/**
+ * Every mounted pane's measurement, in mount order.
+ *
+ * `measure` alone holds only the LAST one — every surface that mounts overwrites it — which is fine
+ * while a test has one tab and silently wrong the moment it has two: only one session would ever be
+ * opened, and a test about two tabs would pass by measuring neither of them.
+ */
+const measures: ((rows: number, cols: number) => void)[] = [];
+
 let surfaceProps: Record<string, unknown> = {};
 
 vi.mock("../components/ui/TerminalSurface", () => ({
   TerminalSurface: (props: { onResize: (rows: number, cols: number) => void }) => {
     measure = props.onResize;
+    measures.push(props.onResize);
     surfaceProps = props as unknown as Record<string, unknown>;
     return <div data-testid="surface" />;
   },
@@ -71,6 +81,7 @@ describe("TerminalView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     measure = undefined;
+    measures.length = 0;
     useTerminalStore.setState({ panes: [], activeKey: null, bootstrapped: false });
     vi.mocked(terminalApi.open).mockResolvedValue({ id: 1, tmux_session: null });
   });
@@ -537,6 +548,32 @@ describe("TerminalView", () => {
       });
 
       expect(vi.mocked(terminalApi.open).mock.calls.at(-1)?.[0]?.tmuxSession).toBeUndefined();
+    });
+
+    it("comes back the way it was when tabs were mixed", async () => {
+      // The case a workspace is actually in: one tab in tmux, the one beside it deliberately not.
+      // Each must return as itself. Putting a tmux session into a tab the user had left tmux in is
+      // the app overruling a decision they made, in the place they would least think to look — and it
+      // is exactly the asymmetry that appeared once the tmux half started restoring properly.
+      useTerminalStore.setState({
+        panes: [
+          pane({ key: "term-0", tmuxSession: "yggshell", plain: false }),
+          pane({ key: "term-1", tmuxSession: null, plain: true }),
+        ],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(58, "yggshell");
+      render(<TerminalView />);
+      // BOTH panes: they are all mounted at once, and this test is about what each of them asks for.
+      act(() => measures.forEach((m) => m(30, 100)));
+      await opened();
+
+      const calls = vi.mocked(terminalApi.open).mock.calls.map((c) => c[0]);
+      const tmuxTab = calls.find((c) => c?.tmuxSession === "yggshell");
+      const plainTab = calls.find((c) => c?.plain === true);
+      expect(tmuxTab).toMatchObject({ plain: false });
+      expect(plainTab?.tmuxSession).toBeUndefined();
     });
   });
 

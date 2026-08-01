@@ -342,14 +342,22 @@ export const useTerminalStore = create<TerminalState>()(
           profileId: p.profileId,
           themeId: p.themeId,
           tmuxSession: p.tmuxSession,
+          plain: p.plain,
         })),
         activeKey: s.activeKey,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        // Rebuild each tab from what survived, with everything else at its starting value. `plain` is
-        // deliberately false: a tab that had detached out of tmux is starting over, and its profile
-        // decides again.
+        // Rebuild each tab from what survived, with everything else at its starting value.
+        //
+        // `plain` survives, and it used to be reset here on the reasoning that a detached tab "is
+        // starting over". That was wrong, and became visibly wrong once a tmux tab started returning
+        // to its exact session: the two halves then disagreed. A tab you deliberately left tmux in
+        // came back inside tmux — the app undoing a decision the user had made, in the one place they
+        // would not think to look. Which multiplexer a tab is in is part of what the tab IS, like its
+        // directory and its profile, and all of those survive.
+        //
+        // The way back is closing the tab and opening a new one; there is no re-attach action.
         state.panes = (state.panes ?? [])
           .filter((p): p is TerminalPane => typeof p?.key === "string")
           .map((p) => ({
@@ -361,7 +369,7 @@ export const useTerminalStore = create<TerminalState>()(
             profileId: typeof p.profileId === "string" ? p.profileId : null,
             themeId: typeof p.themeId === "string" ? p.themeId : null,
             tmuxSession: typeof p.tmuxSession === "string" ? p.tmuxSession : null,
-            plain: false,
+            plain: p.plain === true,
             generation: 0,
             detail: null,
             // Never restored: a tab reopened tomorrow is a fresh shell that is running nothing.

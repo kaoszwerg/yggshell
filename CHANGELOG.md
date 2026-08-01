@@ -8,6 +8,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A tab that was NOT in tmux now comes back that way too.** The other half of the restore above, and
+  it was pointing the wrong way: a tab you had deliberately detached out of tmux returned *inside*
+  tmux, because `plain` was reset on rehydration on the reasoning that such a tab "is starting over".
+
+  That reasoning was defensible while nothing else about tmux survived a restart. It stopped being
+  defensible the moment a tmux tab started returning to its exact session: the two halves then
+  disagreed in the same workspace — one tab restored faithfully, the tab beside it silently overruled.
+  Which multiplexer a tab is in is part of what the tab *is*, exactly like its directory, profile and
+  colour scheme, and all of those already survived.
+
+  `plain` is now persisted and restored; `generation` still is not, and the test says why — it is a
+  nonce meaning "give me a new session now", not a fact about the tab. The way back into tmux is
+  closing the tab and opening a new one, as it already was: there is no re-attach action.
+
+  Pinned at both levels: the store test asserts a mixed workspace rehydrates with each tab as itself,
+  and the view test asserts each of them then asks the backend for the right thing. Both were verified
+  by reverting the change and watching them fail.
+
 - **A tab restored after a crash now returns to its own tmux session, by name.** tmux's sessions
   survive the app dying — that part never depended on us — but getting *back* to them did, and the
   wiring was missing. The tab persisted the session it was in, with a comment saying it did so "so a

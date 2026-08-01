@@ -73,14 +73,33 @@ describe("restoring the workspace", () => {
     expect(store.getState().panes[0]?.detail).toBeNull();
   });
 
-  it("does NOT bring back a tab's detached state — its profile decides again", async () => {
+  it("brings back a tab that was NOT in tmux as a plain shell", async () => {
+    // Reversed deliberately. This used to reset, on the reasoning that a detached tab "is starting
+    // over" — and it became visibly wrong once a tmux tab started returning to its exact session: a
+    // tab you had left tmux in came back inside tmux, while its neighbour returned correctly. The app
+    // undoing the user's own decision, in the place they would least think to look. Which
+    // multiplexer a tab is in is part of what the tab is, exactly like its directory and profile.
+    const store = await restoreFrom({
+      panes: [
+        { key: "term-0", cwd: null, profileId: null, themeId: null, plain: true, generation: 4 },
+        { key: "term-1", cwd: null, profileId: null, themeId: null, tmuxSession: "yggshell" },
+      ],
+      activeKey: "term-0",
+    });
+    expect(store.getState().panes[0]?.plain).toBe(true);
+    expect(store.getState().panes[1]?.plain).toBe(false);
+    expect(store.getState().panes[1]?.tmuxSession).toBe("yggshell");
+  });
+
+  it("does NOT bring back the generation — it is a nonce, not a fact about the tab", async () => {
+    // Unlike `plain`. The generation only ever means "this tab wants a new session NOW"; a restored
+    // tab is getting one anyway.
     const store = await restoreFrom({
       panes: [
         { key: "term-0", cwd: null, profileId: null, themeId: null, plain: true, generation: 4 },
       ],
       activeKey: "term-0",
     });
-    expect(store.getState().panes[0]?.plain).toBe(false);
     expect(store.getState().panes[0]?.generation).toBe(0);
   });
 
@@ -163,9 +182,9 @@ describe("restoring the workspace", () => {
         themeId: "nord",
         tmuxSession: "yggshell",
       });
+      expect(pane).toHaveProperty("plain");
       expect(pane).not.toHaveProperty("title");
       expect(pane).not.toHaveProperty("detail");
-      expect(pane).not.toHaveProperty("plain");
       expect(pane).not.toHaveProperty("generation");
     });
   });
