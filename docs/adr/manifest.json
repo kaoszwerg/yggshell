@@ -894,7 +894,15 @@
         "sigwinch",
         "spawn",
         "iterm2",
-        "theme"
+        "theme",
+        "tmux",
+        "multiplexer",
+        "attach",
+        "detach",
+        "reattach",
+        "restore",
+        "restored",
+        "survive"
       ],
       "applies-to": [
         "src-tauri/src/terminal/**",
@@ -909,7 +917,7 @@
       ],
       "supersededBy": null,
       "path": "docs/adr/project/proj-001-terminal-architecture.md",
-      "hash": "78a06ea4529b813f"
+      "hash": "681d01d7d3ddb131"
     },
     {
       "id": "ADR-PROJ-002",

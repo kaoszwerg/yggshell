@@ -30,6 +30,14 @@ triggers:
     spawn,
     iterm2,
     theme,
+    tmux,
+    multiplexer,
+    attach,
+    detach,
+    reattach,
+    restore,
+    restored,
+    survive,
   ]
 applies-to:
   [
