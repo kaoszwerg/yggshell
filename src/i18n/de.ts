@@ -28,6 +28,8 @@ export const de: Translations = {
   // ── Window chrome ────────────────────────────────────────────────────────────────────────────
   "titlebar.newTerminal": "Neues Terminal",
   "titlebar.terminals": "Terminals",
+  "titlebar.scrollLeft": "Frühere Tabs zeigen",
+  "titlebar.scrollRight": "Spätere Tabs zeigen",
   "titlebar.minimize": "Minimieren",
   "titlebar.maximize": "Maximieren",
   "titlebar.close": "Schließen",

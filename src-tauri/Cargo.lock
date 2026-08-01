@@ -5838,7 +5838,7 @@ dependencies = [
 
 [[package]]
 name = "yggshell"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "chrono",
  "gix",

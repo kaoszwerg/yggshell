@@ -31,6 +31,8 @@ export const en = {
   // ── Window chrome ────────────────────────────────────────────────────────────────────────────
   "titlebar.newTerminal": "New terminal",
   "titlebar.terminals": "Terminals",
+  "titlebar.scrollLeft": "Show earlier tabs",
+  "titlebar.scrollRight": "Show later tabs",
   "titlebar.minimize": "Minimize",
   "titlebar.maximize": "Maximize",
   "titlebar.close": "Close",

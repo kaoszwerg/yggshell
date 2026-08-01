@@ -52,7 +52,7 @@ export function TitleBar() {
       data-tauri-drag-region
       className="hud-strip hud-accent-cyan flex h-10 shrink-0 items-center justify-between pr-3 pl-5"
     >
-      <div data-tauri-drag-region className="flex items-center gap-2">
+      <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-2">
         <img
           src={logoUrl}
           alt=""
@@ -106,7 +106,7 @@ export function TitleBar() {
             {/* A DOM element, not `<Tabs>` directly: ContextMenu attaches its handler to whatever it
                 is given, and a component that does not forward unknown props to a DOM node drops it
                 without a word. That is exactly how this menu shipped doing nothing. */}
-            <div className="contents">
+            <div className="flex min-w-0 flex-1">
               <Tabs
                 label={t("titlebar.terminals")}
                 items={panes.map((p) => ({ id: p.key, label: p.title }))}
@@ -116,8 +116,13 @@ export function TitleBar() {
                 onMiddleClick={pasteIntoTab}
                 onAdd={() => show(openPane())}
                 addLabel={t("titlebar.newTerminal")}
+                scrollBackLabel={t("titlebar.scrollLeft")}
+                scrollForwardLabel={t("titlebar.scrollRight")}
                 getPanelId={(key) => `terminal-panel-${key}`}
-                className="max-w-[52vw]"
+                // The strip takes whatever is left between the app mark and the window buttons,
+                // rather than stopping at a fixed fraction of the viewport: a 52vw cap left half the
+                // title bar empty on a wide window while tabs were being cut off inside it.
+                className="min-w-0 flex-1"
               />
             </div>
           </ContextMenu>

@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The tab strip no longer cuts a tab in half.** Tabs now shrink before the strip scrolls, down to a
+  floor that still shows about seven characters and the × — below that a tab is not a smaller tab, it
+  is an unusable one. Past the floor the strip scrolls, and it comes to rest on a tab boundary.
+- **There is now a visible way to reach the other tabs**: arrows that appear only when there is
+  something in their direction, outside the scrolling element so they cannot scroll away with it.
+  A vertical mouse wheel scrolls the strip too — without that, a trackpad could reach the far tabs
+  and a mouse could not. The selected tab is scrolled into view whoever selected it, so `⌘3` cannot
+  land somewhere invisible.
+- **The strip uses the whole title bar.** It was capped at 52% of the viewport, which left half the
+  bar empty on a wide window while tabs were being cut off inside it.
+
+### Fixed
+
 - **"That directory is not on your PATH" about a directory that was first in it.** The launcher panel
   read the *process* `PATH`, which on macOS is the minimal one launchd hands a GUI app —
   `~/.local/bin`, Homebrew and everything else a developer has only exist after a login shell has run.
