@@ -1,4 +1,5 @@
 import { PALETTE, TERMINAL_ANSI } from "../styles/palette";
+import { AA, contrast, mostReadableOn } from "./contrast";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
 
 /**
@@ -125,7 +126,65 @@ export function resolveTheme(theme: TerminalTheme | null | undefined): XtermThem
     overrides.set("selectionBackground", `${theme.selection.trim().toLowerCase()}59`);
   }
 
-  return { ...HUD_TERMINAL_THEME, ...Object.fromEntries(overrides) };
+  const resolved = { ...HUD_TERMINAL_THEME, ...Object.fromEntries(overrides) };
+  return { ...resolved, ...readableSelection(resolved, theme) };
+}
+
+/** How much of the selection colour actually lands on screen — `59` of 255, from just above. */
+const SELECTION_ALPHA = 0x59 / 255;
+
+/** Composite `colour` at `alpha` over `behind`, so a translucent layer can be measured. */
+function over(colour: string, alpha: number, behind: string): string {
+  const parse = (c: string, at: number) => Number.parseInt(c.slice(1 + at * 2, 3 + at * 2), 16);
+  const channel = (at: number) =>
+    Math.round(parse(colour, at) * alpha + parse(behind, at) * (1 - alpha))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
+/**
+ * Give the selection a foreground colour when the scheme's own pairing would be hard to read.
+ *
+ * **The problem, measured.** A scheme says which colour to fill a selection with; almost none of
+ * them say what colour the text on it should be, so the text stays the ordinary foreground. Whether
+ * that reads is left to chance — and chance loses: Alien Blood's selected text scores **3.85:1**
+ * against the selection as it is actually drawn, under the 4.5 needed for text this size.
+ *
+ * **Why not simply fix the scheme.** Thirteen of the bundled fifteen are other people's palettes,
+ * carried over with their licences. Editing their colours to raise a score would make them no longer
+ * their themes, and the next import would arrive with the same problem anyway. The app fixes the
+ * pairing it forms instead: the scheme keeps every colour it declares, and gains one it did not.
+ *
+ * Only when needed, and never over an explicit choice — a scheme that states a selection foreground
+ * has already answered this question.
+ */
+function readableSelection(
+  resolved: XtermTheme,
+  theme: TerminalTheme,
+): Partial<Pick<XtermTheme, "selectionForeground">> {
+  if (usable(theme.selection_foreground)) return {};
+  const selection = resolved.selectionBackground;
+  const background = resolved.background;
+  if (selection === undefined || background === undefined) return {};
+
+  // Measured as drawn — translucent over the background — not as written. The two differ by more
+  // than a point, and using the written value would "fix" selections that were never broken.
+  const drawn = over(selection, SELECTION_ALPHA, background);
+  const current = contrast(resolved.foreground ?? "", drawn);
+  if (current !== null && current >= AA) return {};
+
+  // The scheme's own extremes first: they belong to it, so the result still looks like the scheme.
+  const candidate = mostReadableOn(drawn, [
+    resolved.brightWhite ?? "#ffffff",
+    resolved.black ?? "#000000",
+    "#ffffff",
+    "#000000",
+  ]);
+  if (candidate === null) return {};
+  const improved = contrast(candidate, drawn);
+  if (improved === null || (current !== null && improved <= current)) return {};
+  return { selectionForeground: candidate };
 }
 
 /**

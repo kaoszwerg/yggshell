@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { contrast } from "./contrast";
 import {
   BUILTIN_THEME_ID,
   detailThemeId,
@@ -265,5 +266,59 @@ describe("the default scheme as a terminal palette", () => {
 
   it("keeps the foreground itself comfortably readable", () => {
     expect(contrast(theme.foreground, theme.background)).toBeGreaterThanOrEqual(7);
+  });
+});
+
+describe("selection readability", () => {
+  /** A scheme as the backend hands it over, with only what a test needs. */
+  function scheme(over: Partial<TerminalTheme>): TerminalTheme {
+    return {
+      id: "t",
+      name: "T",
+      builtin: false,
+      background: null,
+      foreground: null,
+      cursor: null,
+      cursor_accent: null,
+      selection: null,
+      selection_foreground: null,
+      ansi: [],
+      ...over,
+    } as TerminalTheme;
+  }
+
+  it("gives selected text a colour when the scheme's own pairing would not read", () => {
+    // Alien Blood, exactly: its selection scores 3.85:1 against its foreground as actually drawn.
+    // The scheme keeps every colour it declares and gains one it never specified.
+    const resolved = resolveTheme(
+      scheme({ background: "#000e07", foreground: "#637d75", selection: "#1d4125" }),
+    );
+
+    expect(resolved.selectionForeground).toBeDefined();
+    const ratio = contrast(resolved.selectionForeground ?? "", "#0a2011") ?? 0;
+    expect(ratio).toBeGreaterThan(3.85);
+  });
+
+  it("leaves a scheme alone when its selection already reads", () => {
+    // Supplying a colour that was not needed would override the scheme's look for nothing.
+    const resolved = resolveTheme(
+      scheme({ background: "#1e1e2e", foreground: "#cdd6f4", selection: "#585b70" }),
+    );
+
+    expect(resolved.selectionForeground).toBeUndefined();
+  });
+
+  it("never overrides a selection foreground the scheme states itself", () => {
+    // An explicit choice has already answered this question, whatever it scores.
+    const resolved = resolveTheme(
+      scheme({
+        background: "#000e07",
+        foreground: "#637d75",
+        selection: "#1d4125",
+        selection_foreground: "#112616",
+      }),
+    );
+
+    expect(resolved.selectionForeground).toBe("#112616");
   });
 });

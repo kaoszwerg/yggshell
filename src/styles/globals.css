@@ -573,9 +573,13 @@ input[type="range"]:disabled::-moz-range-thumb {
 .scheme-fg {
   color: var(--scheme-fg);
 }
-/* Secondary text: a commit body, a file path, a count. */
+/* Secondary text: a commit body, a file path, a count.
+   Mixed towards the FOREGROUND, never towards transparency. A scheme's "quiet" slot is often very
+   close to its background — measured, Yggdrasil's was 1.78:1 and Alien Blood's 2.00:1 — and fading
+   it further is how dimmed text becomes invisible text. Mixing towards the foreground keeps the
+   dimming while putting a floor under it, in every scheme including one imported tomorrow. */
 .scheme-dim {
-  color: color-mix(in srgb, var(--scheme-dim) 85%, var(--scheme-fg));
+  color: color-mix(in srgb, var(--scheme-dim) 70%, var(--scheme-fg));
 }
 /* The `@@ … @@` header, and a ref chip. Lifted off the surface rather than given an accent of its
    own, so it reads as a separator in any scheme instead of as one more colour. */
@@ -584,9 +588,10 @@ input[type="range"]:disabled::-moz-range-thumb {
   color: var(--scheme-meta);
   border-color: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
 }
-/* Line numbers: present, never competing with the code beside them. */
+/* Line numbers: present, never competing with the code beside them — and never fading into the
+   background either, for the reason given above `.scheme-dim`. */
 .scheme-num {
-  color: color-mix(in srgb, var(--scheme-dim) 80%, transparent);
+  color: color-mix(in srgb, var(--scheme-dim) 80%, var(--scheme-fg));
 }
 .scheme-add {
   background: color-mix(in srgb, var(--scheme-add) 14%, transparent);

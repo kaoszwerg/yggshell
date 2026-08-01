@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Colours that could not be read.** Measured rather than judged by eye, with WCAG ratios across all
+  fifteen bundled schemes. Yggdrasil's own `brightBlack` scored **1.78:1** — invisible on the
+  background, and it is the slot every program uses for comments and the diff uses for line numbers;
+  it is now 3.81:1, while white text *on* it stays at 5.18:1, because a prompt fills that slot as a
+  surface as often as it writes in it. Dimmed text in the diff and commit views is now mixed towards
+  the foreground instead of towards transparency, so a scheme whose quiet colour sits close to its
+  background cannot fade it away entirely. And where a scheme's selection would leave its text under
+  the readable threshold — Alien Blood's is 3.85:1 — the app now supplies a selection foreground
+  rather than recolouring somebody else's palette: every scheme keeps the colours it declares and
+  gains only one it never specified.
+
 - **Closing a tab, quitting, or crashing no longer destroys a tmux session.** It was believed that
   letting the terminal go was enough — a client hung up on detaches, and the session keeps running.
   Measured against a real server, it does not: the session was gone from `list-sessions` a moment

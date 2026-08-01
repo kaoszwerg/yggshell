@@ -45,7 +45,11 @@ export const TERMINAL_ANSI = {
   magenta: "#8339c4",
   cyan: "#0d7d85",
   white: "#b8c2cc",
-  brightBlack: "#3a3a4e",
+  // Measured: #3a3a4e scored 1.78:1 on the background — invisible, and this slot is what
+  // every program uses for comments and what the diff uses for line numbers. #6a6a8c is 3.81:1,
+  // and still 5.18:1 for white text ON it, which matters because a prompt fills this slot as a
+  // SURFACE as often as it writes in it.
+  brightBlack: "#6a6a8c",
   brightRed: "#ff3366",
   brightGreen: "#00ff88",
   brightYellow: "#ffd700",
