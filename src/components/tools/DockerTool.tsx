@@ -5,6 +5,7 @@ import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
 import { dockerApi } from "../../api/docker";
 import { useT } from "../../hooks/useT";
+import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { stateColour } from "../../lib/containerState";
 import type { ContainerInfo } from "../../bindings/ContainerInfo";
 
@@ -25,6 +26,7 @@ const LOG_LINES = 200;
  */
 export function DockerTool() {
   const t = useT();
+  const fontSize = useContentFontSize();
   const query = useQuery({
     queryKey: ["docker"],
     queryFn: () => dockerApi.containers(),
@@ -61,7 +63,11 @@ export function DockerTool() {
         </IconButton>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto py-1">
+      <div
+        className="min-h-0 flex-1 overflow-auto py-1"
+        // Content, not chrome — container names and logs read like a terminal.
+        style={{ fontSize: `${fontSize}px` }}
+      >
         {query.isPending ? (
           <Empty>{t("docker.reading")}</Empty>
         ) : query.isError ? (

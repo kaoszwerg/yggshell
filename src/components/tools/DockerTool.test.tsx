@@ -5,6 +5,7 @@ import { DockerTool } from "./DockerTool";
 import { useUiStore } from "../../store/ui";
 import type { ContainerInfo } from "../../bindings/ContainerInfo";
 
+vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../../api/docker", () => ({ dockerApi: { containers: vi.fn(), logs: vi.fn() } }));
 
 import { dockerApi } from "../../api/docker";
@@ -116,5 +117,15 @@ describe("DockerTool", () => {
     await screen.findByText("app-nginx");
     const labels = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? "");
     expect(labels.some((l) => /start|stop|restart|remove|kill/i.test(l))).toBe(false);
+  });
+
+  it("draws its content at the terminal's own text size", async () => {
+    // rule:content-size — container names and logs read like a terminal.
+    vi.mocked(dockerApi.containers).mockResolvedValue(CONTAINERS);
+    const { container } = renderTool();
+
+    await screen.findByText("app-nginx");
+    const sized = container.querySelector<HTMLElement>("[style*='font-size']");
+    expect(sized?.style.fontSize).toBe("17px");
   });
 });

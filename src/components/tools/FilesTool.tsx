@@ -8,6 +8,7 @@ import { filesApi } from "../../api/files";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { useT } from "../../hooks/useT";
+import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { humanSize } from "../../lib/humanSize";
 import type { DirEntry } from "../../bindings/DirEntry";
 
@@ -35,6 +36,7 @@ export function FilesTool() {
   const t = useT();
   const root = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
   const showHidden = useUiStore((s) => s.filesShowHidden);
+  const fontSize = useContentFontSize();
   const toggleHidden = useUiStore((s) => s.toggleFilesHidden);
 
   if (root === null) {
@@ -64,7 +66,11 @@ export function FilesTool() {
           {showHidden ? <FolderOpen size={12} aria-hidden /> : <Folder size={12} aria-hidden />}
         </IconButton>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto py-1">
+      <div
+        className="min-h-0 flex-1 overflow-auto py-1"
+        // Content, not chrome: the tree is the same kind of reading as a terminal.
+        style={{ fontSize: `${fontSize}px` }}
+      >
         <Directory root={root} path={root} depth={0} showHidden={showHidden} />
       </div>
     </div>

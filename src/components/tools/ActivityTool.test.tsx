@@ -7,6 +7,7 @@ import { useUiStore } from "../../store/ui";
 import { pane } from "../../test/panes";
 import type { TerminalActivity } from "../../bindings/TerminalActivity";
 
+vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../../api/terminal", () => ({ terminalApi: { activity: vi.fn() } }));
 
 import { terminalApi } from "../../api/terminal";
@@ -123,5 +124,15 @@ describe("ActivityTool", () => {
     await screen.findByText("npm run dev");
     const labels = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? "");
     expect(labels.some((l) => /kill|stop|terminate|end/i.test(l))).toBe(false);
+  });
+
+  it("draws its content at the terminal's own text size", async () => {
+    // rule:content-size — a process list reads like a terminal.
+    vi.mocked(terminalApi.activity).mockResolvedValue(ACTIVITY);
+    const { container } = renderTool();
+
+    await screen.findByText("npm run dev");
+    const sized = container.querySelector<HTMLElement>("[style*='font-size']");
+    expect(sized?.style.fontSize).toBe("17px");
   });
 });

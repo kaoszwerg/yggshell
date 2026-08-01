@@ -5,6 +5,7 @@ import { AgentTool } from "./AgentTool";
 import { useUiStore } from "../../store/ui";
 import type { AgentSession } from "../../bindings/AgentSession";
 
+vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../../hooks/useAgentSession", () => ({ useAgentSession: vi.fn() }));
 // The account panel rides along inside the tool — the two answer one question ("what agent is here")
 // and switching the account is part of it, so it needs the query client too.
@@ -99,5 +100,15 @@ describe("AgentTool", () => {
     renderTool();
 
     expect(await screen.findByText(/own working files/)).toBeInTheDocument();
+  });
+
+  it("draws its content at the terminal's own text size", async () => {
+    // rule:content-size — reported on this very tool.
+    state({});
+    const { container } = renderTool();
+
+    await screen.findByText("claude-opus-5");
+    const sized = container.querySelector<HTMLElement>("[style*='font-size']");
+    expect(sized?.style.fontSize).toBe("17px");
   });
 });

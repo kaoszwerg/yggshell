@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Agent tool noticed a running agent only sometimes.** A project holds one transcript per
+  session and plenty contain no turn at all — a one-shot `claude -p`, an abandoned session, a
+  `/usage` query. The newest *file* was therefore often not the newest *session*: measured here, a
+  5 kB file with zero turns sat on top of the live 25 MB one. It now takes the newest transcript that
+  actually has a session in it.
+- **Every sidebar tool ignored the text size.** Five of them carried hard-coded pixel sizes while the
+  Git detail panel had followed the setting since it was built — same app, two answers. Content now
+  follows `terminal_font_size` everywhere, chrome stays fixed, and it is a project rule with a test
+  per tool rather than a fix that lasts until the next tool is written.
+
 ### Added
 
 - **The agent can now say what it wants, not just that something happened.** A Claude Code hook,

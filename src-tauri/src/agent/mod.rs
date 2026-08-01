@@ -123,7 +123,8 @@ pub fn homes_for(home_dir: &Path, cwd: &Path) -> Vec<PathBuf> {
             continue;
         }
         let project = project_dir(&path, cwd);
-        let Some(newest) = newest_transcript(&project)
+        let Some(newest) = transcripts_by_age(&project)
+            .first()
             .and_then(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
         else {
             continue;
@@ -227,26 +228,53 @@ pub fn project_dir(home: &Path, cwd: &Path) -> PathBuf {
     home.join("projects").join(slug)
 }
 
-/// The most recently written transcript in a directory.
+/// The transcripts in a directory, most recently written first.
 ///
 /// "Most recent" by modification time rather than by name: the files are named by session id, which
-/// says nothing about order, and the one being written to right now is the one the user is looking
-/// at.
-fn newest_transcript(dir: &Path) -> Option<PathBuf> {
-    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
-    for entry in std::fs::read_dir(dir).ok()?.flatten() {
-        let path = entry.path();
-        if path.extension().is_none_or(|e| e != "jsonl") {
-            continue;
-        }
-        let Ok(modified) = entry.metadata().and_then(|m| m.modified()) else {
+/// says nothing about order.
+fn transcripts_by_age(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut found: Vec<(std::time::SystemTime, PathBuf)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "jsonl") {
+                return None;
+            }
+            let modified = entry.metadata().and_then(|m| m.modified()).ok()?;
+            Some((modified, path))
+        })
+        .collect();
+    found.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+    found.into_iter().map(|(_, path)| path).collect()
+}
+
+/// The newest transcript that actually has a session in it.
+///
+/// **Not simply the newest file, and that distinction is the whole defect it fixes.** A project
+/// directory holds one transcript per session, and plenty of them contain no assistant turn at all:
+/// a `claude -p` one-shot, a session opened and abandoned, a `/usage` query. Measured on this very
+/// machine — the newest file for this project was 5 kB with zero turns while the live session sat
+/// beside it at 25 MB with dozens. Taking the newest by timestamp therefore showed "no agent has run
+/// here" at random, depending on what else had touched the directory, which is exactly how it was
+/// reported: sometimes it notices, sometimes it does not.
+///
+/// Bounded to a handful of candidates: reading the tail of every transcript a long-lived project has
+/// accumulated would cost more than the answer is worth, and a session with nothing in it going back
+/// six files is not the one being looked at.
+fn newest_session(dir: &Path) -> Option<(PathBuf, AgentSession)> {
+    const CANDIDATES: usize = 6;
+    for path in transcripts_by_age(dir).into_iter().take(CANDIDATES) {
+        let Some(text) = read_tail(&path, TAIL_BYTES) else {
             continue;
         };
-        if best.as_ref().is_none_or(|(best, _)| modified > *best) {
-            best = Some((modified, path));
+        if let Some(session) = parse_tail(&text) {
+            return Some((path, session));
         }
     }
-    best.map(|(_, path)| path)
+    None
 }
 
 /// How much of the end of a transcript to read.
@@ -261,10 +289,8 @@ const TAIL_BYTES: u64 = 256 * 1024;
 /// `None` when there is no Claude home, no project directory, or no transcript — all of which mean
 /// "no agent has run here", which is not a failure.
 pub fn session(home: &Path, cwd: &Path) -> Option<AgentSession> {
-    let dir = project_dir(home, cwd);
-    let path = newest_transcript(&dir)?;
-    let text = read_tail(&path, TAIL_BYTES)?;
-    let mut session = parse_tail(&text)?;
+    let (path, mut session) = newest_session(&project_dir(home, cwd))?;
+    tracing::debug!(transcript = %path.display(), turns = session.turns, "read an agent session");
     session.home = home.to_string_lossy().to_string();
     Some(session)
 }
@@ -509,7 +535,8 @@ mod tests {
         std::fs::write(dir.path().join("aaa.jsonl"), "new").expect("write");
 
         assert_eq!(
-            newest_transcript(dir.path())
+            transcripts_by_age(dir.path())
+                .first()
                 .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())),
             Some("aaa.jsonl".to_string())
         );

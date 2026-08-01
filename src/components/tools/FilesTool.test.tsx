@@ -7,6 +7,7 @@ import { useUiStore } from "../../store/ui";
 import { pane } from "../../test/panes";
 import type { DirEntry } from "../../bindings/DirEntry";
 
+vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../../api/files", () => ({
   filesApi: { list: vi.fn(), reveal: vi.fn() },
 }));
@@ -133,5 +134,16 @@ describe("FilesTool", () => {
     renderTool();
 
     expect(await screen.findByText("Everything here is hidden.")).toBeInTheDocument();
+  });
+
+  it("draws its content at the terminal's own text size", async () => {
+    // rule:content-size. Reported as "I don't think the agent widget honours the text size" — and
+    // it did not, nor did any other tool. The Git detail panel already followed it: code is code.
+    vi.mocked(filesApi.list).mockResolvedValue({ entries: ROOT, truncated: false });
+    const { container } = renderTool();
+
+    await screen.findByText("src");
+    const sized = container.querySelector<HTMLElement>("[style*='font-size']");
+    expect(sized?.style.fontSize).toBe("17px");
   });
 });

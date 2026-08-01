@@ -1,6 +1,7 @@
 import { Bot, Clock, GitBranch, Hash, Home } from "lucide-react";
 import { useAgentSession } from "../../hooks/useAgentSession";
 import { useNow } from "../../hooks/useNow";
+import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { AttentionPanel } from "./AttentionPanel";
 import { UsageBars } from "./UsageBars";
@@ -28,6 +29,7 @@ export function AgentTool() {
   // Ticked rather than read in the render body: two calls in one render would disagree, and a
   // static value would leave "2m ago" saying that forever.
   const now = useNow(30_000);
+  const fontSize = useContentFontSize();
 
   if (!ready) return <Empty>{t("agent.noSession")}</Empty>;
   if (isPending) return <Empty>{t("agent.reading")}</Empty>;
@@ -53,7 +55,11 @@ export function AgentTool() {
         </span>
       </header>
 
-      <dl className="flex flex-col gap-px p-2">
+      <dl
+        className="flex flex-col gap-px p-2"
+        // Content, not chrome: the same reading as a terminal, at the size chosen for one.
+        style={{ fontSize: `${fontSize}px` }}
+      >
         <Fact Icon={Home} label={t("agent.account")} value={home} hint={session.home} />
         <Fact
           Icon={Hash}

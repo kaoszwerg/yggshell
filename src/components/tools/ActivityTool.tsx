@@ -5,6 +5,7 @@ import { Row } from "../ui/Row";
 import { terminalApi } from "../../api/terminal";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
+import { useContentFontSize } from "../../hooks/useContentFontSize";
 import type { PortInfo } from "../../bindings/PortInfo";
 import { stateColour } from "../../lib/processState";
 import type { ProcessInfo } from "../../bindings/ProcessInfo";
@@ -29,6 +30,7 @@ const INDENT = 10;
  */
 export function ActivityTool() {
   const t = useT();
+  const fontSize = useContentFontSize();
   const sessionId = useTerminalStore(
     (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
   );
@@ -68,7 +70,11 @@ export function ActivityTool() {
         </IconButton>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div
+        className="min-h-0 flex-1 overflow-auto"
+        // Content, not chrome — a process list reads like a terminal.
+        style={{ fontSize: `${fontSize}px` }}
+      >
         {query.isPending ? (
           <Empty>{t("activity.reading")}</Empty>
         ) : query.isError ? (
