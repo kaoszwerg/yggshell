@@ -1,5 +1,6 @@
 import {
   Activity,
+  Box,
   FolderTree,
   GitBranch,
   ScrollText,
@@ -24,6 +25,7 @@ const TOOLS: ToolItem[] = [
   { id: "git", Icon: GitBranch, label: "nav.git" },
   { id: "files", Icon: FolderTree, label: "nav.files" },
   { id: "activity", Icon: Activity, label: "nav.activity" },
+  { id: "docker", Icon: Box, label: "nav.docker" },
 ];
 
 const BOTTOM_NAV: NavItem[] = [

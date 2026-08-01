@@ -7,6 +7,7 @@
 pub mod cli_install;
 pub mod commands;
 pub mod crash;
+pub mod docker;
 pub mod dto;
 pub mod error;
 pub mod files;
@@ -73,6 +74,8 @@ pub fn run() {
             commands::changelog,
             commands::system_load,
             commands::list_directory,
+            commands::list_containers,
+            commands::container_logs,
             commands::reveal_in_file_manager,
             commands::list_terminal_themes,
             commands::import_terminal_theme,

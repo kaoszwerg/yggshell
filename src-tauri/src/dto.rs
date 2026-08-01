@@ -162,6 +162,24 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// One Docker container, as the tool draws it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct ContainerInfo {
+    /// Short form — twelve characters, which is what every docker command accepts.
+    pub id: String,
+    pub name: String,
+    /// `running`, `exited`, `created`, `paused`.
+    pub state: String,
+    /// `Up 3 hours (healthy)` — verbatim, because the health verdict lives only here.
+    pub status: String,
+    pub image: String,
+    /// Only ports published to the host, deduplicated: `3000→80`.
+    pub ports: Vec<String>,
+    /// The compose project, when it belongs to one.
+    pub project: Option<String>,
+}
+
 /// One process under a terminal tab.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

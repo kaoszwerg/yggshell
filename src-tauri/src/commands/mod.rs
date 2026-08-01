@@ -507,3 +507,27 @@ pub fn reveal_in_file_manager(root: String, path: String) -> Result<()> {
     tracing::info!(%path, "reveal_in_file_manager ok");
     Ok(())
 }
+
+/// Every container the daemon knows about, running or not.
+///
+/// Read-only. Starting or stopping one is a command, and whether this app may issue it is a decision
+/// for an ADR rather than for a widget (`docker`, ADR-PROJ-001 §5). An empty list is the honest
+/// answer when there is no Docker, no daemon, or no permission — none of those is an error here.
+#[tauri::command]
+pub fn list_containers() -> Vec<crate::dto::ContainerInfo> {
+    let containers = crate::docker::containers();
+    tracing::debug!(count = containers.len(), "list_containers");
+    containers
+}
+
+/// The last `lines` of a container's log.
+///
+/// The id is validated as one before it reaches a process (rule:security), and the read is bounded:
+/// a week-old container's whole log has no business crossing the IPC boundary to fill a panel.
+#[tauri::command]
+pub fn container_logs(id: String, lines: u32) -> String {
+    tracing::debug!(%id, lines, "container_logs");
+    // Clamped here rather than trusted: the number arrives from the webview, and "all of it" is
+    // exactly the request this must not honour.
+    crate::docker::logs(&id, lines.clamp(1, 2_000))
+}

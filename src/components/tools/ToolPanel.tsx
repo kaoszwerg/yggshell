@@ -5,6 +5,7 @@ import { repositoryName, useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { useT } from "../../hooks/useT";
 import type { MessageKey } from "../../i18n";
 import { ActivityTool } from "./ActivityTool";
+import { DockerTool } from "./DockerTool";
 import { FilesTool } from "./FilesTool";
 import { GitTool } from "./GitTool";
 import { TOOL_WIDTH_MAX, TOOL_WIDTH_MIN, useUiStore, type ToolId } from "../../store/ui";
@@ -20,6 +21,8 @@ function toolLabelKey(tool: ToolId): MessageKey {
       return "nav.files";
     case "activity":
       return "nav.activity";
+    case "docker":
+      return "nav.docker";
   }
 }
 
@@ -87,6 +90,7 @@ export function ToolPanel() {
           {activeTool === "git" ? <GitTool /> : null}
           {activeTool === "files" ? <FilesTool /> : null}
           {activeTool === "activity" ? <ActivityTool /> : null}
+          {activeTool === "docker" ? <DockerTool /> : null}
         </div>
       </aside>
 

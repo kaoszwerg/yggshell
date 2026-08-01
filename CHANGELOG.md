@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A Docker tool.** Containers grouped by compose project, with the health verdict verbatim — `Up 3
+  hours (healthy)` and `Up 2 minutes (health: starting)` are different situations and a green dot
+  loses both — the published ports (only the ones actually reachable from the host, deduplicated
+  across IPv4 and IPv6), and the last 200 log lines on demand. Stopped containers are listed too:
+  that is the one you are looking for when something that should be answering is not. No Docker, no
+  daemon, or no permission all mean an empty list rather than an error. **It reads and does not
+  act** — starting or stopping is a command, and whether this app may issue one is a decision for an
+  ADR rather than for a widget.
+
 - **An activity tool: what this tab is running, and what it is listening on.** A harness starts a dev
   server, a watcher, a build; it scrolls away or the tab is closed, and nothing said any of it was
   still there — until the next run failed on a port that was already taken, with an error naming
