@@ -528,10 +528,23 @@ pub fn list_containers() -> Vec<crate::dto::ContainerInfo> {
 /// anything at all — so the two are fetched independently, and this one only while the tool is
 /// actually on screen (`components/tools/DockerTool`). A monitor nobody is looking at is just heat.
 #[tauri::command]
-pub fn container_stats() -> Vec<crate::dto::ContainerStats> {
-    let stats = crate::docker::stats();
-    tracing::debug!(count = stats.len(), "container_stats");
-    stats
+pub async fn container_stats() -> Vec<crate::dto::ContainerStats> {
+    // `async` + `spawn_blocking` because a sync command runs on Tauri's MAIN thread, and this one
+    // waits ~2 s for `docker stats` to sample twice (rule:rust-conventions). Sync, it would freeze
+    // window events and IPC for that whole time — the same defect that made the Agent tool take
+    // 1.5 s to paint.
+    tauri::async_runtime::spawn_blocking(|| {
+        let stats = crate::docker::stats();
+        tracing::debug!(count = stats.len(), "container_stats");
+        stats
+    })
+    .await
+    .unwrap_or_else(|error| {
+        // A panicked blocking task is not worth taking the app down for; an empty list is the same
+        // answer this command already gives when there is no Docker (rule:logging: never silent).
+        tracing::error!(%error, "the container stats task failed");
+        Vec::new()
+    })
 }
 
 /// The last `lines` of a container's log.
@@ -551,50 +564,56 @@ pub fn container_logs(id: String, lines: u32) -> String {
 /// Read-only. Everything it reports is a fact on disk: which homes exist, what the `.envrc` says,
 /// whether direnv is installed, and whether direnv itself considers the file approved.
 #[tauri::command]
-pub fn environment_status(
+pub async fn environment_status(
     app: tauri::AppHandle,
     cwd: String,
 ) -> Result<crate::dto::EnvironmentStatus> {
     use tauri::Manager;
     tracing::debug!(%cwd, "environment_status");
-    let project = std::path::Path::new(&cwd);
+    // The home directory is resolved on this thread — it is a lookup, not a process. Everything
+    // below spawns `direnv`, so it goes to a blocking thread (rule:rust-conventions).
     let home_dir = app
         .path()
         .home_dir()
         .map_err(|e| AppError::Other(format!("could not resolve the home directory: {e}")))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let project = std::path::Path::new(&cwd);
 
-    let declared = crate::agent::declared_home(project);
-    let used = crate::agent::homes_for(&home_dir, project);
-    let mut homes = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&home_dir) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !name.starts_with(".claude") || !entry.path().is_dir() {
-                continue;
+        let declared = crate::agent::declared_home(project);
+        let used = crate::agent::homes_for(&home_dir, project);
+        let mut homes = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&home_dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if !name.starts_with(".claude") || !entry.path().is_dir() {
+                    continue;
+                }
+                homes.push(crate::dto::ClaudeHome {
+                    used_here: used.contains(&entry.path()),
+                    path: entry.path().to_string_lossy().to_string(),
+                    name,
+                });
             }
-            homes.push(crate::dto::ClaudeHome {
-                used_here: used.contains(&entry.path()),
-                path: entry.path().to_string_lossy().to_string(),
-                name,
-            });
         }
-    }
-    homes.sort_by(|a, b| a.name.cmp(&b.name));
+        homes.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let status = crate::dto::EnvironmentStatus {
-        homes,
-        declared: declared.as_ref().map(|p| p.to_string_lossy().to_string()),
-        has_envrc: declared.is_some(),
-        direnv_installed: crate::agent::direnv::is_installed(),
-        direnv_allowed: crate::agent::direnv::is_allowed(project),
-    };
-    tracing::debug!(
-        homes = status.homes.len(),
-        declared = ?status.declared,
-        direnv = status.direnv_installed,
-        "environment_status ok"
-    );
-    Ok(status)
+        let status = crate::dto::EnvironmentStatus {
+            homes,
+            declared: declared.as_ref().map(|p| p.to_string_lossy().to_string()),
+            has_envrc: declared.is_some(),
+            direnv_installed: crate::agent::direnv::is_installed(),
+            direnv_allowed: crate::agent::direnv::is_allowed(project),
+        };
+        tracing::debug!(
+            homes = status.homes.len(),
+            declared = ?status.declared,
+            direnv = status.direnv_installed,
+            "environment_status ok"
+        );
+        Ok(status)
+    })
+    .await
+    .map_err(|e| AppError::Other(format!("the environment status task failed: {e}")))?
 }
 
 /// Point this project at a Claude account, and approve the file so direnv will load it.
@@ -608,23 +627,28 @@ pub fn environment_status(
 /// Approval is best-effort: without direnv the declaration is still correct and takes effect as soon
 /// as direnv arrives. That is a partial success, and it is reported as one rather than as a failure.
 #[tauri::command]
-pub fn set_project_environment(cwd: String, home: String) -> Result<String> {
+pub async fn set_project_environment(cwd: String, home: String) -> Result<String> {
     tracing::info!(%cwd, %home, "set_project_environment");
-    let project = std::path::Path::new(&cwd);
-    let home_path = std::path::Path::new(&home);
-    if !home_path.is_dir() {
-        return Err(AppError::Other(format!("{home} is not a directory")));
-    }
-    let written =
-        crate::agent::declare_home(project, home_path).map_err(|e| AppError::io(cwd.clone(), e))?;
-    if crate::agent::direnv::is_installed() {
-        crate::agent::direnv::allow(project)?;
-    } else {
-        tracing::warn!(
-            "direnv is not installed — the declaration is written but will not load yet"
-        );
-    }
-    Ok(written.to_string_lossy().to_string())
+    // Spawns `direnv allow` (rule:rust-conventions — never on the main thread).
+    tauri::async_runtime::spawn_blocking(move || {
+        let project = std::path::Path::new(&cwd);
+        let home_path = std::path::Path::new(&home);
+        if !home_path.is_dir() {
+            return Err(AppError::Other(format!("{home} is not a directory")));
+        }
+        let written = crate::agent::declare_home(project, home_path)
+            .map_err(|e| AppError::io(cwd.clone(), e))?;
+        if crate::agent::direnv::is_installed() {
+            crate::agent::direnv::allow(project)?;
+        } else {
+            tracing::warn!(
+                "direnv is not installed — the declaration is written but will not load yet"
+            );
+        }
+        Ok(written.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| AppError::Other(format!("the environment task failed: {e}")))?
 }
 
 /// Create a new, empty Claude home.
@@ -663,9 +687,14 @@ pub fn create_claude_home(app: tauri::AppHandle, name: String) -> Result<String>
 /// The whole command is a constant in `agent::direnv` — nothing about it comes from the webview
 /// (ADR-PROJ-001 §5). Returns the manager that did it.
 #[tauri::command]
-pub fn install_direnv() -> Result<String> {
+pub async fn install_direnv() -> Result<String> {
     tracing::info!("install_direnv");
-    crate::agent::direnv::install()
+    // `async` + `spawn_blocking`: this runs a PACKAGE MANAGER, which can take minutes. As a sync
+    // command it would hold Tauri's main thread for that entire time — the window would stop
+    // responding, and the user would reasonably conclude the app had died (rule:rust-conventions).
+    tauri::async_runtime::spawn_blocking(crate::agent::direnv::install)
+        .await
+        .map_err(|e| AppError::Other(format!("the direnv install task failed: {e}")))?
 }
 
 /// Where the hook script lives once installed, beside the launcher.

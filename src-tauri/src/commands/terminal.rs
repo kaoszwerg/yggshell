@@ -6,7 +6,7 @@
 //! webview that can run anything the user's account can — which is not the same thing as a terminal
 //! the user typed into (ADR-PROJ-001 §5, rule:security).
 
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use crate::state::AppState;
 use crate::terminal::{pty::Size, SessionId, TerminalRegistry};
 use tauri::ipc::{Channel, InvokeResponseBody};
@@ -183,10 +183,22 @@ fn home_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
 /// figures cannot be derived from the transcript, which records tokens and never limits.
 ///
 /// Runs with the account the project declares, or the numbers would be somebody else's.
+/// **`async` + `spawn_blocking`, and this one is not stylistic** (rule:rust-conventions). Tauri runs a
+/// synchronous command **on the main thread**; only an `async fn` reaches the async runtime. This one
+/// shells out to the `claude` CLI, measured at **1443–1629 ms** — so as a sync command it held the
+/// thread that also serves window events and IPC for a second and a half.
+///
+/// It was visible, and it was blamed on the wrong layer: opening the Agent tool took **1562–1591 ms**
+/// to show its first frame, while React rendered it in about one millisecond. The panel already
+/// handles `isPending`; it simply never got the chance to paint it.
 #[tauri::command]
-pub fn agent_usage(cwd: String) -> Result<Option<crate::dto::UsageSummary>> {
+pub async fn agent_usage(cwd: String) -> Result<Option<crate::dto::UsageSummary>> {
     tracing::debug!(%cwd, "agent_usage");
-    let project = std::path::Path::new(&cwd);
-    let home = crate::agent::declared_home(project);
-    Ok(crate::agent::usage::read(home.as_deref(), project))
+    tauri::async_runtime::spawn_blocking(move || {
+        let project = std::path::Path::new(&cwd);
+        let home = crate::agent::declared_home(project);
+        crate::agent::usage::read(home.as_deref(), project)
+    })
+    .await
+    .map_err(|e| AppError::Other(format!("reading the usage summary failed: {e}")))
 }

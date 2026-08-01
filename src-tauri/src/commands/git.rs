@@ -74,9 +74,15 @@ pub fn git_commit_file_diff(cwd: String, rev: String, path: String) -> Result<Op
 /// Never fails the caller: no remote, no `git`, no network and a refused credential are all reported
 /// as an outcome rather than raised. Refreshing a display is not something worth an error dialog.
 #[tauri::command]
-pub fn git_fetch(cwd: String) -> Result<String> {
+pub async fn git_fetch(cwd: String) -> Result<String> {
     tracing::debug!(%cwd, "git_fetch");
-    let outcome = crate::git::fetch::fetch(&PathBuf::from(&cwd))?;
+    // `async` + `spawn_blocking`: a sync command runs on Tauri's main thread, and this one talks to a
+    // REMOTE — it is bounded by somebody else's network, not by us (rule:rust-conventions).
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        crate::git::fetch::fetch(&PathBuf::from(&cwd))
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Other(format!("the fetch task failed: {e}")))??;
     Ok(match outcome {
         crate::git::fetch::Outcome::Fetched => String::new(),
         crate::git::fetch::Outcome::NoRemote => "no remote".into(),

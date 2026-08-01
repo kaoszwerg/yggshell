@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening the Agent tool took a second and a half, and the cause was a missing `async` keyword.**
+  Tauri runs a synchronous command **on the main thread**; only `async fn` reaches the async runtime.
+  `agent_usage` shells out to `claude -p /usage` — measured at 1443–1629 ms — so it held the thread
+  that also serves window events and IPC for that whole time. The panel could not paint although React
+  had finished in about one millisecond, and the symptom looked like a slow UI three layers away from
+  its cause. Measured before and after, same build, same keystrokes: **1562 ms → 27 ms**.
+
+  Five more commands had the same defect and are converted too: `container_stats` (~2 s for
+  `docker stats`), `git_fetch` (bounded by somebody else's network), `install_direnv` (runs a package
+  manager — minutes), `environment_status` and `set_project_environment` (both spawn `direnv`).
+
+  **`check:all` now refuses the mistake**: `check-blocking-commands.mjs` fails the build when a
+  `#[tauri::command]` that starts a child process is not `async`. It resolves spawners at function
+  granularity — an earlier module-level version flagged commands for calls they never make, and a check
+  that is wrong half the time gets switched off (ADR-CORE-039). Short, bounded commands stay
+  synchronous by name, each with the measurement that justifies it.
+
 ### Added
 
 - **Every sidebar tool now has a keyboard shortcut, not just Git.** `⌘G` existed and the other four did

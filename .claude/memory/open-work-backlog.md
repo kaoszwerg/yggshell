@@ -202,7 +202,32 @@ of the questions below. A clean baseline needs a window with **no agent session 
 | Rust async paths | **0** async commands doing blocking work — the "we built it blocking" premise was wrong |
 | Polling inventory | `tmux display-message` 8.9 ms ×2 per 2 s (~0.9 %); `git_snapshot` ~25 ms per 4 s (~0.6 %) |
 
-### Round 2 — MEASURED end to end (2026-08-01). It is not React, it is the backend.
+### Round 2 — CLOSED (2026-08-01). Cause found, fixed, gated.
+
+**The Agent tool's 1.5 s was a missing `async` keyword.** `agent_usage` shells out to
+`claude -p /usage`, measured at 1443–1629 ms — and **Tauri runs a synchronous command on the main
+thread**. Only `async fn` reaches the async runtime. So the call held the thread that also serves
+window events and IPC, and the panel could not paint even though React had finished in ~1 ms.
+
+**Measured, same build, same keystrokes:**
+
+| | click → visible |
+| --- | --- |
+| before | 1562 / 1591 ms |
+| after `async` + `spawn_blocking` | **27 ms** |
+
+Six commands were converted: `agent_usage`, `container_stats` (~2 s, `docker stats`), `git_fetch`
+(network-bound), `install_direnv` (a package manager — minutes), `environment_status` and
+`set_project_environment` (both spawn `direnv`).
+
+**And it cannot happen again:** `scripts/project/check-blocking-commands.mjs` runs in `check:all` and
+fails the build when a `#[tauri::command]` that starts a child process is not `async`. It resolves
+spawners at **function** granularity — two earlier versions matched modules and were unusable, flagging
+`terminal_resize` and `pending_crash` for calls they do not make. A gate that is wrong half the time
+gets switched off (ADR-CORE-039), so the precision is the feature. Ten short commands are allowed by
+name, each with the measurement that justifies it.
+
+**Superseded — the measurement that led here:**
 
 **Click-to-visible**, driven by keyboard shortcuts through a dev instance, two passes, `<Profiler>` plus
 two nested `requestAnimationFrame`:
