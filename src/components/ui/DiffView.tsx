@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { languageFor, tokenize, type SyntaxScheme, type Token } from "../../lib/highlight";
+import { surfaceStyle } from "../../lib/schemeSurface";
 import { sideBySide } from "../../lib/diffLayout";
 import { useT } from "../../hooks/useT";
 import type { GitDiff } from "../../bindings/GitDiff";
@@ -39,9 +40,9 @@ function useColoured(diff: GitDiff, scheme: SyntaxScheme | null): Coloured[] {
 function lineStyle(kind: string): { row: string; mark: string } {
   switch (kind) {
     case "added":
-      return { row: "bg-green/8", mark: "+" };
+      return { row: "scheme-add", mark: "+" };
     case "removed":
-      return { row: "bg-danger/8", mark: "−" };
+      return { row: "scheme-del", mark: "−" };
     default:
       return { row: "", mark: " " };
   }
@@ -91,7 +92,7 @@ export function DiffView({
   }
 
   return (
-    <div className="font-mono leading-[1.5]" style={{ fontSize: `${fontSize}px` }}>
+    <div className="scheme-surface font-mono leading-[1.5]" style={surfaceStyle(scheme, fontSize)}>
       {diff.hunks.map((hunk, index) => {
         const key = `${hunk.old_start}:${hunk.new_start}`;
         return split ? (
@@ -133,9 +134,7 @@ function SplitHunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | und
 
   return (
     <section>
-      <div className="bg-elevated text-cyan/70 border-cyan/15 border-y px-2 py-0.5">
-        {hunk.header}
-      </div>
+      <div className="scheme-meta border-y px-2 py-0.5">{hunk.header}</div>
       {rows.map((row, index) => (
         <div key={`${hunk.old_start}:${index}`} className="flex items-start">
           <Side
@@ -143,7 +142,7 @@ function SplitHunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | und
             side="left"
             tokens={row.left ? coloured?.at(indexOf.get(row.left) ?? -1) : undefined}
           />
-          <span aria-hidden className="bg-cyan/15 w-px shrink-0 self-stretch" />
+          <span aria-hidden className="scheme-divider w-px shrink-0 self-stretch" />
           <Side
             line={row.right}
             side="right"
@@ -167,18 +166,18 @@ function Side({
 }) {
   if (line === null) {
     return (
-      <span aria-hidden className="bg-dim/5 min-w-0 flex-1 basis-0 px-1">
+      <span aria-hidden className="scheme-gap min-w-0 flex-1 basis-0 px-1">
         &nbsp;
       </span>
     );
   }
   const changed = line.kind !== "context";
-  const tint = changed ? (side === "left" ? "bg-danger/8" : "bg-green/8") : "";
+  const tint = changed ? (side === "left" ? "scheme-del" : "scheme-add") : "";
   const number = side === "left" ? line.old_line : line.new_line;
 
   return (
     <span className={`flex min-w-0 flex-1 basis-0 items-start ${tint}`}>
-      <span className="text-dim/50 w-10 shrink-0 pr-1 text-right select-none">{number ?? ""}</span>
+      <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">{number ?? ""}</span>
       <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre">
         <Code line={line} tokens={tokens} />
       </code>
@@ -189,9 +188,7 @@ function Side({
 function Hunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | undefined }) {
   return (
     <section>
-      <div className="bg-elevated text-cyan/70 border-cyan/15 border-y px-2 py-0.5">
-        {hunk.header}
-      </div>
+      <div className="scheme-meta border-y px-2 py-0.5">{hunk.header}</div>
       {hunk.lines.map((line, index) => {
         const { row, mark } = lineStyle(line.kind);
         const tokens = coloured?.at(index);
@@ -202,19 +199,19 @@ function Hunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | undefine
             key={`${hunk.old_start}:${index}`}
             className={`flex items-start ${row}`}
           >
-            <span className="text-dim/50 w-10 shrink-0 pr-1 text-right select-none">
+            <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">
               {line.old_line ?? ""}
             </span>
-            <span className="text-dim/50 w-10 shrink-0 pr-1 text-right select-none">
+            <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">
               {line.new_line ?? ""}
             </span>
             <span
               className={`w-4 shrink-0 text-center select-none ${
                 line.kind === "added"
-                  ? "text-green"
+                  ? "scheme-mark-add"
                   : line.kind === "removed"
-                    ? "text-danger"
-                    : "text-dim/30"
+                    ? "scheme-mark-del"
+                    : "scheme-mark-none"
               }`}
               aria-hidden
             >

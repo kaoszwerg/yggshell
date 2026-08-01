@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A diff and a commit are now really drawn in the scheme you chose.** The setting promises "the
+  colours a terminal, a diff and a commit are drawn in", and each view kept half of that promise: the
+  diff handed the scheme to the syntax highlighter and nothing else, so Alien Blood keywords sat on
+  the HUD's background with HUD line numbers and HUD tints — a third theme nobody had picked. The
+  commit view had the opposite half: it set the surface colours and then wrote on them in HUD greys,
+  which on a light scheme is pale grey on near-white. Both now draw from one set of properties, and
+  the washes are mixed against the scheme's own background, so a light scheme gets a light wash
+  instead of a hard-coded tint that either vanishes or glares.
+
 ### Added
 
 - **Shift+Enter reaches the program as its own key.** The classic terminal encoding has no room for

@@ -220,4 +220,34 @@ describe("GitDetailPanel", () => {
     const sized = body.closest("[style*='font-size']");
     expect((sized as HTMLElement | null)?.style.fontSize).toBe("17px");
   });
+
+  // The defect these pin: both views claimed to be drawn "in the colours a terminal, a diff and a
+  // commit are drawn in", and both were only half doing it. The commit view set its surface colours
+  // and then wrote on them in HUD greys — which on a LIGHT scheme is pale grey on near-white.
+  it("draws a commit on a scheme surface, not on HUD colours", async () => {
+    showDetail({ kind: "commit", rev: COMMIT.sha });
+    const { container } = renderPanel();
+
+    await screen.findByText(/The gap was small/);
+    const surface = container.querySelector<HTMLElement>(".scheme-surface");
+    expect(surface).not.toBeNull();
+    // Even with nothing configured the properties are set — to the terminal's own defaults, which
+    // is what "not configured" means here. Unset is what let a view inherit the panel behind it.
+    expect(surface?.style.getPropertyValue("--scheme-bg")).not.toBe("");
+    expect(surface?.style.getPropertyValue("--scheme-fg")).not.toBe("");
+  });
+
+  it("writes a commit's text in the scheme's colours, never the HUD's", async () => {
+    showDetail({ kind: "commit", rev: COMMIT.sha });
+    const { container } = renderPanel();
+
+    const body = await screen.findByText(/The gap was small/);
+    expect(body.className).toContain("scheme-dim");
+    // Scoped to the SURFACE, not the whole panel: the title bar above it sits on the HUD frame and
+    // is meant to stay HUD. What may not be HUD is anything written ON the scheme's background —
+    // `text-fg` and `text-dim` are picked for a dark surface and are the bug on a light scheme.
+    const inside = container.querySelector<HTMLElement>(".scheme-surface")?.innerHTML ?? "";
+    expect(inside).not.toContain("text-fg");
+    expect(inside).not.toContain("text-dim");
+  });
 });

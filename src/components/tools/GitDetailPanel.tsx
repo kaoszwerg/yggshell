@@ -10,6 +10,7 @@ import { useT } from "../../hooks/useT";
 import { useUiStore, type GitDetail } from "../../store/ui";
 import { useSettings, useTerminalThemes } from "../../hooks/useSettings";
 import { detailThemeId, resolveTheme, themeById } from "../../lib/terminalTheme";
+import { surfaceStyle } from "../../lib/schemeSurface";
 import type { SyntaxScheme } from "../../lib/highlight";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitFileStat } from "../../bindings/GitFileStat";
@@ -261,21 +262,19 @@ function CommitContent({
         show={show}
       />
       <div
-        className="min-h-0 flex-1 overflow-auto p-3"
-        // The commit view is prose and a file list rather than code, so the scheme reaches it as its
-        // surface colours instead of as syntax colouring.
-        style={
-          scheme
-            ? { backgroundColor: scheme.colours.background, color: scheme.colours.foreground }
-            : undefined
-        }
+        className="scheme-surface min-h-0 flex-1 overflow-auto p-3"
+        // Prose and a file list rather than code, so the scheme reaches it as SURFACE colours — and as
+        // the properties every child below draws from (lib/schemeSurface). Filling a scheme-coloured
+        // surface with `text-fg`/`text-dim` is what made a light scheme unreadable: pale grey on
+        // near-white, with the colours technically applied.
+        style={surfaceStyle(scheme)}
       >
         {query.isPending ? (
-          <p className="text-dim font-mono text-xs">{t("git.readingCommit")}</p>
+          <p className="scheme-dim font-mono text-xs">{t("git.readingCommit")}</p>
         ) : query.isError ? (
-          <p className="text-danger font-mono text-xs">{String(query.error)}</p>
+          <p className="scheme-mark-del font-mono text-xs">{String(query.error)}</p>
         ) : query.data === null || query.data === undefined ? (
-          <p className="text-dim font-mono text-xs">{t("git.commitMissing")}</p>
+          <p className="scheme-dim font-mono text-xs">{t("git.commitMissing")}</p>
         ) : (
           <CommitBody rev={rev} detail={query.data} show={show} fontSize={fontSize} />
         )}
@@ -310,7 +309,7 @@ function CommitBody({
           {detail.refs.map((ref) => (
             <span
               key={ref}
-              className="hud-clip-sm bg-elevated text-cyan px-1.5 py-0.5 font-mono text-[0.6rem]"
+              className="hud-clip-sm scheme-meta px-1.5 py-0.5 font-mono text-[0.6rem]"
             >
               {ref}
             </span>
@@ -321,12 +320,12 @@ function CommitBody({
       {/* The whole message, wrapped — prose, unlike the code below it, and a commit body that is cut
           off is the one part of a commit nobody can reconstruct from anywhere else. */}
       <div className="font-mono leading-relaxed whitespace-pre-wrap">
-        <span className="text-fg">{detail.summary}</span>
-        {detail.body === "" ? null : <span className="text-dim">{`\n\n${detail.body}`}</span>}
+        <span className="scheme-fg">{detail.summary}</span>
+        {detail.body === "" ? null : <span className="scheme-dim">{`\n\n${detail.body}`}</span>}
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-dim text-[0.56rem] tracking-[0.12em]">
+        <span className="scheme-dim text-[0.56rem] tracking-[0.12em]">
           {detail.files.length} FILE{detail.files.length === 1 ? "" : "S"}
         </span>
         {detail.files.map((file) => (
@@ -347,13 +346,13 @@ function FileRow({ file, onOpen }: { file: GitFileStat; onOpen: () => void }) {
       <span className={`w-3 shrink-0 ${statusColour(file.status)}`} aria-hidden>
         {statusMark(file.status)}
       </span>
-      <span className="text-dim min-w-0 flex-1 truncate">{file.path}</span>
+      <span className="scheme-dim min-w-0 flex-1 truncate">{file.path}</span>
       {file.binary ? (
-        <span className="text-dim/60 shrink-0">binary</span>
+        <span className="scheme-dim shrink-0 opacity-70">binary</span>
       ) : (
         <>
-          <span className="text-green shrink-0">+{file.added}</span>
-          <span className="text-danger shrink-0">−{file.removed}</span>
+          <span className="scheme-mark-add shrink-0">+{file.added}</span>
+          <span className="scheme-mark-del shrink-0">−{file.removed}</span>
         </>
       )}
     </Row>
@@ -378,12 +377,12 @@ function statusMark(status: string): string {
 function statusColour(status: string): string {
   switch (status) {
     case "added":
-      return "text-green";
+      return "scheme-mark-add";
     case "deleted":
-      return "text-danger";
+      return "scheme-mark-del";
     case "renamed":
-      return "text-purple";
+      return "scheme-mark-alt";
     default:
-      return "text-gold";
+      return "scheme-mark-warn";
   }
 }

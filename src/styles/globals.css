@@ -554,3 +554,65 @@ input[type="range"]:disabled::-moz-range-thumb {
     opacity: 0.85;
   }
 }
+
+/* ── A diff and a commit, drawn in a terminal colour scheme ────────────────────────────────────
+   The setting says "the colours a terminal, a diff and a commit are drawn in", and it used to be
+   half true in each view: the diff handed the scheme to the syntax highlighter and nothing else,
+   so Alien Blood keywords sat on the HUD's background with HUD line numbers and HUD tints. The
+   commit view did the opposite — it set the surface colours, then filled them with `text-fg` and
+   `text-dim`, which on a LIGHT scheme is pale grey on near-white.
+
+   Everything below derives from the nine properties `lib/schemeSurface.ts` sets, never from
+   `--saga-*`, or the surface would be HUD again. `color-mix` rather than fixed tints: a light
+   scheme needs its "added" wash mixed into ITS background, and a hard-coded rgba would either
+   vanish or glare depending on which scheme was picked. */
+.scheme-surface {
+  background: var(--scheme-bg);
+  color: var(--scheme-fg);
+}
+.scheme-fg {
+  color: var(--scheme-fg);
+}
+/* Secondary text: a commit body, a file path, a count. */
+.scheme-dim {
+  color: color-mix(in srgb, var(--scheme-dim) 85%, var(--scheme-fg));
+}
+/* The `@@ … @@` header, and a ref chip. Lifted off the surface rather than given an accent of its
+   own, so it reads as a separator in any scheme instead of as one more colour. */
+.scheme-meta {
+  background: color-mix(in srgb, var(--scheme-fg) 8%, var(--scheme-bg));
+  color: var(--scheme-meta);
+  border-color: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
+}
+/* Line numbers: present, never competing with the code beside them. */
+.scheme-num {
+  color: color-mix(in srgb, var(--scheme-dim) 80%, transparent);
+}
+.scheme-add {
+  background: color-mix(in srgb, var(--scheme-add) 14%, transparent);
+}
+.scheme-del {
+  background: color-mix(in srgb, var(--scheme-del) 14%, transparent);
+}
+/* A row that exists on one side only. Deliberately unlike an empty line — a blank line is a line. */
+.scheme-gap {
+  background: color-mix(in srgb, var(--scheme-fg) 5%, transparent);
+}
+.scheme-mark-add {
+  color: var(--scheme-add);
+}
+.scheme-mark-del {
+  color: var(--scheme-del);
+}
+.scheme-mark-alt {
+  color: var(--scheme-alt);
+}
+.scheme-mark-warn {
+  color: var(--scheme-warn);
+}
+.scheme-mark-none {
+  color: color-mix(in srgb, var(--scheme-dim) 45%, transparent);
+}
+.scheme-divider {
+  background: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
+}

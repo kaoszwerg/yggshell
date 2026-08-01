@@ -142,6 +142,37 @@ and it is why everything below is a reader.
       several Claude homes the way the maintainer does by hand today, and bind one to a terminal
       profile. Creating one means making an empty directory and setting a variable; **credentials are
       never touched** (rule:security).
+
+      Requested with it, and each part raises a question that must be answered *before* it is built,
+      not during:
+
+      - **Set up what the mechanism needs, including installing `direnv` when it is missing.**
+        Installing software is a step beyond anything the app does today (`cli_install` writes two
+        script files into a directory the user already owns). It means invoking a package manager,
+        which is a *command* — permitted only if the backend holds the whole command and the webview
+        merely asks for "install the prerequisite" (ADR-PROJ-001 §5), never if a name or an argument
+        travels over IPC. Which manager, on which platform, and what happens when there is none, is
+        an ADR, not an implementation detail.
+      - **Write the `.envrc` files** — the mechanical half, and the safe one.
+      - **Run `direnv allow`.** Note what that *is*: direnv refuses to load an `.envrc` until a human
+        has approved that exact content, precisely because an `.envrc` is executable code that runs
+        on `cd`. An app that approves on the user's behalf has spent that safety. Defensible only
+        under conditions worth writing down: the file was written by YggShell itself, in this same
+        action, at the user's request, and the app shows what it approved. Approving a file it did
+        not author, or one it did not just write, is not on the table.
+
+      A profile-level `CLAUDE_CONFIG_DIR` needs none of this (the app sets the variable when it
+      spawns the PTY, as it already does for shell and directory). direnv is for the case the
+      maintainer actually has: **the environment must also be right for every tool started outside
+      YggShell** — an editor, another terminal, a script. That is the reason to support it, and it
+      belongs in the ADR as the justification.
+- [ ] **Docker.** Used constantly in development, and invisible from the terminal until something
+      is already wrong: the containers belonging to *this* project (the compose project follows from
+      the tab's working directory), their state, their published ports, health, and a way into their
+      logs. Reading is unproblematic (`docker ps`, the compose labels); **starting and stopping is a
+      decision, not a reflex** — it is a command, so it is only permissible if the backend owns the
+      whole of it and the webview merely names an action (ADR-PROJ-001 §5). Whether the tool acts at
+      all, or only shows and lets the terminal act, is the first question its ADR answers.
 - [ ] **Worktrees.** Which ones the repository has, which tab sits in which, how far apart they are.
       Agents increasingly work in an isolated worktree, and nothing in the app shows that today.
 - [ ] **Changes since this session started** — an extension of the Git tool, not a new one. The tool
