@@ -139,10 +139,14 @@ comes from the `.envrc` declaration instead, walked upwards as direnv does.
 - [ ] **Worktrees.** Which ones the repository has, which tab sits in which, how far apart they are.
 - [ ] **Changes since this session started** — an extension of the Git tool: a marker at the start of
       a session and the diff against it, rather than the working tree.
-- [ ] **An "agent is waiting for you" signal.** The remaining half of the status bar proposal, and it
-      needs a channel: the terminal has no bell handling at all today, and Claude Code's documented
-      `Notification` / `Stop` hooks are the stable route (`cli_install` is the pattern for offering
-      to install one).
+- [x] **An "agent is waiting for you" signal — built, in both halves.** The terminal bell marks the
+      tab that rang and a status item counts them; a Claude Code hook (`Notification` / `Stop`,
+      installable from the Agent tool) says which directory and why. **Measured, and it decided the
+      design:** tmux registers and forwards a bell (`bell-action any`) while it swallows OSC
+      sequences whole — so OSC 9, which carries a whole message, never arrives inside tmux and the
+      informationless bell does. The hook sidesteps the terminal entirely by writing to a file, which
+      also means events survive the app being closed. Hooks are read when a Claude Code SESSION
+      STARTS, so installing one takes effect in the next session — the panel says so.
 - [ ] **Acting on a container** — start, stop, restart. A command, so it is a decision for an ADR
       rather than for a widget (ADR-PROJ-001 §5), and deliberately not taken while building the rest.
 

@@ -140,6 +140,14 @@ later contradicted. The measurements are kept so the next agent does not pay for
   (*"fitting its content"*); not lint-gated, because whether an element is width-limited depends on
   its parent and the check would be guesswork.
 
+- **An unexplained light-grey surface, reported 2026-08-01 and not found.** A screenshot showed three
+  backgrounds meeting: `#0a0a0f` (the app's deep) and `#1a1a2e` (`bg-elevated`, a panel) — both
+  accounted for and one of them fixed (the diff's scroll container now carries the scheme) — plus a
+  **light grey block, roughly `#eceef0`, that matches no colour in the palette**. The crop was too
+  small to place it and the maintainer was not asked in time. If it turns up again: it is not a HUD
+  colour, so the candidates are a browser default on an element nobody styled, or a light colour
+  scheme being drawn where a dark one was expected.
+
 ## Things that are true and will bite you
 
 - **A GUI app has almost no `PATH` — and the login shell is only HALF the fix.** This cost three

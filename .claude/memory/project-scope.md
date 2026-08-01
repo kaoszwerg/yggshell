@@ -46,24 +46,35 @@ The product is real and in daily use — the maintainer works in it while it is 
 - **Terminal configuration:** shell picked from a list the backend produced, iTerm2 `.itermcolors`
   import by drag-and-drop, a 22-colour theme editor with live preview, and named profiles overriding
   shell, directory and theme.
-- **The Git tool** — so far the only sidebar tool: branch with ahead/behind, staged and unstaged
-  changes, a drawn history of every local branch with lanes and merges, and a diff for any changed
-  file or whole commit.
+- **Five sidebar tools** — the product itself (see [[surfaces]] for what a *tool* is):
+  **Git**, **Files** (the tab's tree, one directory per open), **Agent** (what the harness is doing,
+  which Claude account, subscription usage, and switching that account), **Activity** (the process
+  tree and listening ports — the whole tmux session where there is one) and **Docker** (containers by
+  compose project). Every one of them **reads and does not act**: the terminal is beside the panel and
+  already has every signal a process understands (ADR-PROJ-001 §5).
+  The Git tool is the oldest and the deepest: branch with ahead/behind, staged and unstaged changes,
+  a drawn history of every local branch with lanes and merges, and a diff for any changed file or
+  whole commit.
 - **The shell around it:** frameless HUD window, configurable status bar (drag-and-drop editor,
   spacers, system load, tmux session, working directory), rebindable keyboard shortcuts that can
   never take a key the shell needs (rule:shortcuts), English/German throughout (rule:i18n), rendered
   changelog and credits, crash handling on both runtimes (ADR-APP-032), logging into console + file +
   a live Logs view.
+- **Two attention signals.** The terminal bell marks the tab that rang — the only signal that
+  survives tmux, and it says no more than "something happened". A Claude Code **hook**, installable
+  from the Agent tool, says *which* directory is waiting and *why*; it writes to a file, so events
+  from a time the app was closed are there when it opens.
 - **Getting in from outside:** `ygg` / `yggshell` on the command line, Finder's *Open With* and *New
   Terminal Here* — all converging on one validated path (rule:launching).
-- **32 typed IPC commands**, `ts-rs`-generated bindings, settings as an atomically written JSON
+- **A typed IPC surface** (around fifty commands), `ts-rs`-generated bindings, settings as an atomically written JSON
   document, single-source identity (`app.identity.json`).
 
 ## What is not built
 
-- **Further sidebar tools — PLAN.md Phase 5, deliberately undecided.** Candidates and the
-  measurements behind them are listed there; none is agreed. This is the part where the product is
-  still ahead of itself, and it is the part that decides whether the app achieves its purpose.
+- **Further sidebar tools.** Five are built; `PLAN.md` Phase 5 lists what is left — worktrees, a
+  session-scoped diff — and the two decisions deliberately *not* taken while building the rest:
+  acting on a container (a command, so it needs an ADR) and remote branches in the graph. A new tool
+  is still the maintainer's call, never guessed into existence.
 - **Split panes and session persistence across restarts** — explicitly outside milestone 1.
 - **Windows and Linux behavioural verification** — deferred by the maintainer; only macOS is proven.
 - **Remote branches in the Git graph**, and a shell-integration hook for fish.
