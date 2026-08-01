@@ -118,7 +118,24 @@ later contradicted. The measurements are kept so the next agent does not pay for
   has tests. Measurements behind it, so nobody repeats them: `$COLUMNS`/`stty size` match the spawn
   size exactly (the column-mismatch-at-spawn theory in this file was wrong); xterm.js fed zsh's exact
   bytes leaves `%` at 80 real vs. 100 believed columns and nothing at 100 vs. 100.
-## Round 6 — owed upstream: the window-frame paint measurement (OPEN, 2026-08-01)
+## Round 6 — DELIVERED to the upstream (2026-08-01). Ball is in their court.
+
+**The maintainer sent the report.** Nothing is owed from here; do not re-run the harness unless the
+upstream asks for something specific. What went out, in one line each — the numbers are below in full:
+
+- `ring-clip` is a **regression** (27.2 % vs 9.9 % for `current`), measured. Drop it as a candidate.
+- `transform-spin` costs **nothing measurable**, including the memory they worried about — GPU 44 MB
+  and WebContent 40 MB, byte-identical to the control. Their one documented objection does not
+  materialise on WebKit/macOS. WebKitGTK stays untested.
+- **No cadence band reads as stutter**, and the `steps(n)` travel arithmetic measures the wrong
+  quantity: five stops across 360° means one 6° step is 6.7 % of a colour transition.
+
+**What we are waiting for:** their decision on `transform-spin`, and — per their §7 — a
+`docs/migrations/app-NNN-….md` briefing, because `src/**` is outside the published layer and the fix
+will NOT arrive via `governance:update`. It has to be ported by hand here. We ship `steps(60)` until
+then, which measured at +0.1 points over control and which the maintainer confirms looks normal.
+
+### Round 6 — the measurement, for reference
 
 **The template is waiting on us.** `kaoszwerg/saga-rust-template@a9cb0f5` confirmed the *mechanism*
 (164.7 repaint triggers/s, one per frame) but could not measure the *cost*: five attempts on
@@ -173,11 +190,11 @@ digits. Recorded at the time of writing: load 5.73, VM 144 %, WindowServer 18.5 
 | # | What | State |
 | --- | --- | --- |
 | 1 | Frame paint, polling inventory, blocking-path check | **done**, shipped 0.34.x/0.35.0 |
-| 2 | Widget switching | React ruled out (0–3 ms); click-to-*visible* unmeasured |
-| 3 | Terminal rendering (~25 %, largest remaining) | open, needs a quiet machine |
-| 4 | Measurement-led deep analysis | open, follows 2 and 3 |
+| 2 | Widget switching | **closed** — a sync Tauri command blocked the main thread; 1562 ms → 27 ms, gated |
+| 3 | Terminal rendering | **closed** — idle is 7.8 %; under load the cost is xterm's parser, and the coalescer is not at fault |
+| 4 | Measurement-led deep analysis | absorbed into 2, 3 and 5 — nothing left standing on its own |
 | 5 | Targeted code audit | **done**, one finding (`launch::Pending`) |
-| 6 | The measurement the template is waiting on | open, **blocked on a quiet machine** |
+| 6 | The measurement the template was waiting on | **delivered** — awaiting their decision + a migration briefing |
 
 Rounds 3, 4 and 6 all need the same thing — a calm system. Round 6 is the one somebody else is waiting
 on, so it goes first when the machine is quiet.
