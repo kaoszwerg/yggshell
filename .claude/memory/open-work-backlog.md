@@ -118,6 +118,42 @@ later contradicted. The measurements are kept so the next agent does not pay for
   has tests. Measurements behind it, so nobody repeats them: `$COLUMNS`/`stty size` match the spawn
   size exactly (the column-mismatch-at-spawn theory in this file was wrong); xterm.js fed zsh's exact
   bytes leaves `%` at 80 real vs. 100 believed columns and nothing at 100 vs. 100.
+## Owed upstream: the window-frame paint measurement (open, 2026-08-01)
+
+**The template is waiting on us.** `kaoszwerg/saga-rust-template@a9cb0f5` confirmed the *mechanism*
+(164.7 repaint triggers/s, one per frame) but could not measure the *cost*: five attempts on
+Blink/Windows produced a noise floor larger than the effect — the control variant, animation off, sat
+at **58 % GPU**. So it shipped an A/B harness instead of a guess and asks the reporter (us) for the
+figures from WebKit/macOS, where it reproduces. `src/styles/globals.css` upstream is unchanged: **no
+fix ships there until our numbers are in.**
+
+**Harness:** `docs/perf/window-frame/index.html` in that repo — one self-contained file, no build.
+Open it in **Safari** (or the app's own WebView, which is the most faithful). Variants: `current`,
+`steps-60`, `steps-180`, `ring-clip`, `transform-spin`, `off`. Buttons: *Measure all variants*, then
+*Solo 20 s* **per variant** reading CPU **and memory** from Activity Monitor, then *Copy report block*.
+`?autorun` drives the sweep from a headless browser. The window must stay foregrounded and visible —
+an occluded window stops getting animation frames.
+
+**Three upstream findings that correct our own report — do not repeat the mistakes:**
+
+1. **Our suggestion 2 was wrong.** `mask`/`clip-path` on `.window-frame` applies to the element *and
+   its descendants*, and that element is the container the whole app renders inside — it would have
+   erased the UI, not the covered gradient. That is why the harness puts the gradient on a dedicated
+   `.glow` element instead.
+2. **A ring clip does not lower the trigger rate** (still 165/s) and may be a regression: our own
+   `sample` pointed at clip decomposition, and a 16-point even-odd ring is more of that, not less.
+3. **No `steps(n)` is visually free.** A colour-stop boundary travels ~56–150 px per step at
+   `steps(60)` on 1920×1080, ~19–50 px at `steps(180)`. **We shipped `steps(60)`** — worth checking at
+   the window size actually used before defending it.
+
+**Our own measurement, for the report:** 27.7 % → 3.0 % in the WebKit GPU process, same instance, CSS
+swapped by hot-reload, idle release build. That is the number the upstream does not have.
+
+**Blocked on a quiet machine, and this is not a formality** — it is the exact reason the upstream's
+attempt failed. Before measuring, require: Docker test runs finished, RustDesk closed, **no agent
+session running in the measured window**, and `load average` below ~1.5 with WindowServer in single
+digits. Recorded at the time of writing: load 5.73, VM 144 %, WindowServer 18.5 % — unusable.
+
 ## Performance rounds — measured, and where they stopped (2026-08-01)
 
 **A resumable state, not a wish list.** Read the numbers before re-measuring anything; each cost
