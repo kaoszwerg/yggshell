@@ -434,18 +434,29 @@ input[type="range"]:disabled::-moz-range-thumb {
 }
 
 /* ── Animated neon window frame around the app shell. ──
-   Implemented as a 1.5px padding band filled with a slowly rotating conic-gradient; the inner wrapper
-   (.hud-grid-bg in App.tsx) sits on top and covers the gradient everywhere but that band. This needs
-   NO CSS `mask` — the earlier mask + mask-composite ring was silently broken by the production CSS
-   minifier (Tailwind v4 / lightningcss) and flooded the whole window. Padding survives minification. */
-@property --frame-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-@keyframes frame-rotate {
+   The gradient is painted ONCE onto .window-frame-glow and then spun by a `transform`, so every frame
+   is a compositor operation and NOT a repaint.
+
+   It used to animate a registered custom property (`--frame-angle`) feeding a conic-gradient on
+   .window-frame itself. That is a paint: the gradient was re-rasterised across the element's full box —
+   the entire window — on every frame, forever, in order to show a 1.5px band. Measured on WebKit
+   (Safari 26.5, 3898x2232 device px): 60 repaint triggers/s costing +4.4pp of a core over an
+   animation-off control. The version below measures at the control floor (-0.2pp) with no memory
+   change, and is visually identical — rotating a conic gradient about its own centre is exactly
+   equivalent to advancing its `from` angle. See docs/migrations/app-109.
+
+   Two structural constraints, both learned the hard way — do not "simplify" either away:
+   - The glow is a SEPARATE element. `clip-path`/`mask` apply to an element AND its descendants, and
+     .window-frame is the container the whole app renders inside; clipping it to the band would erase
+     the application, not the covered gradient.
+   - The spun element must be SQUARE and cover the window's diagonal. A rotated non-square box would
+     deform the gradient rather than merely advance its phase. */
+@keyframes frame-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
   to {
-    --frame-angle: 360deg;
+    transform: translate(-50%, -50%) rotate(360deg);
   }
 }
 .window-frame {
@@ -463,44 +474,77 @@ input[type="range"]:disabled::-moz-range-thumb {
     0 calc(100% - 10px),
     0 20px
   );
+  --frame-band: 1.5px;
   position: relative;
   overflow: hidden;
-  padding: 1.5px;
+  padding: var(--frame-band);
+  clip-path: var(--hud-window-clip);
+}
+
+/* The band itself: an even-odd ring clip (the window chamfer, minus the same chamfer inset by the band
+   width) over a square that carries the gradient and spins. Only the ring is ever composited to screen. */
+.window-frame > .window-frame-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  clip-path: polygon(
+    evenodd,
+    20px 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 20px),
+    calc(100% - 20px) 100%,
+    10px 100%,
+    0 calc(100% - 10px),
+    0 20px,
+    calc(20px + var(--frame-band)) var(--frame-band),
+    calc(100% - 10px - var(--frame-band)) var(--frame-band),
+    calc(100% - var(--frame-band)) calc(10px + var(--frame-band)),
+    calc(100% - var(--frame-band)) calc(100% - 20px - var(--frame-band)),
+    calc(100% - 20px - var(--frame-band)) calc(100% - var(--frame-band)),
+    calc(10px + var(--frame-band)) calc(100% - var(--frame-band)),
+    var(--frame-band) calc(100% - 10px - var(--frame-band)),
+    var(--frame-band) calc(20px + var(--frame-band))
+  );
+}
+.window-frame > .window-frame-glow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* Square, and wide enough that its inscribed circle still covers the window diagonal at any aspect
+     ratio up to square. vmax (not %) keeps it square without a second length. */
+  width: 145vmax;
+  height: 145vmax;
   background: conic-gradient(
-    from var(--frame-angle, 0deg),
     var(--saga-neon-green),
     var(--saga-neon-cyan),
     var(--saga-rune-purple),
     var(--saga-gold),
     var(--saga-neon-green)
   );
-  /* STEPPED, NOT LINEAR — and this is a performance fix, not a style choice.
-     `--frame-angle` feeds a conic-gradient, which makes it a PAINT: every change re-rasterises the
-     gradient across this element's whole box, and this element is the whole window. At `linear` that
-     is a full-window repaint sixty times a second, for ever, whether or not anything is happening —
-     measured on an idle production build at 45% of a core in the WebKit GPU process, with
-     `CA::OGL::MetalContext::draw_elements` at the top of the sample. Everything else in the app —
-     a tab switch, a sidebar tool — was then competing for frame time with it, which is how this was
-     reported: "tab switches feel sluggish".
-     60 steps over a 12s revolution is 6° every 200ms on a 1.5px band. The motion still reads as
-     continuous at that width; the repaints drop by an order of magnitude. If this is ever raised,
-     re-measure — the cost is in the paint, not in the animation. */
-  animation: frame-rotate 12s steps(60) infinite;
-  clip-path: var(--hud-window-clip);
+  animation: frame-spin 12s linear infinite;
+  will-change: transform;
 }
 /* Inner content shell: same chamfer (inset by the 1.5px padding) + inner glow on the content edge.
    Scoped to the explicit wrapper so it never applies to sibling overlays (e.g. the About dialog), which
    must keep their own position: fixed. */
 .window-frame > .window-frame-inner {
   position: relative;
+  /* Above the glow layer, so the opaque shell covers everything but the 1.5px band. */
+  z-index: 1;
   overflow: hidden;
   clip-path: var(--hud-window-clip);
   box-shadow:
     inset 0 0 15px rgb(var(--saga-neon-green-rgb) / 0.06),
     inset 0 0 30px rgb(var(--saga-neon-cyan-rgb) / 0.04);
 }
+/* The animation lives on the spun square, so this must target THAT element — targeting .window-frame
+   (where it used to live) would leave the frame spinning for users who asked it not to. */
 @media (prefers-reduced-motion: reduce) {
-  .window-frame {
+  .window-frame > .window-frame-glow::before {
     animation: none;
   }
 }

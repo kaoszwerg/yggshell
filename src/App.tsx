@@ -40,6 +40,10 @@ export default function App() {
 
   return (
     <div className="window-frame h-full">
+      {/* The animated band. A separate element on purpose: `clip-path` applies to an element AND its
+          descendants, and `.window-frame` is the container the whole app renders inside — clipping it
+          to the band would erase the application, not the covered gradient (app-109). */}
+      <div className="window-frame-glow" aria-hidden="true" />
       <div className="window-frame-inner hud-grid-bg flex h-full flex-col">
         <TitleBar />
         {/* Shown only when the previous run left a crash report (ADR-APP-032) — the one place a

@@ -8,6 +8,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The window frame is now composited instead of repainted, and it is smooth again.** Ours already
+  cut the cost — `steps(60)` measured at **+0.1 points** over an animation-off control, down from
+  **+4.4 points** at `linear` — but it paid for it with the animation: five full-window repaints per
+  second instead of sixty, in exchange for a stepped 200 ms cadence. The upstream's answer (template
+  v0.10.4, `de5b97f`, briefing `app-109`) removes the repaint entirely: the conic gradient is
+  rasterised **once** onto its own layer and spun by a `transform`, which the compositor does without
+  ever touching the paint. Measured at the control floor (**−0.2 points**, i.e. noise) with a smooth
+  12 s revolution restored.
+
+  The difference is not the 0.3 points — both are free today. It is that our number was small because
+  we repainted *rarely*, and that cost still scales with the window's area; this one does not scale at
+  all. It also removes the tuning knob whose comment had to ask the next agent to re-measure.
+
+  The band lives on its own element on purpose: `clip-path` applies to an element **and its
+  descendants**, and `.window-frame` is what the entire application renders inside — clipping it to the
+  band would erase the app rather than the covered gradient. `src/styles/globals.test.ts` pins that,
+  and pins the step the briefing calls out as silently wrong: the reduced-motion query must follow the
+  animation to `.window-frame-glow::before`. Left on `.window-frame` nothing errors, no style fails,
+  and the frame simply keeps spinning for everyone who asked it not to. Proven by breaking it.
+
 - **Opening the Agent tool took a second and a half, and the cause was a missing `async` keyword.**
   Tauri runs a synchronous command **on the main thread**; only `async fn` reaches the async runtime.
   `agent_usage` shells out to `claude -p /usage` — measured at 1443–1629 ms — so it held the thread
