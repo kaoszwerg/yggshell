@@ -10,7 +10,7 @@
  * Showing "—" for each of those would fill the strip with absences.
  */
 import { useEffect, useState } from "react";
-import { Activity, GitBranch, Terminal as TerminalIcon, Folder, Layers } from "lucide-react";
+import { Activity, Bot, Folder, GitBranch, Layers, Terminal as TerminalIcon } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Tooltip } from "../ui/Tooltip";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
@@ -19,6 +19,8 @@ import { useSystemLoad } from "../../hooks/useSystemLoad";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { useT } from "../../hooks/useT";
+import { useAgentSession } from "../../hooks/useAgentSession";
+import { formatTokens } from "../../lib/tokens";
 import { APP_NAME } from "../../lib/app";
 import { formatElapsed, formatLoad, loadPressure, shortPath } from "../../lib/statusFormat";
 import type { StatusItemId } from "../../lib/statusBar";
@@ -207,6 +209,39 @@ function LoadItem() {
 }
 
 /**
+ * How much context the harness in this tab is carrying.
+ *
+ * **A count, never a percentage.** The transcript records how many tokens a turn carried and nowhere
+ * records the size of the window they went into — a live session measured 530k, which is comfortable
+ * in a 1M window and impossible in a 200k one, with an identical model name in both cases. A
+ * percentage against a guessed maximum is a number that looks precise and is not (`lib/tokens`).
+ *
+ * Renders nothing at all when no agent has run here, which is most tabs. An element that sat there
+ * showing a dash would be spending the bar's width to say "not applicable".
+ */
+function AgentItem() {
+  const t = useT();
+  const { session } = useAgentSession();
+  if (session === null || session.context_tokens === null) return null;
+
+  return (
+    <Tooltip
+      content={t("statusbar.agent", {
+        model: session.model ?? "?",
+        turns: String(session.turns),
+        written: formatTokens(session.output_tokens),
+        account: session.home,
+      })}
+    >
+      <span className="flex items-center gap-1.5">
+        <Bot size={11} strokeWidth={2} className="text-dim shrink-0" aria-hidden />
+        <span className="text-fg">{formatTokens(session.context_tokens)}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
  * One item of the bar.
  *
  * Spacer and separator are drawn by the bar itself, not here: a spacer is a flex property of the
@@ -227,6 +262,8 @@ export function StatusItemView({ id }: { id: StatusItemId }) {
       return <TmuxItem />;
     case "load":
       return <LoadItem />;
+    case "agent":
+      return <AgentItem />;
     default:
       return null;
   }
@@ -285,6 +322,13 @@ export function StatusItemSample({ id }: { id: StatusItemId }) {
         <span className="flex items-center gap-1.5">
           <Activity size={11} strokeWidth={2} className="text-dim shrink-0" aria-hidden />
           <span className="text-fg">1.4</span>
+        </span>
+      );
+    case "agent":
+      return (
+        <span className="flex items-center gap-1.5">
+          <Bot size={11} strokeWidth={2} className="text-dim shrink-0" aria-hidden />
+          <span className="text-fg">128k</span>
         </span>
       );
     default:

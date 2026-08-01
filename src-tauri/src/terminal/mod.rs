@@ -103,6 +103,10 @@ struct Session {
     /// Kept so the activity tool can walk what this tab is running. Outside tmux that child IS the
     /// tab's shell and everything hangs off it; inside tmux it is only the client, which is why the
     /// tool asks tmux for the pane pids instead (`procs`).
+    #[allow(
+        dead_code,
+        reason = "read through `activity`; kept as the session's own identity"
+    )]
     pid: Option<u32>,
     /// The terminal device this session's shell runs on, when it could be determined.
     ///

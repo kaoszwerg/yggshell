@@ -134,6 +134,17 @@ export function TitleBar() {
         ) : null}
       </div>
 
+      {/* A grab area that exists no matter how full the strip is.
+          The tabs take every pixel they are offered, so on a window with many of them the only
+          draggable place left was the app mark — about thirty pixels, at the far left, which is
+          neither discoverable nor where anyone reaches. This is the same reservation a browser
+          keeps to the right of its tabs. */}
+      <div
+        data-tauri-drag-region
+        aria-hidden
+        className="h-full w-8 shrink-0 cursor-grab active:cursor-grabbing"
+      />
+
       <div className="flex items-center gap-1.5">
         <WinButton
           label={t("titlebar.minimize")}

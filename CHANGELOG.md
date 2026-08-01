@@ -8,6 +8,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The agent tool, and the Claude account manager with it.** What the harness in this tab is doing —
+  model, branch, turns, context carried, how long ago the last turn was — read from its own
+  transcript, plus a status bar element showing the context count. **Which account it is** is shown
+  rather than assumed: several Claude homes can be in use on one machine, one per project, and a tool
+  that hard-coded `~/.claude` would name the wrong one plausibly. The account for a project can now be
+  chosen, created and applied from the app: it writes the `.envrc` direnv reads (backing up and
+  preserving anything already there), approves it, and offers to install direnv where it is missing.
+  Deliberately **no percentage of the context window**: the transcript records what a turn carried and
+  never the size of the window it went into, so a percentage would be a number that looks precise and
+  is not.
+
+### Fixed
+
+- **The window can be dragged again.** The tab strip takes the whole title bar by design, which left
+  the app mark — about thirty pixels at the far edge — as the only place to grab. The empty part of
+  the strip now drags, as it does in every browser, and a reserved area before the window buttons
+  always does, however full the strip gets.
+
 - **A Docker tool.** Containers grouped by compose project, with the health verdict verbatim — `Up 3
   hours (healthy)` and `Up 2 minutes (health: starting)` are different situations and a green dot
   loses both — the published ports (only the ones actually reachable from the host, deduplicated

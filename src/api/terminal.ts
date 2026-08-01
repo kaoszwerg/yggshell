@@ -4,6 +4,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
 import type { TerminalOpened } from "../bindings/TerminalOpened";
+import type { AgentSession } from "../bindings/AgentSession";
 import type { TerminalActivity } from "../bindings/TerminalActivity";
 import type { TerminalStatus } from "../bindings/TerminalStatus";
 
@@ -77,6 +78,18 @@ export const terminalApi = {
    * names a *session*; no command line crosses this boundary (ADR-PROJ-001 §5).
    */
   activity: (id: SessionId) => invoke<TerminalActivity>("terminal_activity", { id }),
+
+  /**
+   * What the AI harness in this tab is doing, as far as its transcript says.
+   *
+   * The Claude home is decided by the BACKEND from the tab's own process environment — never passed
+   * in from here, and never assumed to be `~/.claude`: several accounts can be in use on one
+   * machine, one per project.
+   *
+   * `null` when no agent has run in that directory, which is the ordinary case for most tabs.
+   */
+  agentSession: (id: SessionId, cwd: string) =>
+    invoke<AgentSession | null>("agent_session", { id, cwd }),
 
   /** End a session because its tab was closed. Takes the foreground process group with it. */
   close: (id: SessionId) => invoke<void>("terminal_close", { id }),

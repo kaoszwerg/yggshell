@@ -205,6 +205,11 @@ export function Tabs({
       }}
       aria-label={label}
       aria-orientation={orientation}
+      // The empty part of the strip drags the window, exactly as it does in every browser. Tauri
+      // looks at the event TARGET, so a click on a tab is still a click on a tab — only the space
+      // beside them moves the window. Without this, a title bar filled edge to edge with tabs left
+      // nowhere to grab: the strip takes all the width there is, by design.
+      data-tauri-drag-region={vertical ? undefined : true}
       className={`no-scrollbar flex min-w-0 gap-1 ${
         vertical
           ? "flex-col items-stretch overflow-y-auto"

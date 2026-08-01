@@ -26,6 +26,7 @@ export const STATUS_ITEM_IDS = [
   "cwd",
   "tmux",
   "load",
+  "agent",
   "spacer",
   "separator",
 ] as const;

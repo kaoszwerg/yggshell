@@ -162,6 +162,56 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// One Claude home on this machine.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct ClaudeHome {
+    /// Absolute path.
+    pub path: String,
+    /// What it is called in the interface — the directory name, `.claude` being "the default one".
+    pub name: String,
+    /// Whether it has been used for the project currently open.
+    pub used_here: bool,
+}
+
+/// How a project is currently pointed at a Claude account, and what the machine can do about it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct EnvironmentStatus {
+    /// Every home found under the user's home directory.
+    pub homes: Vec<ClaudeHome>,
+    /// The home this project's `.envrc` declares, if any.
+    pub declared: Option<String>,
+    /// Whether there is an `.envrc` at all, anywhere up the tree.
+    pub has_envrc: bool,
+    pub direnv_installed: bool,
+    /// Whether direnv would actually load this project's `.envrc` as it stands.
+    pub direnv_allowed: bool,
+}
+
+/// What the AI harness in a project is doing, as far as its transcript says.
+///
+/// Every field is optional because the transcript is Claude Code's own working file rather than an
+/// API: an unfamiliar shape must cost information, never correctness.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct AgentSession {
+    pub session_id: Option<String>,
+    pub model: Option<String>,
+    pub branch: Option<String>,
+    /// ISO timestamp of the most recent turn.
+    pub last_at: Option<String>,
+    /// What the model had in front of it on the last turn — a level, not a total. This is the number
+    /// that decides when a compact is due.
+    pub context_tokens: Option<u64>,
+    /// What it has written across the turns in view — a total.
+    pub output_tokens: u64,
+    pub turns: u32,
+    /// Which Claude home this was read from. Shown because the maintainer runs several, and "which
+    /// account is this" is exactly the question a shared machine makes hard to answer.
+    pub home: String,
+}
+
 /// One Docker container, as the tool draws it.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

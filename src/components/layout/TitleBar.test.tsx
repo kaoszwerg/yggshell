@@ -281,3 +281,17 @@ describe("TitleBar", () => {
     expect(runs[1]?.style.fontSize).not.toBe("");
   });
 });
+
+describe("dragging the window", () => {
+  // The defect this pins: the tab strip takes every pixel it is offered — deliberately, so tabs are
+  // not cut off on a wide window — and that left the app mark as the only draggable place. About
+  // thirty pixels, at the far left, which is neither where anyone reaches nor discoverable at all.
+  it("keeps a grab area that exists however full the strip is", () => {
+    const { container } = renderTitleBar({ channel: "release" } as BuildInfo);
+
+    const regions = container.querySelectorAll("[data-tauri-drag-region]");
+    expect(regions.length).toBeGreaterThan(1);
+    // One of them has a width of its own rather than being whatever the tabs left over.
+    expect(container.querySelector("[data-tauri-drag-region].w-8")).not.toBeNull();
+  });
+});

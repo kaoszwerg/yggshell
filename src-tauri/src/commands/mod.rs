@@ -531,3 +531,125 @@ pub fn container_logs(id: String, lines: u32) -> String {
     // exactly the request this must not honour.
     crate::docker::logs(&id, lines.clamp(1, 2_000))
 }
+
+/// How a project is pointed at a Claude account, and what this machine can do about it.
+///
+/// Read-only. Everything it reports is a fact on disk: which homes exist, what the `.envrc` says,
+/// whether direnv is installed, and whether direnv itself considers the file approved.
+#[tauri::command]
+pub fn environment_status(
+    app: tauri::AppHandle,
+    cwd: String,
+) -> Result<crate::dto::EnvironmentStatus> {
+    use tauri::Manager;
+    tracing::debug!(%cwd, "environment_status");
+    let project = std::path::Path::new(&cwd);
+    let home_dir = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("could not resolve the home directory: {e}")))?;
+
+    let declared = crate::agent::declared_home(project);
+    let used = crate::agent::homes_for(&home_dir, project);
+    let mut homes = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&home_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with(".claude") || !entry.path().is_dir() {
+                continue;
+            }
+            homes.push(crate::dto::ClaudeHome {
+                used_here: used.contains(&entry.path()),
+                path: entry.path().to_string_lossy().to_string(),
+                name,
+            });
+        }
+    }
+    homes.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let status = crate::dto::EnvironmentStatus {
+        homes,
+        declared: declared.as_ref().map(|p| p.to_string_lossy().to_string()),
+        has_envrc: declared.is_some(),
+        direnv_installed: crate::agent::direnv::is_installed(),
+        direnv_allowed: crate::agent::direnv::is_allowed(project),
+    };
+    tracing::debug!(
+        homes = status.homes.len(),
+        declared = ?status.declared,
+        direnv = status.direnv_installed,
+        "environment_status ok"
+    );
+    Ok(status)
+}
+
+/// Point this project at a Claude account, and approve the file so direnv will load it.
+///
+/// **Two deliberate acts, in one call because they are one intention.** The `.envrc` is written (an
+/// existing one is backed up and preserved line for line), and then approved — which is spending
+/// direnv's own safety, and defensible only because the app wrote the file itself, in this same
+/// action, at the user's request, and reports the path back so they can read what was approved
+/// (`agent::direnv`).
+///
+/// Approval is best-effort: without direnv the declaration is still correct and takes effect as soon
+/// as direnv arrives. That is a partial success, and it is reported as one rather than as a failure.
+#[tauri::command]
+pub fn set_project_environment(cwd: String, home: String) -> Result<String> {
+    tracing::info!(%cwd, %home, "set_project_environment");
+    let project = std::path::Path::new(&cwd);
+    let home_path = std::path::Path::new(&home);
+    if !home_path.is_dir() {
+        return Err(AppError::Other(format!("{home} is not a directory")));
+    }
+    let written =
+        crate::agent::declare_home(project, home_path).map_err(|e| AppError::io(cwd.clone(), e))?;
+    if crate::agent::direnv::is_installed() {
+        crate::agent::direnv::allow(project)?;
+    } else {
+        tracing::warn!(
+            "direnv is not installed — the declaration is written but will not load yet"
+        );
+    }
+    Ok(written.to_string_lossy().to_string())
+}
+
+/// Create a new, empty Claude home.
+///
+/// Empty is the whole of it: Claude Code signs in on first use and writes its own credentials there.
+/// **This app never touches a credential** (rule:security) — it makes a directory and lets the
+/// harness do the rest.
+#[tauri::command]
+pub fn create_claude_home(app: tauri::AppHandle, name: String) -> Result<String> {
+    use tauri::Manager;
+    tracing::info!(%name, "create_claude_home");
+    // The name becomes a directory under the user's home. Anything but a plain name could put it
+    // somewhere else entirely (rule:security: validate at the boundary).
+    let clean = name.trim();
+    if clean.is_empty()
+        || !clean
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(AppError::Other(
+            "a name may only contain letters, digits, dashes and underscores".to_string(),
+        ));
+    }
+    let home_dir = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("could not resolve the home directory: {e}")))?;
+    let path = home_dir.join(format!(".claude-{clean}"));
+    std::fs::create_dir_all(&path).map_err(|e| AppError::io(path.display().to_string(), e))?;
+    tracing::info!(path = %path.display(), "created a claude home");
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Install direnv through the machine's own package manager.
+///
+/// The whole command is a constant in `agent::direnv` — nothing about it comes from the webview
+/// (ADR-PROJ-001 §5). Returns the manager that did it.
+#[tauri::command]
+pub fn install_direnv() -> Result<String> {
+    tracing::info!("install_direnv");
+    crate::agent::direnv::install()
+}

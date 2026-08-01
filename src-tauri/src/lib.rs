@@ -4,6 +4,7 @@
 //! modules are added alongside these as the app grows — this file stays the single place where the
 //! app is assembled.
 
+pub mod agent;
 pub mod cli_install;
 pub mod commands;
 pub mod crash;
@@ -74,6 +75,10 @@ pub fn run() {
             commands::changelog,
             commands::system_load,
             commands::list_directory,
+            commands::environment_status,
+            commands::set_project_environment,
+            commands::create_claude_home,
+            commands::install_direnv,
             commands::list_containers,
             commands::container_logs,
             commands::reveal_in_file_manager,
@@ -94,6 +99,7 @@ pub fn run() {
             commands::terminal::terminal_close,
             commands::terminal::terminal_status,
             commands::terminal::terminal_activity,
+            commands::terminal::agent_session,
             commands::git::git_snapshot,
             commands::git::git_fetch,
             commands::git::git_file_diff,

@@ -132,3 +132,46 @@ pub fn terminal_activity(
     tracing::debug!(session = id, "terminal_activity");
     state.activity(id)
 }
+
+/// What the AI harness in this tab is doing.
+///
+/// **The Claude home is read from the tab's own process environment**, never assumed: the maintainer
+/// runs several accounts side by side, one per project, and a tool that hard-coded `~/.claude` would
+/// show the wrong one in most of them — plausibly, which is worse than showing nothing (`agent`).
+///
+/// `None` when no agent has run in this directory, which is the ordinary case for most tabs.
+#[tauri::command]
+pub fn agent_session(
+    app: tauri::AppHandle,
+    id: u32,
+    cwd: String,
+) -> Result<Option<crate::dto::AgentSession>> {
+    tracing::debug!(session = id, %cwd, "agent_session");
+    let cwd_path = std::path::Path::new(&cwd);
+    // In order of how much the answer can be trusted: what the project DECLARES, then whichever home
+    // has actually been used here, then the default. Never a hard-coded `~/.claude` — see `agent`.
+    let home = crate::agent::declared_home(cwd_path)
+        .or_else(|| {
+            home_dir(&app)
+                .and_then(|dir| crate::agent::homes_for(&dir, cwd_path).into_iter().next())
+        })
+        .or_else(|| home_dir(&app).map(|dir| dir.join(".claude")));
+    let Some(home) = home else {
+        tracing::debug!("no claude home could be determined");
+        return Ok(None);
+    };
+    let session = crate::agent::session(&home, cwd_path);
+    tracing::debug!(
+        found = session.is_some(),
+        home = %home.display(),
+        "agent_session ok"
+    );
+    Ok(session)
+}
+
+/// The user's home directory, through Tauri's path API rather than by assembling `$HOME`
+/// (rule:rust-conventions).
+fn home_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    use tauri::Manager;
+    app.path().home_dir().ok()
+}
