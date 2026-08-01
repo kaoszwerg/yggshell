@@ -7,6 +7,7 @@ import type { AgentSession } from "../../bindings/AgentSession";
 
 vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../../hooks/useAgentSession", () => ({ useAgentSession: vi.fn() }));
+vi.mock("../../hooks/useAgentAttention", () => ({ useAgentAttention: vi.fn() }));
 // The account panel rides along inside the tool — the two answer one question ("what agent is here")
 // and switching the account is part of it, so it needs the query client too.
 vi.mock("../../api/environment", () => ({
@@ -14,6 +15,7 @@ vi.mock("../../api/environment", () => ({
 }));
 
 import { useAgentSession } from "../../hooks/useAgentSession";
+import { useAgentAttention } from "../../hooks/useAgentAttention";
 
 const SESSION: AgentSession = {
   session_id: "d56b6f22",
@@ -44,10 +46,21 @@ function state(over: Partial<ReturnType<typeof useAgentSession>>) {
   });
 }
 
+function attention(over: Partial<ReturnType<typeof useAgentAttention>> = {}) {
+  vi.mocked(useAgentAttention).mockReturnValue({
+    installed: true,
+    waiting: [],
+    ready: true,
+    ...over,
+  });
+}
+
 describe("AgentTool", () => {
   beforeEach(() => {
     useUiStore.setState({ locale: "en" });
     vi.mocked(useAgentSession).mockReset();
+    vi.mocked(useAgentAttention).mockReset();
+    attention();
   });
 
   it("names which account the session belongs to", async () => {
@@ -84,6 +97,23 @@ describe("AgentTool", () => {
     renderTool();
 
     expect(await screen.findByText(/No agent has run/)).toBeInTheDocument();
+  });
+
+  it("still says which OTHER tab is asking when this one has no agent", async () => {
+    // The whole reason a hook beats a bell is that the event carries a directory — it tells you
+    // about a tab you are NOT looking at. Hiding the panel because the tab in front of you has no
+    // agent in it hides exactly the case the feature exists for, and it is how this was reported:
+    // "I have never seen it point anything out to me."
+    state({ session: null });
+    attention({
+      waiting: [
+        { cwd: "/repo/other", event: "Notification", message: "Claude is waiting for your input" },
+      ],
+    });
+    renderTool();
+
+    expect(await screen.findByText("/repo/other")).toBeInTheDocument();
+    expect(screen.getByText("Claude is waiting for your input")).toBeInTheDocument();
   });
 
   it("says so when the tab has no terminal at all", async () => {

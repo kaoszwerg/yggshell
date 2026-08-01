@@ -474,7 +474,18 @@ input[type="range"]:disabled::-moz-range-thumb {
     var(--saga-gold),
     var(--saga-neon-green)
   );
-  animation: frame-rotate 12s linear infinite;
+  /* STEPPED, NOT LINEAR — and this is a performance fix, not a style choice.
+     `--frame-angle` feeds a conic-gradient, which makes it a PAINT: every change re-rasterises the
+     gradient across this element's whole box, and this element is the whole window. At `linear` that
+     is a full-window repaint sixty times a second, for ever, whether or not anything is happening —
+     measured on an idle production build at 45% of a core in the WebKit GPU process, with
+     `CA::OGL::MetalContext::draw_elements` at the top of the sample. Everything else in the app —
+     a tab switch, a sidebar tool — was then competing for frame time with it, which is how this was
+     reported: "tab switches feel sluggish".
+     60 steps over a 12s revolution is 6° every 200ms on a 1.5px band. The motion still reads as
+     continuous at that width; the repaints drop by an order of magnitude. If this is ever raised,
+     re-measure — the cost is in the paint, not in the animation. */
+  animation: frame-rotate 12s steps(60) infinite;
   clip-path: var(--hud-window-clip);
 }
 /* Inner content shell: same chamfer (inset by the 1.5px padding) + inner glow on the content edge.

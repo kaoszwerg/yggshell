@@ -261,21 +261,47 @@ fn transcripts_by_age(dir: &Path) -> Vec<PathBuf> {
 /// here" at random, depending on what else had touched the directory, which is exactly how it was
 /// reported: sometimes it notices, sometimes it does not.
 ///
-/// Bounded to a handful of candidates: reading the tail of every transcript a long-lived project has
-/// accumulated would cost more than the answer is worth, and a session with nothing in it going back
-/// six files is not the one being looked at.
+/// **Bounded by what it reads, never by how many files it opens** — and that is the second half of
+/// the same defect. Counting candidates loses a race against the user's own typing: every slash
+/// command mints its own transcript, ~5 kB with no assistant turn in it, newer than the live session.
+/// Measured while this was written — five of the six newest files in a working project were exactly
+/// that, one per minute of work, leaving the live session a single file away from invisible. Any
+/// fixed count is the same bug with more headroom.
+///
+/// A budget does not have that failure mode: a cheap file draws on it in proportion to what it cost,
+/// so a thousand slash commands still cannot crowd out the answer, while genuinely large transcripts
+/// stop the walk quickly — which is what the bound is actually for.
 fn newest_session(dir: &Path) -> Option<(PathBuf, AgentSession)> {
-    const CANDIDATES: usize = 6;
-    for path in transcripts_by_age(dir).into_iter().take(CANDIDATES) {
+    let mut spent: u64 = 0;
+    for path in transcripts_by_age(dir) {
+        if spent >= SEARCH_BUDGET {
+            // Not silent: the answer is "no agent here", and this is the one case where that is a
+            // give-up rather than a fact (rule:logging).
+            tracing::debug!(
+                dir = %dir.display(),
+                spent,
+                "gave up looking for a live session before reaching the end of the directory"
+            );
+            break;
+        }
         let Some(text) = read_tail(&path, TAIL_BYTES) else {
             continue;
         };
+        spent += text.len() as u64;
         if let Some(session) = parse_tail(&text) {
             return Some((path, session));
         }
     }
     None
 }
+
+/// How much may be read, in total, while looking for the live session.
+///
+/// Sixteen full tails. The bound has to exist — a project accumulates one transcript per session
+/// forever, and answering "what is happening now" may not get more expensive every month. It is
+/// deliberately generous in *files*: at the ~5 kB a slash command leaves behind, this is several
+/// hundred of them, which is the flood it exists to survive.
+const SEARCH_BUDGET: u64 = 16 * TAIL_BYTES;
 
 /// How much of the end of a transcript to read.
 ///
@@ -299,7 +325,7 @@ pub fn session(home: &Path, cwd: &Path) -> Option<AgentSession> {
 ///
 /// A partial first line is dropped rather than parsed: half a JSON object is not an object, and
 /// feeding it to a parser to see what happens is how a reader ends up trusting a half-read value.
-fn read_tail(path: &Path, bytes: u64) -> Option<String> {
+pub(crate) fn read_tail(path: &Path, bytes: u64) -> Option<String> {
     use std::io::{Read, Seek, SeekFrom};
     let mut file = std::fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
@@ -622,5 +648,63 @@ mod tests {
     fn a_project_nobody_has_run_an_agent_in_has_no_session() {
         let dir = tempfile::tempdir().expect("tempdir");
         assert!(session(dir.path(), Path::new("/nowhere")).is_none());
+    }
+
+    /// What a slash command leaves behind: its own transcript, with no assistant turn in it.
+    ///
+    /// Verbatim in shape from a live directory — `type` values measured, not invented.
+    const LOCAL_COMMAND: &str = r#"{"type":"queue-operation"}
+{"type":"attachment"}
+{"type":"user","message":{"role":"user"}}
+{"type":"system","subtype":"local_command"}
+{"type":"last-prompt"}
+"#;
+
+    #[test]
+    fn a_flood_of_newer_slash_command_transcripts_does_not_hide_the_live_session() {
+        // Measured on the maintainer's machine while this was being written: a project directory
+        // held the live session at 291 kB and FIVE 5.6 kB slash-command transcripts newer than it,
+        // one per minute of work. Every `/command` mints another. A fixed candidate count is
+        // therefore a race against the user's own typing — at six candidates the live session had
+        // exactly one slot of headroom left, and the widget went blank the moment it lost it.
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("live.jsonl"), TAIL).expect("write");
+
+        for i in 0..12 {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            std::fs::write(dir.path().join(format!("cmd{i}.jsonl")), LOCAL_COMMAND).expect("write");
+        }
+
+        let (path, found) =
+            newest_session(dir.path()).expect("the live session must still be found");
+        assert_eq!(
+            path.file_name().and_then(|n| n.to_str()),
+            Some("live.jsonl"),
+            "a burst of turn-less transcripts must not push the real session out of view"
+        );
+        assert_eq!(found.turns, 2);
+    }
+
+    #[test]
+    fn the_search_is_bounded_by_what_it_reads_rather_than_by_how_many_files_it_opens() {
+        // The bound has to exist — a project accumulates transcripts forever, and answering "what is
+        // happening now" may not cost more every month. But it is a BUDGET, not a count: cheap files
+        // (a slash command is ~5 kB) barely draw on it, so thousands of them still cannot crowd out
+        // the answer, while genuinely large transcripts stop the walk quickly.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let big = "x".repeat(TAIL_BYTES as usize);
+        // Each of these costs a full tail read and carries no session.
+        for i in 0..40 {
+            std::fs::write(dir.path().join(format!("big{i}.jsonl")), &big).expect("write");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+
+        let budget_in_tails = (SEARCH_BUDGET / TAIL_BYTES) as usize;
+        assert!(
+            budget_in_tails < 40,
+            "the fixture must actually exceed the budget, or this asserts nothing"
+        );
+        // It gives up rather than reading the whole directory, and gives up quietly.
+        assert!(newest_session(dir.path()).is_none());
     }
 }

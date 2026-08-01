@@ -665,8 +665,12 @@ fn hook_script(home: &std::path::Path) -> std::path::PathBuf {
 /// script running inside the user's own sessions, so they are there whether or not this app was
 /// open when they happened.
 #[tauri::command]
-pub fn agent_attention(app: tauri::AppHandle, cwd: String) -> Result<crate::dto::AgentAttention> {
+pub fn agent_attention(
+    app: tauri::AppHandle,
+    cwd: Option<String>,
+) -> Result<crate::dto::AgentAttention> {
     use tauri::Manager;
+    tracing::debug!(cwd = cwd.as_deref().unwrap_or("-"), "agent_attention");
     let home = app
         .path()
         .home_dir()
@@ -677,21 +681,41 @@ pub fn agent_attention(app: tauri::AppHandle, cwd: String) -> Result<crate::dto:
         .map_err(|e| AppError::Other(format!("no app data directory: {e}")))?;
     let script = hook_script(&home);
 
-    let claude_home = crate::agent::declared_home(std::path::Path::new(&cwd))
+    // **`cwd` is optional, and that is a correctness requirement rather than a convenience.** It
+    // decides only WHICH account's settings are checked for the hook — the events themselves are
+    // machine-wide and are about tabs the user is not looking at. Requiring it made the whole signal
+    // depend on the front tab having reported a directory yet: no directory, no query, no attention
+    // for any of the other tabs either. The question this answers is not "what is in front of me".
+    let claude_home = cwd
+        .as_deref()
+        .and_then(|cwd| crate::agent::declared_home(std::path::Path::new(cwd)))
         .unwrap_or_else(|| home.join(".claude"));
-    let waiting = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 50)
-        .into_iter()
-        .map(|event| crate::dto::AgentWaiting {
-            cwd: event.cwd,
-            event: event.event,
-            message: event.message,
-        })
-        .collect();
+    let events = crate::agent::hooks::events_path(&data);
+    // The current state, not the log: only an agent that is actually asking, and only its newest
+    // word — so answering makes the mark go away on its own (`hooks::waiting_now`).
+    let waiting: Vec<crate::dto::AgentWaiting> =
+        crate::agent::hooks::waiting_now(crate::agent::hooks::read_events(&events, 50))
+            .into_iter()
+            .map(|event| crate::dto::AgentWaiting {
+                cwd: event.cwd,
+                event: event.event,
+                message: event.message,
+            })
+            .collect();
 
-    Ok(crate::dto::AgentAttention {
-        installed: crate::agent::hooks::is_installed(&claude_home, &script),
-        waiting,
-    })
+    let installed = crate::agent::hooks::is_installed(&claude_home, &script);
+    // The file it read is named, and that is the point of logging this one at all: the hook script
+    // writes to a path it works out for ITSELF, so "the panel says nothing is waiting" and "the
+    // events are in a file over there" look identical from the outside (rule:logging).
+    tracing::debug!(
+        installed,
+        waiting = waiting.len(),
+        events = %events.display(),
+        claude_home = %claude_home.display(),
+        "agent_attention ok"
+    );
+
+    Ok(crate::dto::AgentAttention { installed, waiting })
 }
 
 /// Install the hook into this project's Claude home.

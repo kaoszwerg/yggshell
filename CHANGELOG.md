@@ -8,6 +8,65 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The interface painted the defaults first and jumped to your settings a moment later.** Settings
+  arrive over IPC, so the first frame had none: scale 1.0, font size 13, default theme — then the real
+  values, on every single launch. The last known settings are now read synchronously from
+  `localStorage` as the query's initial data, so the first frame is already right. `settings.json`
+  still wins: the cached copy is marked infinitely old, a real read is issued immediately, and the
+  cache decides what is on screen for one frame — never what is true.
+- **A release build could silently ship the DEV identity.** `tauri dev --config …` exports its merged
+  configuration as `TAURI_CONFIG`, and `tauri build` reads that variable too — so building in the same
+  shell you had just tested in compiled the release against the dev config. Nothing looked wrong: the
+  bundle's `Info.plist` still said `com.kaoszwerg.yggshell`, the app installed and started. But
+  `app_data_dir()` resolves from the compiled-in identifier, so it read and wrote
+  `…/com.kaoszwerg.yggshell.dev/` — different settings, themes, logs and agent events, while the real
+  ones sat untouched next to it. It cost an install and a round of "why is nothing showing up".
+  `app:build` now strips the variable, and `check-release-identity.mjs` refuses any release binary
+  carrying the dev identifier — the binary is the only artefact that betrays it.
+
+### Added
+
+- **An agent that wants something now marks its tab.** The hook signal knows which directory raised
+  it, which is the whole reason it beats the terminal bell — but it was only ever rendered inside the
+  Agent tool, so seeing it required already having that panel open and looking at it. It now rings the
+  tab's own mark, at the shell root, so it reaches you while you are working somewhere else. It reuses
+  the bell's mark rather than adding a second one: that mark already skips the tab in front, already
+  clears on a visit, and is already counted in the status bar.
+
+### Changed
+
+- **The attention list is a state, not a log.** It showed every event ever recorded until somebody
+  pressed "clear" — including a `Stop` for every finished turn, which is not a request for anything.
+  It now reports only an agent that is actually asking, and only its newest word per directory: when
+  you answer, the agent runs on, its next event replaces the question, and the entry disappears by
+  itself. Nothing to manage, and nothing stale.
+
+### Fixed
+
+- **The attention signal switched itself off in the situations it exists for.** Three independent
+  causes, each enough on its own: it was mounted inside a panel that only rendered when the front tab
+  had a recognised session (an unmounted query polls nothing); it was `enabled` only once that tab had
+  reported a directory (a question about *other* tabs, gated on this one); and its polling stopped
+  whenever the window was hidden, which is exactly when an agent waiting for you matters. The events
+  had been piling up in the file correctly the whole time.
+- **The Agent tool lost the live session as soon as you worked.** Every slash command mints its own
+  transcript — ~5 kB, no turns — and each one is newer than the session actually running. The search
+  looked at a fixed six candidates, so a few minutes of work pushed the real session out of view and
+  the panel said "no agent has run here". Measured while fixing it: five of the six newest files were
+  exactly that. The search is now bounded by how much it reads, not by how many files it opens, so a
+  flood of cheap files cannot crowd out the answer.
+- **The window frame repainted the entire window sixty times a second, for ever.** The rotating
+  chamfer animates a custom property feeding a `conic-gradient` — a paint, not a composite — across an
+  element whose box is the whole window, to show a 1.5 px border. Measured on an idle build: 27.7 % of
+  a core in the WebKit GPU process, against 3.0 % with the same animation stepped; every tab switch
+  and sidebar update was competing with it for frame time. Same motion, a twelfth of the repaints.
+- **The events file was read whole on every poll.** It is append-only and nobody prunes it, so the
+  cost grew with how much the app had been used — a feature that gets slower the more useful it is.
+  Only the tail is read now, at a fixed cost.
+- **`agent_attention` logged nothing.** It named neither the file it read nor what it found, so "the
+  panel says nothing is waiting" and "the events are in a file over there" were indistinguishable from
+  the outside — which is precisely what made this take an afternoon to pin down (rule:logging).
+
 - **The Agent tool noticed a running agent only sometimes.** A project holds one transcript per
   session and plenty contain no turn at all — a one-shot `claude -p`, an abandoned session, a
   `/usage` query. The newest *file* was therefore often not the newest *session*: measured here, a

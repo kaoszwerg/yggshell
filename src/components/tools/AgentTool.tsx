@@ -36,9 +36,15 @@ export function AgentTool() {
   if (session === null) {
     // Not a failure: most tabs have never had an agent in them — and this is precisely the moment
     // somebody wants to decide which account this project should use, so the panel comes along.
+    //
+    // **Attention comes along too, and that is the point of it.** A hook event carries the directory
+    // it came from, which is what lets it speak about a tab you are NOT looking at. Showing it only
+    // beside a session hid exactly the case the feature was built for — reported as "it has never
+    // pointed anything out to me", while the events had been piling up in the file all along.
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <Empty>{t("agent.none")}</Empty>
+        <AttentionPanel />
         <EnvironmentPanel />
       </div>
     );

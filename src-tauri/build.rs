@@ -1,8 +1,31 @@
 use std::process::Command;
 
 fn main() {
+    declare_config_env_as_a_build_input();
     embed_build_metadata();
     tauri_build::build()
+}
+
+/// Make `TAURI_CONFIG` a build input, because it decides **which app this binary is**.
+///
+/// `tauri dev --config src-tauri/tauri.dev.conf.json` exports its merged configuration into the
+/// environment as `TAURI_CONFIG`, and `tauri build` reads the same variable — so a release built in
+/// the shell you had just tested in is compiled against the *dev* configuration. The bundle still
+/// looks right from the outside; what changes is `app_data_dir()`, which resolves from the
+/// compiled-in identifier. The app then reads and writes the dev directory: a different settings
+/// file, different themes, different logs, and not one error anywhere. It cost an install and a
+/// diagnosis session.
+///
+/// **Cargo cannot see that on its own.** An environment variable is not a file, so without this line
+/// it happily reuses the poisoned artefact even after the variable is gone — which is exactly what
+/// happened on the first attempt to fix this: the build command was corrected, and the binary did not
+/// change. Declaring it means unsetting the variable actually rebuilds.
+///
+/// Belt and braces, deliberately: `npm run app:build` strips the variable, this makes a change to it
+/// invalidate the build, and `scripts/project/check-release-identity.mjs` refuses a release binary
+/// that still carries the dev identifier.
+fn declare_config_env_as_a_build_input() {
+    println!("cargo:rerun-if-env-changed=TAURI_CONFIG");
 }
 
 /// Embed git commit + build date as compile-time env vars so every build is traceable to a commit

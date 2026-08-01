@@ -114,6 +114,16 @@ later contradicted. The measurements are kept so the next agent does not pay for
 
 ## Traps this session paid for — do not re-learn them
 
+- **An animated custom property inside a `conic-gradient` is a PAINT across the element's whole box,
+  every frame, for ever.** `.window-frame` animated `--frame-angle` at `linear` over an element that
+  *is the whole window*, to show a 1.5 px border — the rest is covered by `.window-frame-inner` and
+  painted anyway. Measured on an idle release build, same instance, CSS swapped by hot-reload:
+  **27.7 % of a core in the WebKit GPU process vs 3.0 % with `steps(60)`**, `sample` showing
+  `CA::OGL::MetalContext::draw_elements` on top. It presented as *"tab switches feel sluggish"* —
+  every interaction was competing with a permanent full-window repaint, and nobody would look for it
+  in a stylesheet. **A decorative animation is a per-frame cost times the element's area; a 12 s
+  revolution does not need 60 fps.** If you raise the step count, re-measure — the cost is in the
+  paint, not in the animation.
 - **`.hud-panel` pins `position: relative`, and unlayered CSS beats every `@layer` — including
   Tailwind's utilities.** `className="hud-panel absolute inset-0"` therefore does NOT float: the
   element stays in the flow, `inset-0` does nothing, and an `overflow-auto` child never bounds. Use

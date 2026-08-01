@@ -48,6 +48,11 @@ describe("useApplyUiScale", () => {
     vi.mocked(api.getSettings).mockReset();
     getCurrentWebviewMock.mockReset();
     document.documentElement.style.removeProperty("zoom");
+    // `useSettings` seeds its first frame from the last known settings in localStorage, and writes
+    // there on every successful read (`hooks/useSettings`). Without clearing it, one test's settings
+    // become the next one's starting scale — which is the point of the cache in the app and a
+    // cross-test dependency here.
+    localStorage.removeItem("yggshell.settings.last-known");
   });
 
   it("applies the scale via the native webview zoom and clears a leftover CSS fallback", async () => {

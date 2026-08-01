@@ -14,6 +14,7 @@ import { useSyncLocale } from "./hooks/useT";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
+import { useAttentionBell } from "./hooks/useAttentionBell";
 import { useUiStore } from "./store/ui";
 
 /** Application shell: frameless HUD chrome with a sidebar and the routed views. Product views are
@@ -33,6 +34,9 @@ export default function App() {
   // Keyboard shortcuts, matched on the window so they work wherever the caret is.
   useShortcuts();
   useNativeContextMenuGuard();
+  // An agent asking for something marks ITS tab — at the shell root, because the whole point is that
+  // it reaches you while you are looking somewhere else entirely (`hooks/useAttentionBell`).
+  useAttentionBell();
 
   return (
     <div className="window-frame h-full">

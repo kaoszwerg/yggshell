@@ -23,8 +23,14 @@ export const environmentApi = {
   /** Install direnv through the machine's own package manager. Resolves to the manager used. */
   installDirenv: () => invoke<string>("install_direnv"),
 
-  /** Whether the agent hooks are in place, and which directories are asking for attention. */
-  attention: (cwd: string) => invoke<AgentAttention>("agent_attention", { cwd }),
+  /**
+   * Whether the agent hooks are in place, and which directories are asking for attention.
+   *
+   * `cwd` is optional and only selects which account's settings are checked for the hook. The
+   * events are machine-wide — they are about the tabs you are *not* looking at — so this must stay
+   * answerable before any tab has reported a directory.
+   */
+  attention: (cwd: string | null) => invoke<AgentAttention>("agent_attention", { cwd }),
 
   /**
    * Install the hook into this project's Claude account.

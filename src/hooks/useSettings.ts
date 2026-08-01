@@ -1,15 +1,58 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/commands";
+import type { SettingsDto } from "../bindings/SettingsDto";
 import type { TerminalProfile } from "../bindings/TerminalProfile";
 import type { TerminalTheme } from "../bindings/TerminalTheme";
 import type { TmuxMode } from "../bindings/TmuxMode";
 
-/** Read the persisted user settings (async/server state owned by TanStack Query, cached 60s). */
+/**
+ * Where the last known settings are kept so the FIRST frame can already be right.
+ *
+ * Not a second source of truth — see `useSettings`. `localStorage` because it is the only store the
+ * webview can read synchronously, before anything has been painted.
+ */
+const LAST_KNOWN = "yggshell.settings.last-known";
+
+/** The last settings this app saw, or `undefined` on a first run. Never throws. */
+function lastKnown(): SettingsDto | undefined {
+  try {
+    const raw = localStorage.getItem(LAST_KNOWN);
+    return raw === null ? undefined : (JSON.parse(raw) as SettingsDto);
+  } catch {
+    // Corrupt payload, private mode, quota — all of them mean "no head start", never a failure.
+    return undefined;
+  }
+}
+
+/**
+ * Read the persisted user settings (async/server state owned by TanStack Query, cached 60s).
+ *
+ * **The first frame is drawn with the last known values, not with the defaults.** Settings arrive
+ * over IPC, so for the first render there were none: the whole interface painted at scale 1.0, font
+ * size 13 and the default theme, then jumped to the real values a moment later — on every single
+ * launch. Reported as *"zuerst rendert die app mit den default, erst danach springt sie um"*, and it
+ * is the same reasoning that already drives the locale mirror (rule:i18n), applied once at the point
+ * every consumer goes through instead of once per setting.
+ *
+ * **The direction is never ambiguous: `settings.json` wins.** `initialDataUpdatedAt: 0` marks the
+ * cached copy as infinitely old, so a real read is issued immediately and overwrites it. The cache
+ * decides what is on screen for one frame; it never decides what is true.
+ */
 export function useSettings() {
   return useQuery({
     queryKey: ["settings"],
-    queryFn: api.getSettings,
+    queryFn: async () => {
+      const settings = await api.getSettings();
+      try {
+        localStorage.setItem(LAST_KNOWN, JSON.stringify(settings));
+      } catch {
+        // A head start next launch is a nicety; failing to store it must never fail the read.
+      }
+      return settings;
+    },
     staleTime: 60_000,
+    initialData: lastKnown,
+    initialDataUpdatedAt: 0,
   });
 }
 

@@ -157,13 +157,25 @@ pub struct AgentEvent {
     pub message: Option<String>,
 }
 
+/// How much of the end of the events file is read per poll.
+///
+/// **The file is append-only and nobody prunes it**, so its size is a function of how much the user
+/// has worked, without limit. Reading it whole every three seconds therefore gets slower for as long
+/// as the app is useful — the classic feature that degrades quietly. A tail costs the same on day one
+/// and in month six.
+///
+/// 64 kB is many hundreds of ordinary events and still comfortably holds the last handful even when
+/// a `Stop` line carries a long final message, which is what makes these lines large.
+const EVENTS_TAIL_BYTES: u64 = 64 * 1024;
+
 /// Read the events file, newest last.
 ///
-/// Bounded, and unparseable lines are skipped rather than fatal: this file is appended to by a shell
-/// script running in the user's sessions, and a half-written line must cost one event rather than
-/// the feature.
+/// Bounded twice over, and unparseable lines are skipped rather than fatal: this file is appended to
+/// by a shell script running in the user's sessions, and a half-written line must cost one event
+/// rather than the feature. The first line read is dropped when the file was longer than the tail —
+/// half a JSON object is not an object (`agent::read_tail`, same reasoning, same trap).
 pub fn read_events(path: &Path, keep: usize) -> Vec<AgentEvent> {
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Some(text) = super::read_tail(path, EVENTS_TAIL_BYTES) else {
         return Vec::new();
     };
     let mut events: Vec<AgentEvent> = text.lines().filter_map(parse_event).collect();
@@ -171,6 +183,33 @@ pub fn read_events(path: &Path, keep: usize) -> Vec<AgentEvent> {
         events.drain(..events.len() - keep);
     }
     events
+}
+
+/// What is asking for attention **right now** — the last word per directory, never the history.
+///
+/// **A queue of everything that ever happened is not an attention signal.** The file is append-only
+/// and keeps its contents until cleared, so reporting its contents meant reporting every turn that
+/// had ever ended, for ever, until the user pressed a button. Two things follow, and both were
+/// reported:
+///
+/// - **Only `Notification` can ask for something.** `Stop` fires at the end of every single turn; it
+///   says "finished", which is the opposite of "waiting for you".
+/// - **Answering makes it go away by itself.** When the user replies, the agent runs again and the
+///   next event for that directory is a `Stop` — so the newest event per directory is the whole
+///   state, and no "mark as seen" is needed. Clearing by hand stays possible; it is no longer the
+///   only way out.
+pub fn waiting_now(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
+    // Insertion order = file order = chronological (the script appends), so a later event for the
+    // same directory simply replaces the earlier one.
+    let mut latest: Vec<AgentEvent> = Vec::new();
+    for event in events {
+        match latest.iter_mut().find(|kept| kept.cwd == event.cwd) {
+            Some(kept) => *kept = event,
+            None => latest.push(event),
+        }
+    }
+    latest.retain(|event| event.event == "Notification");
+    latest
 }
 
 /// Parse one line of the events file.
@@ -353,5 +392,58 @@ mod tests {
     fn clearing_something_that_is_not_there_is_not_an_error() {
         let dir = tempfile::tempdir().expect("tempdir");
         assert!(clear(&dir.path().join("nothing.jsonl")).is_ok());
+    }
+
+    fn event(name: &str, cwd: &str) -> AgentEvent {
+        AgentEvent {
+            event: name.to_string(),
+            cwd: cwd.to_string(),
+            message: None,
+        }
+    }
+
+    #[test]
+    fn only_an_agent_that_wants_something_is_asking_for_attention() {
+        // `Stop` fires at the end of every turn. Reporting it as "waiting for you" lights the signal
+        // up permanently, and a signal that is always on has stopped being one.
+        let now = waiting_now(vec![event("Stop", "/a"), event("Notification", "/b")]);
+
+        assert_eq!(now.len(), 1);
+        assert_eq!(now[0].cwd, "/b");
+    }
+
+    #[test]
+    fn answering_clears_it_without_anybody_pressing_a_button() {
+        // The sequence a real session produces: it asks, the user replies, it runs again and ends the
+        // turn. The `Stop` is the proof that the question was answered — so the newest event per
+        // directory IS the state, and "mark as seen" is not something the user should have to do.
+        let now = waiting_now(vec![event("Notification", "/repo"), event("Stop", "/repo")]);
+
+        assert!(now.is_empty(), "a directory that carried on is not waiting");
+    }
+
+    #[test]
+    fn a_fresh_question_after_an_answer_asks_again() {
+        let now = waiting_now(vec![
+            event("Notification", "/repo"),
+            event("Stop", "/repo"),
+            event("Notification", "/repo"),
+        ]);
+
+        assert_eq!(now.len(), 1);
+    }
+
+    #[test]
+    fn each_directory_keeps_its_own_state() {
+        // Two tabs, two agents: one carried on, the other is still asking. Collapsing them would
+        // either hide a real question or invent one.
+        let now = waiting_now(vec![
+            event("Notification", "/a"),
+            event("Notification", "/b"),
+            event("Stop", "/a"),
+        ]);
+
+        assert_eq!(now.len(), 1);
+        assert_eq!(now[0].cwd, "/b");
     }
 }
