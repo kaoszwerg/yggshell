@@ -2,6 +2,7 @@
 // ADR-CORE-005). Run `npm run gen:types` after touching Rust DTOs.
 import { invoke } from "@tauri-apps/api/core";
 import type { BuildInfo } from "../bindings/BuildInfo";
+import type { SystemLoad } from "../bindings/SystemLoad";
 import type { CliInstall } from "../bindings/CliInstall";
 import type { CrashReport } from "../bindings/CrashReport";
 import type { LogRecord } from "../bindings/LogRecord";
@@ -122,6 +123,26 @@ export const api = {
    * delete it, and a remembered answer would then be wrong.
    */
   cliStatus: () => invoke<CliInstall | null>("cli_status"),
+  /**
+   * The licence notices of everything bundled with the app.
+   *
+   * A licence obligation, not a courtesy: the ported colour schemes are MIT, which requires the
+   * copyright notice to travel with the copy. It is embedded in the binary, so it cannot go missing.
+   */
+  bundledCredits: () => invoke<string>("bundled_credits"),
+  /**
+   * What changed, release by release. Embedded in the binary, like the licence notices — a changelog
+   * in the repository answers the question for people reading the repository, which is not who is
+   * looking at the app wondering what the update did.
+   */
+  changelog: () => invoke<string>("changelog"),
+  /**
+   * How busy the machine is, or `null` where the platform has no load average.
+   *
+   * `null` is the honest answer on Windows, which has no such measurement — a zero there would read
+   * as a perfectly idle machine.
+   */
+  systemLoad: () => invoke<SystemLoad | null>("system_load"),
   /** Open an http(s) URL in the default browser (routed through the backend so it is logged). */
   openExternal: (url: string) => invoke<void>("open_external", { url }),
   /**

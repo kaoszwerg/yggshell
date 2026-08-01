@@ -175,6 +175,39 @@ pub fn update_settings(
     Ok(next)
 }
 
+/// The licence notices of everything bundled with the app.
+///
+/// **This is a licence obligation, not a courtesy.** Every ported colour scheme is MIT, and MIT
+/// requires the copyright notice to travel with the copy. The schemes shipped inside the app while
+/// `CREDITS.md` stayed in the repository — so the notice did not travel, and the requirement was not
+/// met by an installed build.
+///
+/// Embedded with `include_str!` rather than resolved as a resource at runtime: a notice that can go
+/// missing because a path was wrong is a notice that will go missing.
+#[tauri::command]
+pub fn bundled_credits() -> String {
+    include_str!("../../resources/themes/CREDITS.md").to_string()
+}
+
+/// How busy the machine is, for the status bar.
+///
+/// `None` where the platform has no load average — Windows does not have one, and a zero there would
+/// read as a perfectly idle machine (rule:cross-platform).
+#[tauri::command]
+pub fn system_load() -> Option<crate::sysload::SystemLoad> {
+    crate::sysload::read()
+}
+
+/// What changed, release by release.
+///
+/// **Embedded, like the licence notices.** A changelog that lives only in the repository answers the
+/// question for people who read the repository — which is not who is looking at an app wondering
+/// what the update they just installed actually did.
+#[tauri::command]
+pub fn changelog() -> String {
+    include_str!("../../../CHANGELOG.md").to_string()
+}
+
 /// Whether the command-line launcher is already installed, and where.
 ///
 /// Asked when the settings page opens, so the button can say what it will do rather than looking

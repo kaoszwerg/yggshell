@@ -57,6 +57,8 @@ export const en = {
   "statusbar.running": "running",
   "statusbar.done": "done",
   "statusbar.failed": "failed",
+  "statusbar.load":
+    "Load {value} of {cores} cores — {one}, {five}, {fifteen} over 1, 5 and 15 minutes",
   "statusbar.tmuxAttached": "Attached to the tmux session “{session}”",
 
   // ── The status bar editor ────────────────────────────────────────────────────────────────────
@@ -71,6 +73,9 @@ export const en = {
   "statusbar.item.cwd.hint": "Where the active terminal is.",
   "statusbar.item.tmux": "tmux session",
   "statusbar.item.tmux.hint": "The tmux session the active tab is attached to, if any.",
+  "statusbar.item.load": "System load",
+  "statusbar.item.load.hint":
+    "How busy the machine is — the load average over one minute, against the number of cores.",
   "statusbar.item.spacer": "Spacer",
   "statusbar.item.spacer.hint":
     "Flexible gap. Everything after it is pushed along — this is what does the aligning.",
@@ -252,6 +257,12 @@ export const en = {
   // ── About ────────────────────────────────────────────────────────────────────────────────────
   "about.title": "About",
   "about.close": "Close About",
+  "about.changelog": "What's new",
+  "about.changelogDescription": "Every change, newest first.",
+  "about.changelogFailed": "The changelog could not be read: {reason}",
+  "about.credits": "Licences",
+  "about.creditsDescription": "The colour schemes bundled with the app, and where they come from.",
+  "about.creditsFailed": "The licence notices could not be read: {reason}",
 
   // ── Terminal ─────────────────────────────────────────────────────────────────────────────────
   "terminal.newTab": "New terminal",

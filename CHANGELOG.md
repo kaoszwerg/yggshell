@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Colour schemes are shown as cards, not as a list of names.** "Ayu Mirage" and "Catppuccin Mocha"
+  tell you nothing about what they look like; each card is drawn in its own colours, with a
+  prompt-shaped line and the six colours a program is most likely to reach for. Selection is a ring
+  rather than a fill — a card that adopted the HUD's active colour would stop showing the scheme at
+  the moment you chose it.
+- **Alien Blood**, the terminal palette of the VS Code theme of the same name (MIT, © 2026 kozcode),
+  converted by a new `scripts/project/vscode-to-yggtheme.mjs` — which maps the theme's own
+  `terminal.*` colours and leaves anything it does not define to the HUD rather than inventing it.
+- **A system-load item for the status bar.** The one-minute load average, coloured by its ratio to
+  the core count — 8 is idle on a 16-core machine and desperate on a 4-core one — with all three
+  windows in the tooltip. Nothing at all on a platform with no load average, rather than a zero that
+  would read as an idle machine.
+- **The licence notices and the changelog are now in the app**, under Settings › About. Both are
+  embedded in the binary rather than read from a file that could go missing.
+
+### Fixed
+
+- **The bundled schemes shipped without their copyright notices**, which the MIT licences they carry
+  require to travel with the copy. `CREDITS.md` stayed in the repository while the schemes went into
+  the binary; it is now embedded and displayed.
+- **A leftover disk image no longer blocks the next build.** An interrupted `tauri build`, or a DMG
+  installed and never ejected, left a volume mounted and every later build failed with nothing but
+  `failed to run bundle_dmg.sh`. A pre-build step ejects **only** images from this checkout's build
+  output or an anonymous scratch volume — a DMG mounted from anywhere else is left alone.
+
 ### Fixed
 
 - **The tab strip no longer cuts a tab in half.** Tabs now shrink before the strip scrolls, down to a

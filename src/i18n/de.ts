@@ -52,6 +52,8 @@ export const de: Translations = {
   "statusbar.running": "läuft",
   "statusbar.done": "fertig",
   "statusbar.failed": "fehlgeschlagen",
+  "statusbar.load":
+    "Last {value} bei {cores} Kernen — {one}, {five}, {fifteen} über 1, 5 und 15 Minuten",
   "statusbar.tmuxAttached": "Verbunden mit der tmux-Session „{session}“",
 
   // ── The status bar editor ────────────────────────────────────────────────────────────────────
@@ -66,6 +68,9 @@ export const de: Translations = {
   "statusbar.item.cwd.hint": "Wo das aktive Terminal gerade steht.",
   "statusbar.item.tmux": "tmux-Session",
   "statusbar.item.tmux.hint": "Die tmux-Session des aktiven Tabs, sofern er in einer ist.",
+  "statusbar.item.load": "Systemlast",
+  "statusbar.item.load.hint":
+    "Wie ausgelastet der Rechner ist — die Last im Mittel über eine Minute, im Verhältnis zur Zahl der Kerne.",
   "statusbar.item.spacer": "Abstandhalter",
   "statusbar.item.spacer.hint":
     "Dehnbare Lücke. Alles dahinter wird nach hinten geschoben — das ist es, was ausrichtet.",
@@ -248,6 +253,12 @@ export const de: Translations = {
   // ── About ────────────────────────────────────────────────────────────────────────────────────
   "about.title": "Über",
   "about.close": "Über-Dialog schließen",
+  "about.changelog": "Neuerungen",
+  "about.changelogDescription": "Alle Änderungen, neueste zuerst.",
+  "about.changelogFailed": "Das Änderungsprotokoll konnte nicht gelesen werden: {reason}",
+  "about.credits": "Lizenzen",
+  "about.creditsDescription": "Die mitgelieferten Farbschemata und woher sie stammen.",
+  "about.creditsFailed": "Die Lizenzhinweise konnten nicht gelesen werden: {reason}",
 
   // ── Terminal ─────────────────────────────────────────────────────────────────────────────────
   "terminal.newTab": "Neues Terminal",

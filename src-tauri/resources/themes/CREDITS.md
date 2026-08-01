@@ -8,6 +8,12 @@ what is inside, which is why iTerm2 (and anything else that reads `.itermcolors`
 
 `Bifrost` and `Fimbulwinter` were made for this app.
 
+`Alien Blood` is the terminal palette of
+[`kaoszwerg/alien-blood-contrast`](https://github.com/kaoszwerg/alien-blood-contrast), a VS Code
+theme by the same author (MIT, © 2026 kozcode) — converted by
+`scripts/project/vscode-to-yggtheme.mjs`, which maps the theme's own `terminal.*` colours and leaves
+anything it does not define to the HUD rather than inventing it.
+
 **Yggdrasil is not here on purpose.** It is the app's *default* scheme and is built in rather than
 shipped as a file — a `.yggtheme` copy of it would be a second source for the same colours, and the
 two would drift the first time one was adjusted. Choosing it in Settings means no stored scheme at

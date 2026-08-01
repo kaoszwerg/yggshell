@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
 import { CliInstaller } from "../components/settings/CliInstaller";
+import { Changelog } from "../components/settings/Changelog";
+import { Credits } from "../components/settings/Credits";
 import { MouseReference, ShortcutEditor } from "../components/settings/ShortcutEditor";
 import { StatusBarEditor } from "../components/settings/StatusBarEditor";
 import { ThemeControls } from "../components/settings/ThemeControls";
@@ -91,6 +93,8 @@ export function SettingsView() {
           {section === "tools" ? <ToolsSection /> : null}
           {section === "window" ? <WindowSection /> : null}
           {section === "about" ? <AboutSection /> : null}
+          {section === "about" ? <ChangelogPanel /> : null}
+          {section === "about" ? <CreditsPanel /> : null}
         </div>
       </div>
     </div>
@@ -662,6 +666,35 @@ function AboutSection() {
         <p className="text-dim max-w-2xl text-sm leading-relaxed">{APP_DESCRIPTION}</p>
         <BuildIdentity className="border-elevated max-w-md border-t pt-3" />
       </div>
+    </HudPanel>
+  );
+}
+
+/** What changed, beside the version number the user can see right above it. */
+function ChangelogPanel() {
+  const t = useT();
+  return (
+    <HudPanel
+      accent="cyan"
+      label={t("about.changelog")}
+      description={t("about.changelogDescription")}
+    >
+      <Changelog />
+    </HudPanel>
+  );
+}
+
+/**
+ * The licences of what ships inside the app.
+ *
+ * Its own panel rather than a line in About: MIT requires the notice to travel with the copy, and a
+ * notice folded into a paragraph about the app is one nobody reads.
+ */
+function CreditsPanel() {
+  const t = useT();
+  return (
+    <HudPanel accent="green" label={t("about.credits")} description={t("about.creditsDescription")}>
+      <Credits />
     </HudPanel>
   );
 }

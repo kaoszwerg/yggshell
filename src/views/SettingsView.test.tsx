@@ -516,4 +516,15 @@ describe("SettingsView", () => {
       expect(panel.querySelector("img")).not.toBeNull();
     });
   });
+
+  // MIT requires the copyright notice to travel with the copy. The colour schemes shipped inside the
+  // binary while CREDITS.md stayed in the repository — a file nobody who installs the app can read
+  // does not satisfy that.
+  it("puts the licence notices where a user can actually find them", () => {
+    mockSettings();
+    render(<SettingsView />);
+    fireEvent.click(screen.getByRole("tab", { name: "About" }));
+
+    expect(screen.getByRole("group", { name: "Licences" })).toBeInTheDocument();
+  });
 });

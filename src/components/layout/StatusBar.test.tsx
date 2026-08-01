@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { StatusBar } from "./StatusBar";
-import { formatElapsed, shortPath } from "../../lib/statusFormat";
+import { formatElapsed, formatLoad, loadPressure, shortPath } from "../../lib/statusFormat";
 import { APP_NAME } from "../../lib/app";
 import { useUiStore } from "../../store/ui";
 import { useTerminalStore } from "../../store/terminal";
@@ -13,6 +13,7 @@ import type { BuildInfo } from "../../bindings/BuildInfo";
 vi.mock("../../api/commands", () => ({
   api: {
     buildInfo: vi.fn(),
+    systemLoad: vi.fn(),
   },
 }));
 
@@ -42,6 +43,7 @@ describe("StatusBar", () => {
     useTerminalStore.setState({ panes: [], activeKey: null });
     vi.mocked(api.buildInfo).mockReset();
     vi.mocked(api.buildInfo).mockResolvedValue(build);
+    vi.mocked(api.systemLoad).mockReset().mockResolvedValue(null);
   });
 
   it("opens the About dialog when the build identity is clicked", async () => {
@@ -159,5 +161,59 @@ describe("formatting", () => {
     expect(shortPath("/home/s/git/yggshell")).toBe("…/git/yggshell");
     expect(shortPath("/home/s")).toBe("/home/s");
     expect(shortPath("/home/steve/x", "/home/steve")).toBe("~/x");
+  });
+});
+
+describe("formatting the system load", () => {
+  it("shortens it to one decimal, which is all a strip this size can use", () => {
+    expect(formatLoad(1.42)).toBe("1.4");
+    expect(formatLoad(0)).toBe("0.0");
+    expect(formatLoad(12.98)).toBe("13.0");
+  });
+
+  it("judges load against the number of cores, not on its own", () => {
+    // 8 is idle on a 16-core machine and desperate on a 4-core one. Without the division the colour
+    // would say something different on every machine.
+    expect(loadPressure(8, 16)).toBe("calm");
+    expect(loadPressure(8, 4)).toBe("saturated");
+    expect(loadPressure(10, 16)).toBe("busy");
+  });
+
+  it("survives a core count of zero rather than dividing by it", () => {
+    expect(loadPressure(1, 0)).toBe("saturated");
+  });
+});
+
+describe("the system load item", () => {
+  it("shows the one-minute load when the platform has one", async () => {
+    vi.mocked(api.systemLoad).mockResolvedValue({ one: 2.4, five: 1.9, fifteen: 1.2, cores: 10 });
+    useUiStore.setState({ statusLayout: [makeItem("load")] });
+    renderStatusBar();
+
+    expect(await screen.findByText("2.4")).toBeInTheDocument();
+  });
+
+  it("shows nothing at all where the platform has no load average", async () => {
+    // Windows has none — not a smaller number, none. A zero there would read as an idle machine.
+    vi.mocked(api.systemLoad).mockResolvedValue(null);
+    useUiStore.setState({ statusLayout: [makeItem("load")] });
+    const { container } = renderStatusBar();
+
+    await waitFor(() => expect(api.systemLoad).toHaveBeenCalled());
+    expect(container.textContent?.trim()).toBe("");
+  });
+
+  it("colours the number by the ratio, not by the raw figure", async () => {
+    // 8 on 16 cores is calm; the same 8 on 4 cores is not. Colouring by the bare number would say
+    // something different on every machine.
+    vi.mocked(api.systemLoad).mockResolvedValue({ one: 8, five: 8, fifteen: 8, cores: 16 });
+    useUiStore.setState({ statusLayout: [makeItem("load")] });
+    const { unmount } = renderStatusBar();
+    expect((await screen.findByText("8.0")).className).toContain("text-fg");
+    unmount();
+
+    vi.mocked(api.systemLoad).mockResolvedValue({ one: 8, five: 8, fifteen: 8, cores: 4 });
+    renderStatusBar();
+    expect((await screen.findByText("8.0")).className).toContain("text-danger");
   });
 });

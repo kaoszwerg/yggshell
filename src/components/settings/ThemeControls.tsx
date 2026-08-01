@@ -3,9 +3,10 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Palette, Trash2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import { ColorField } from "../ui/ColorField";
+import { PreviewCard } from "../ui/PreviewCard";
 import { IconButton } from "../ui/IconButton";
 import { TextField } from "../ui/TextField";
-import { HUD_TERMINAL_THEME, resolveTheme } from "../../lib/terminalTheme";
+import { BUILTIN_THEME_NAME, HUD_TERMINAL_THEME, resolveTheme } from "../../lib/terminalTheme";
 import { useT } from "../../hooks/useT";
 import {
   useDeleteTerminalTheme,
@@ -139,23 +140,21 @@ export function ThemeControls() {
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5" role="group" aria-label={t("scheme.terminal")}>
         <span className="text-dim text-xs">{t("scheme.label")}</span>
-        <div className="flex flex-wrap gap-1">
-          <Button
-            aria-pressed={chosen === ""}
-            active={chosen === ""}
-            onClick={() => update.mutate({ terminalTheme: "" })}
-          >
-            Yggdrasil
-          </Button>
+        {/* Cards, not names: the point of a scheme is how it looks, and eleven names make somebody
+            try each one in turn to find that out. Yggdrasil is a card too — it is a scheme like any
+            other here, even though choosing it means storing nothing. */}
+        <div className="flex flex-wrap gap-2">
+          <BuiltinCard
+            selected={chosen === ""}
+            onChoose={() => update.mutate({ terminalTheme: "" })}
+          />
           {(themes.data ?? []).map((theme) => (
-            <Button
+            <SchemeCard
               key={theme.id}
-              aria-pressed={chosen === theme.id}
-              active={chosen === theme.id}
-              onClick={() => update.mutate({ terminalTheme: theme.id })}
-            >
-              {theme.name}
-            </Button>
+              theme={theme}
+              selected={chosen === theme.id}
+              onChoose={() => update.mutate({ terminalTheme: theme.id })}
+            />
           ))}
         </div>
         <span className="text-dim text-xs">{t("scheme.appliesToAll")}</span>
@@ -258,23 +257,108 @@ function SchemeChoice({
     // scheme names side by side are ambiguous to anyone not looking at the headings.
     <div className="flex flex-col gap-1.5" role="group" aria-label={`${label} colour scheme`}>
       <span className="text-dim text-xs">{label}</span>
-      <div className="flex flex-wrap gap-1">
+      {/* Cards rather than a row of names: the point of a scheme is how it looks, and eleven names
+          make somebody try each one in turn to find that out. "Follow the settings" stays a plain
+          button — it has no colours of its own to show, and drawing it as a card would invent some. */}
+      <div className="flex flex-wrap gap-2">
         <Button aria-pressed={chosen === ""} active={chosen === ""} onClick={() => onChoose("")}>
           {followsLabel}
         </Button>
         {themes.map((theme) => (
-          <Button
+          <SchemeCard
             key={theme.id}
-            aria-pressed={chosen === theme.id}
-            active={chosen === theme.id}
-            onClick={() => onChoose(theme.id)}
-          >
-            {theme.name}
-          </Button>
+            theme={theme}
+            selected={chosen === theme.id}
+            onChoose={() => onChoose(theme.id)}
+          />
         ))}
       </div>
       <span className="text-dim text-xs">{hint}</span>
     </div>
+  );
+}
+
+/**
+ * The built-in scheme, drawn the same way as the rest.
+ *
+ * It has no `TerminalTheme` of its own — choosing it means storing nothing at all — so it cannot go
+ * through `SchemeCard`. Rendered from the HUD's own palette, which is exactly what it is.
+ */
+function BuiltinCard({ selected, onChoose }: { selected: boolean; onChoose: () => void }) {
+  return (
+    <SchemeCardBody
+      name={BUILTIN_THEME_NAME}
+      colours={HUD_TERMINAL_THEME}
+      selected={selected}
+      onChoose={onChoose}
+    />
+  );
+}
+
+/**
+ * One scheme, drawn as what it looks like.
+ *
+ * The three things it shows answer the questions somebody choosing actually has: the background and
+ * foreground together (is it dark? is the text comfortable on it?), a line of prompt-shaped text
+ * (what will my shell look like?), and the colours a program is most likely to reach for.
+ */
+function SchemeCard({
+  theme,
+  selected,
+  onChoose,
+}: {
+  theme: TerminalTheme;
+  selected: boolean;
+  onChoose: () => void;
+}) {
+  return (
+    <SchemeCardBody
+      name={theme.name}
+      colours={resolveTheme(theme)}
+      selected={selected}
+      onChoose={onChoose}
+    />
+  );
+}
+
+/** The card itself, for a scheme that has colours — bundled, imported or built in. */
+function SchemeCardBody({
+  name,
+  colours: c,
+  selected,
+  onChoose,
+}: {
+  name: string;
+  colours: ReturnType<typeof resolveTheme>;
+  selected: boolean;
+  onChoose: () => void;
+}) {
+  const swatches = [c.red, c.green, c.yellow, c.blue, c.magenta, c.cyan];
+
+  return (
+    <PreviewCard
+      label={name}
+      selected={selected}
+      background={c.background}
+      onChoose={onChoose}
+      className="w-40"
+    >
+      <span className="truncate font-mono text-[11px]" style={{ color: c.foreground }}>
+        {name}
+      </span>
+      {/* Prompt-shaped, because that is what the user will spend the day looking at. The command is
+          `<code>`: it is what somebody TYPES, identical in every language, and translating it in a
+          preview would misrepresent what their terminal is going to look like (rule:i18n). */}
+      <code className="truncate font-mono text-[10px]">
+        <span style={{ color: c.green }}>~/src</span> <span style={{ color: c.cyan }}>❯</span>{" "}
+        <span style={{ color: c.foreground }}>git status</span>
+      </code>
+      <span className="flex gap-0.5" aria-hidden>
+        {swatches.map((colour, at) => (
+          <span key={at} className="h-2.5 flex-1" style={{ backgroundColor: colour }} />
+        ))}
+      </span>
+    </PreviewCard>
   );
 }
 

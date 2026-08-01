@@ -37,3 +37,27 @@ export function shortPath(path: string, home?: string): string {
   if (parts.length <= 2) return withHome;
   return `…/${parts.slice(-2).join("/")}`;
 }
+
+/**
+ * A load average as one short number: `1.4`.
+ *
+ * Two decimals is what `uptime` prints and one digit too many for a strip this size — the difference
+ * between 1.42 and 1.43 is noise, and the difference between 1.4 and 14 is the whole point.
+ */
+export function formatLoad(value: number): string {
+  return value.toFixed(1);
+}
+
+/**
+ * How hard the machine is working, as a fraction of what it can do.
+ *
+ * **Divided by the core count**, because a raw load average is meaningless without it: 8 is idle on a
+ * 16-core machine and desperate on a 4-core one. That ratio is what decides the colour, so the
+ * display says the same thing on every machine.
+ */
+export function loadPressure(one: number, cores: number): "calm" | "busy" | "saturated" {
+  const ratio = one / Math.max(1, cores);
+  if (ratio >= 1) return "saturated";
+  if (ratio >= 0.6) return "busy";
+  return "calm";
+}

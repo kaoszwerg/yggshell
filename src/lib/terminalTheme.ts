@@ -138,6 +138,14 @@ export function resolveTheme(theme: TerminalTheme | null | undefined): XtermThem
  */
 export const BUILTIN_THEME_ID = "yggdrasil";
 
+/**
+ * What the built-in scheme is called on screen.
+ *
+ * One constant, because it is written in the settings card and in the tab's right-click menu, and a
+ * product name spelled two ways in one app is the kind of thing nobody notices until a screenshot.
+ */
+export const BUILTIN_THEME_NAME = "Yggdrasil";
+
 /** The scheme a settings id names, or `null` for the built-in one. */
 export function themeById(
   themes: readonly TerminalTheme[] | undefined,

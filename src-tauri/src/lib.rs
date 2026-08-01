@@ -16,6 +16,7 @@ pub mod profile;
 pub mod services;
 pub mod settings;
 pub mod state;
+pub mod sysload;
 pub mod terminal;
 pub mod theme;
 pub mod tray;
@@ -66,6 +67,9 @@ pub fn run() {
             commands::pending_launches,
             commands::install_cli,
             commands::cli_status,
+            commands::bundled_credits,
+            commands::changelog,
+            commands::system_load,
             commands::list_terminal_themes,
             commands::import_terminal_theme,
             commands::save_terminal_theme,

@@ -10,16 +10,17 @@
  * Showing "—" for each of those would fill the strip with absences.
  */
 import { useEffect, useState } from "react";
-import { GitBranch, Terminal as TerminalIcon, Folder, Layers } from "lucide-react";
+import { Activity, GitBranch, Terminal as TerminalIcon, Folder, Layers } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Tooltip } from "../ui/Tooltip";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
 import { useGitSnapshot } from "../../hooks/useGitSnapshot";
+import { useSystemLoad } from "../../hooks/useSystemLoad";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { useT } from "../../hooks/useT";
 import { APP_NAME } from "../../lib/app";
-import { formatElapsed, shortPath } from "../../lib/statusFormat";
+import { formatElapsed, formatLoad, loadPressure, shortPath } from "../../lib/statusFormat";
 import type { StatusItemId } from "../../lib/statusBar";
 
 /** How often a running command's elapsed time is redrawn. */
@@ -169,6 +170,43 @@ function TmuxItem() {
 }
 
 /**
+ * How busy the machine is.
+ *
+ * Shown as the one-minute load and, in the tooltip, all three windows with the core count — because
+ * the bare number means nothing without it. The colour comes from the RATIO, so "busy" means the
+ * same thing on a laptop and on a build machine.
+ *
+ * Renders nothing where the platform has no load average. Windows has none — not a smaller number,
+ * none — and a zero there would read as a perfectly idle machine.
+ */
+function LoadItem() {
+  const t = useT();
+  const { data } = useSystemLoad();
+  if (!data) return null;
+
+  const pressure = loadPressure(data.one, data.cores);
+  const colour =
+    pressure === "saturated" ? "text-danger" : pressure === "busy" ? "text-gold" : "text-fg";
+
+  return (
+    <Tooltip
+      content={t("statusbar.load", {
+        value: formatLoad(data.one),
+        cores: data.cores,
+        one: formatLoad(data.one),
+        five: formatLoad(data.five),
+        fifteen: formatLoad(data.fifteen),
+      })}
+    >
+      <span className="flex items-center gap-1.5">
+        <Activity size={11} strokeWidth={2} className="text-dim shrink-0" aria-hidden />
+        <span className={colour}>{formatLoad(data.one)}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
  * One item of the bar.
  *
  * Spacer and separator are drawn by the bar itself, not here: a spacer is a flex property of the
@@ -187,6 +225,8 @@ export function StatusItemView({ id }: { id: StatusItemId }) {
       return <CwdItem />;
     case "tmux":
       return <TmuxItem />;
+    case "load":
+      return <LoadItem />;
     default:
       return null;
   }
@@ -238,6 +278,13 @@ export function StatusItemSample({ id }: { id: StatusItemId }) {
         <span className="flex items-center gap-1.5">
           <Layers size={11} strokeWidth={2} className="text-green shrink-0" aria-hidden />
           <span className="text-fg">work</span>
+        </span>
+      );
+    case "load":
+      return (
+        <span className="flex items-center gap-1.5">
+          <Activity size={11} strokeWidth={2} className="text-dim shrink-0" aria-hidden />
+          <span className="text-fg">1.4</span>
         </span>
       );
     default:

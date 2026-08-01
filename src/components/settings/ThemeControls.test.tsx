@@ -229,3 +229,31 @@ describe("ThemeControls", () => {
     expect(update).toHaveBeenCalledWith({ commitTheme: "nord" });
   });
 });
+
+// A name is not a preview: "Ayu Mirage" and "Catppuccin Mocha" tell somebody choosing between eleven
+// schemes almost nothing, and a list of names makes them try each one in turn to find out.
+describe("choosing a scheme by what it looks like", () => {
+  it("draws each scheme in its own colours", () => {
+    render(<ThemeControls />);
+
+    const card = terminalGroup().getByRole("button", { name: "Nord" });
+    expect(card?.getAttribute("style")).toContain("background-color");
+  });
+
+  it("keeps the scheme visible when it is the selected one", () => {
+    // A card that adopted the HUD's active fill would stop showing the thing it previews at the very
+    // moment it is chosen — so selection is a ring, not a fill.
+    render(<ThemeControls />);
+    const card = terminalGroup().getByRole("button", { name: "Nord" });
+
+    fireEvent.click(card as HTMLElement);
+    const after = terminalGroup().getByRole("button", { name: "Nord" });
+    expect(after?.className).toContain("ring");
+    expect(after?.getAttribute("style")).toContain("background-color");
+  });
+
+  it("names each card, since its contents are a picture", () => {
+    render(<ThemeControls />);
+    expect(terminalGroup().getByRole("button", { name: "Nord" })).toBeTruthy();
+  });
+});
