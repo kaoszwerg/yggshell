@@ -8,6 +8,27 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A tab restored after a crash now returns to its own tmux session, by name.** tmux's sessions
+  survive the app dying — that part never depended on us — but getting *back* to them did, and the
+  wiring was missing. The tab persisted the session it was in, with a comment saying it did so "so a
+  restart can return to it", and `terminal_open` had no parameter to carry it. The backend re-derived
+  the name by **counting**: tab 1 → `yggshell`, tab 2 → `yggshell-2`, and so on.
+
+  Counting is not identity. Close one tab before the crash and the numbering has shifted — the restored
+  tab attaches to a session that belonged to a different tab, while the one holding the build runs on
+  with nothing in the interface pointing at it. `terminal_open` now takes the remembered name and uses
+  it when it is free.
+
+  **It is a restore, never a choice.** `tmux::in_series` accepts a name only if it belongs to the series
+  the *settings* define (`base`, `base-2`, …), so the webview can hand back a name this backend minted
+  for it and nothing else — recorded in ADR-PROJ-001 §5, and pinned by a test that walks a list of
+  strangers (`someone-else`, `work:1`, `workshop`, `work-2x`) and asserts none of them is attachable.
+
+  Every escape hatch is unchanged and tested as such: tmux off, no tmux on `PATH`, an unusable
+  configured name and a detach all still produce a plain shell, whatever a tab remembers. A remembered
+  session another tab already shows is not joined twice, and a tab asking for a *new* session (a detach)
+  is not handed the old name back.
+
 - **The window frame is now composited instead of repainted, and it is smooth again.** Ours already
   cut the cost — `steps(60)` measured at **+0.1 points** over an animation-off control, down from
   **+4.4 points** at `linear` — but it paid for it with the animation: five full-window repaints per

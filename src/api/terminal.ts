@@ -41,6 +41,15 @@ export const terminalApi = {
      * just left. A switch, not a program: it selects between things the backend already decides.
      */
     plain?: boolean;
+    /**
+     * The tmux session a RESTORED tab was in when the app last stopped.
+     *
+     * A restore, not a choice — the backend refuses any name outside the series the settings define
+     * (`tmux::in_series`), so this can only hand back a name the backend itself minted for this tab.
+     * Without it a tab returning after a crash is numbered by position rather than identity, and
+     * lands in the wrong session as soon as the tab count has changed (ADR-PROJ-001 §5).
+     */
+    tmuxSession?: string;
     onOutput: (bytes: Uint8Array) => void;
   }): Promise<TerminalOpened> => {
     const channel = new Channel<ArrayBuffer>();
@@ -52,6 +61,7 @@ export const terminalApi = {
       cwd: opts.cwd ?? null,
       profile: opts.profile ?? null,
       plain: opts.plain ?? false,
+      tmuxSession: opts.tmuxSession ?? null,
     });
   },
 

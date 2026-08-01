@@ -138,15 +138,28 @@ pub struct Open<'a> {
     /// Start a plain shell whatever the tmux setting says. Used when a tab drops out of tmux: a
     /// detach means "put me back in a terminal", not "close the window".
     pub plain: bool,
+    /// The tmux session a **restored** tab was in when the app last stopped.
+    ///
+    /// The one thing that makes tmux's survival reachable rather than merely true: the sessions live
+    /// through a crash on their own, but a tab that returns only *numbered* can land in a different
+    /// one and leave the session holding the build orphaned. Constrained to the configured series
+    /// before it is used — the caller restores a name, it does not choose one ([`tmux::launch`]).
+    pub tmux_session: Option<String>,
 }
 
 impl TerminalRegistry {
     /// Start a session and stream its output into `output`.
     ///
-    /// `cwd` is the only thing the caller may influence, and it is validated before it is used.
-    /// Everything about *what runs* — the shell, whether tmux wraps it, which session — comes from
-    /// the persisted settings, never from the call: the webview may say that a terminal should start
-    /// and where, never what it should be (ADR-PROJ-001 §5).
+    /// `cwd` is the only thing the caller may influence freely, and it is validated before it is
+    /// used. Everything about *what runs* — the shell, whether tmux wraps it — comes from the
+    /// persisted settings, never from the call: the webview may say that a terminal should start and
+    /// where, never what it should be (ADR-PROJ-001 §5).
+    ///
+    /// `tmux_session` is the one narrow exception, and it is a **restore, not a choice**: it may only
+    /// name a session in the series the settings define, so the caller can hand back a name this
+    /// backend minted for it and nothing else. Without it a tab restored after a crash is numbered by
+    /// position rather than identity, and lands in the wrong session as soon as the tab count changed
+    /// (`tmux::in_series`).
     pub fn open(
         &self,
         app: AppHandle,
@@ -159,6 +172,7 @@ impl TerminalRegistry {
             settings,
             profile,
             plain,
+            tmux_session,
         } = request;
         // Both kinds of starting directory are PREFERENCES, and a stale one is never a reason to
         // refuse a terminal.
@@ -216,6 +230,7 @@ impl TerminalRegistry {
             &settings.tmux_session,
             &shell,
             &taken,
+            tmux_session.as_deref(),
         );
         let kind = launch.kind;
         let spawned = pty::spawn(pty::Spawn {

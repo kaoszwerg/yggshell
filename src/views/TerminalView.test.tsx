@@ -488,6 +488,56 @@ describe("TerminalView", () => {
 
       expect(vi.mocked(terminalApi.open).mock.calls.at(-1)?.[0]?.cwd).toBeUndefined();
     });
+
+    it("returns to the tmux session it was in, by name", async () => {
+      // The reason tmux is here at all. Its sessions outlive a crash on their own — but a tab that
+      // comes back merely NUMBERED lands wherever its position puts it, and the backend numbers by
+      // counting the tabs already open. Close one tab before the crash and this tab opens somebody
+      // else's session, while the one holding the build runs on with nothing pointing at it.
+      useTerminalStore.setState({
+        panes: [pane({ key: "term-0", tmuxSession: "yggshell-3" })],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(54, "yggshell-3");
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]).toMatchObject({
+        tmuxSession: "yggshell-3",
+      });
+    });
+
+    it("sends no session for a tab that has never been in tmux", async () => {
+      const opened = deferOpen(55);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      expect(vi.mocked(terminalApi.open).mock.calls[0]?.[0]?.tmuxSession).toBeUndefined();
+    });
+
+    it("does not send it again when the tab asks for a NEW session", async () => {
+      // A detach means "put me back in a terminal". Handing the old name back would return the user
+      // to the very work they just asked to leave — the same trap as the restored directory above.
+      useTerminalStore.setState({
+        panes: [pane({ key: "term-0", tmuxSession: "yggshell-3" })],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(56, "yggshell-3");
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      vi.mocked(terminalApi.open).mockResolvedValue({ id: 57, tmux_session: null });
+      await act(async () => {
+        useTerminalStore.getState().detachToShell("term-0");
+      });
+
+      expect(vi.mocked(terminalApi.open).mock.calls.at(-1)?.[0]?.tmuxSession).toBeUndefined();
+    });
   });
 
   // The line along the top edge — iTerm2's idea, our treatment. Its whole value is that it says

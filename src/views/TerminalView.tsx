@@ -173,6 +173,7 @@ export function TerminalView() {
           profileId={pane.profileId}
           themeId={pane.themeId}
           restoredCwd={pane.cwd}
+          restoredTmuxSession={pane.tmuxSession}
           plain={pane.plain}
           generation={pane.generation}
           active={pane.key === activeKey}
@@ -189,6 +190,7 @@ function Pane({
   profileId,
   themeId,
   restoredCwd,
+  restoredTmuxSession,
   plain,
   generation,
   active,
@@ -206,6 +208,8 @@ function Pane({
    * so anything read later is the CURRENT directory rather than the restored one.
    */
   restoredCwd: string | null;
+  /** The tmux session this tab was in when the app last stopped, if it was in one. */
+  restoredTmuxSession: string | null;
   /** Ignore the tmux setting for this tab — set once the user has detached out of it. */
   plain: boolean;
   /** Bumped to ask for a fresh session in this same tab. */
@@ -229,6 +233,20 @@ function Pane({
    * value — and a tab that detached out of tmux would jump back to where it started.
    */
   const restoreCwd = useRef<string | null>(restoredCwd);
+  /**
+   * The tmux session this tab was in when the app last stopped — used once, exactly like the
+   * directory above.
+   *
+   * **This is what makes tmux's survival reachable.** The sessions live through a crash on their own;
+   * that part never depended on us. But a tab that comes back merely *numbered* lands wherever its
+   * position puts it — close one tab before the crash and the numbering has shifted, so this tab
+   * opens someone else's session while the one holding the build runs on with nothing pointing at it.
+   *
+   * Used once, and deliberately not on a restart: bumping the generation means "give me a NEW
+   * session", and handing back the old name would return the user to the work they just asked to
+   * leave. The backend refuses anything outside the configured series regardless (`tmux::in_series`).
+   */
+  const restoreTmux = useRef<string | null>(restoredTmuxSession);
   const settings = useSettings();
   // UI scale and text size are separate questions: how big the chrome is, and how much output fits.
   // The WebView zoom multiplies EVERYTHING, so the emulator is handed a size divided by that zoom —
@@ -310,6 +328,10 @@ function Pane({
           cwd: restoreCwd.current ?? undefined,
           profile: profileId,
           plain,
+          // The tmux session this tab was in before the app stopped. A restore, never a choice: the
+          // backend accepts it only if it belongs to the series the settings define, and a session
+          // that has since gone is simply created again under the same name.
+          tmuxSession: restoreTmux.current ?? undefined,
           onOutput: (bytes) => handle.current?.write(bytes),
         })
         .then((opened) => {
@@ -344,7 +366,10 @@ function Pane({
   // Guarded on `sessionOpen` being TRUE rather than just running on its change: an effect runs on
   // mount too, and clearing it there threw the restored directory away before anything could use it.
   useEffect(() => {
-    if (sessionOpen) restoreCwd.current = null;
+    if (sessionOpen) {
+      restoreCwd.current = null;
+      restoreTmux.current = null;
+    }
   }, [sessionOpen]);
 
   // A bumped generation means "this tab wants a new session" — today, that the user detached out of

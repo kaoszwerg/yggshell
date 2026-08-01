@@ -42,10 +42,21 @@ pub fn terminal_open(
     cwd: Option<String>,
     profile: Option<String>,
     plain: Option<bool>,
+    tmux_session: Option<String>,
 ) -> Result<crate::dto::TerminalOpened> {
     let plain = plain.unwrap_or(false);
-    tracing::info!(rows, cols, ?cwd, ?profile, plain, "terminal_open");
-    // tmux and the shell are persisted PREFERENCES, not something the webview may choose per call.
+    tracing::info!(
+        rows,
+        cols,
+        ?cwd,
+        ?profile,
+        plain,
+        ?tmux_session,
+        "terminal_open"
+    );
+    // The shell and whether tmux wraps it are persisted PREFERENCES, not something the webview may
+    // choose per call. `tmux_session` is a restore of a name this backend handed out, not a choice —
+    // it is refused unless it belongs to the configured series.
     // Even the shell setting is only ever a pick from a list the backend produced, and the registry
     // checks it again before it spawns anything (ADR-PROJ-001 §5, `terminal::shells`).
     let settings = state.settings.get();
@@ -64,6 +75,10 @@ pub fn terminal_open(
             settings: &settings,
             profile: profile.as_ref(),
             plain,
+            // A restored tab asking for the session it was in before the app stopped. Checked against
+            // the configured series in `tmux::launch` — the webview restores a name, it cannot pick
+            // one (ADR-PROJ-001 §5).
+            tmux_session,
         },
     )?;
     tracing::debug!(session = opened.id, tmux = ?opened.tmux_session, "terminal_open ok");

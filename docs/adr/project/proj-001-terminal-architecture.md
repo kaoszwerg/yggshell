@@ -158,6 +158,19 @@ did not ask for.**
   frontend supplies.
 - A supplied working directory is canonicalised and must be an existing directory; anything else is
   rejected at the boundary ([rule:security](../../../.claude/rules/security.md)).
+- **A supplied tmux session name is a *restore*, never a choice.** A restored tab hands back the session
+  it was in before the app last stopped, and `tmux::in_series` accepts it only if it belongs to the
+  series the *settings* define (`base`, `base-2`, …) — so the frontend can name a session this backend
+  minted for it, and nothing else. This does not widen *what runs*: attaching joins a session the user
+  already started, and creating one runs the configured shell either way. What the check prevents is
+  widening *what can be joined* to every tmux session on the machine, including ones the user is running
+  for something entirely unrelated.
+
+  It exists because tmux's survival was true but unreachable. The sessions live through a crash on their
+  own; a tab that returned merely *numbered* — the backend counts the tabs already open — landed
+  wherever its position put it. Close one tab before the crash and the numbering has shifted: the tab
+  opens somebody else's session while the one holding the build runs on with nothing in the interface
+  pointing at it. Pinned by `a_remembered_name_outside_the_configured_series_is_refused`.
 - The child inherits a curated environment. No secret is ever placed in it.
 - Both PTY file descriptors are `CLOEXEC` (the crate does this — `unix.rs:64-65`), so nothing leaks into
   the child.
