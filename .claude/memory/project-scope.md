@@ -34,36 +34,46 @@ legal ways (rule:upstream-changes).
 **Never repoint the upstream at `althing`.** `saga-rust-template` is the only publisher of the app
 layer; pointing at the core would strip the entire desktop shell governance out of this repo.
 
-## What exists today (inherited from the shell, no product code)
+## What exists today
 
-- Frameless HUD window (custom title bar, sidebar rail, status bar, About dialog); an **optional**
-  system tray + close-to-tray behind the `minimize_to_tray` setting (default off); persisted geometry.
-- Typed IPC surface (`app_version`, `build_info`, `get_recent_logs`, `get_settings`, `update_settings`,
-  `open_external`) with `ts-rs`-generated TypeScript bindings.
-- Logging per ADR-APP-025: console + rotating JSON file + in-memory ring buffer streamed live into the
-  Logs view.
-- Settings persisted as an atomically written JSON document under the OS app-data dir.
-- Single-source app identity (`app.identity.json` → `identity:sync`, ADR-APP-031).
+The product is real and in daily use — the maintainer works in it while it is being built
+(rule:live-app). `PLAN.md` holds the phase-by-phase detail; this is the shape of it.
 
-## What is NOT built yet
+- **The terminal** (ADR-PROJ-001): real PTY per tab, `@xterm/xterm`, independent tabs in the title
+  bar, scrollback search, copy/paste on the platform's own keys, OSC 0/2 titles, OSC 7 working
+  directory — and inside tmux the directory comes from tmux itself, because the passthrough hook was
+  measured and does not work ([[open-work-backlog]]).
+- **Terminal configuration:** shell picked from a list the backend produced, iTerm2 `.itermcolors`
+  import by drag-and-drop, a 22-colour theme editor with live preview, and named profiles overriding
+  shell, directory and theme.
+- **The Git tool** — so far the only sidebar tool: branch with ahead/behind, staged and unstaged
+  changes, a drawn history of every local branch with lanes and merges, and a diff for any changed
+  file or whole commit.
+- **The shell around it:** frameless HUD window, configurable status bar (drag-and-drop editor,
+  spacers, system load, tmux session, working directory), rebindable keyboard shortcuts that can
+  never take a key the shell needs (rule:shortcuts), English/German throughout (rule:i18n), rendered
+  changelog and credits, crash handling on both runtimes (ADR-APP-032), logging into console + file +
+  a live Logs view.
+- **Getting in from outside:** `ygg` / `yggshell` on the command line, Finder's *Open With* and *New
+  Terminal Here* — all converging on one validated path (rule:launching).
+- **32 typed IPC commands**, `ts-rs`-generated bindings, settings as an atomically written JSON
+  document, single-source identity (`app.identity.json`).
 
-**Everything.** No PTY, no tabs, no theme parsing, no theme editor, no sidebar widgets — the product is
-entirely ahead. The agreed order is:
+## What is not built
 
-1. **The terminal component with multiple independent tabs**, at the full feature set of a real
-   terminal — explicitly *not* a reduced emulation.
-2. **The first sidebar widget: a Git integration** — the current branch visualised the way VS Code
-   does it, a list of changed files, and below it the branch history showing where each branch stands,
-   with the divergence between branches drawn out.
-
-Everything else (iTerm2 theme import, the theme editor, granular per-terminal config, further sidebar
-tools) is discussed before it is built.
+- **Further sidebar tools — PLAN.md Phase 5, deliberately undecided.** Candidates and the
+  measurements behind them are listed there; none is agreed. This is the part where the product is
+  still ahead of itself, and it is the part that decides whether the app achieves its purpose.
+- **Split panes and session persistence across restarts** — explicitly outside milestone 1.
+- **Windows and Linux behavioural verification** — deferred by the maintainer; only macOS is proven.
+- **Remote branches in the Git graph**, and a shell-integration hook for fish.
 
 **Why:** the shell is deliberately domain-free, so the product is defined on top of a running, governed
 base — and scope drift into half-features stays visible immediately.
 
-**How to apply:** before adding anything, check it against this file. If it is not the agreed milestone
-and not shell infrastructure, it is not in scope yet — ask (rule:clarify-and-plan). Governance for
-**this** project goes in the project line (`.claude/rules/project/`, `docs/adr/project/`); governance
-for every project on this stack belongs upstream in `saga-rust-template`, never here.
-See [[open-work-backlog]].
+**How to apply:** before adding anything, check it against this file. A **sidebar tool** is the
+product and needs a decision from the maintainer before it is built (`PLAN.md` Phase 5,
+rule:clarify-and-plan) — never guess one into existence. A **terminal** feature that nobody asked for
+is scope drift even when it is a good idea. Governance for **this** project goes in the project line
+(`.claude/rules/project/`, `docs/adr/project/`); governance for every project on this stack belongs
+upstream in `saga-rust-template`, never here. See [[open-work-backlog]].
