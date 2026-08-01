@@ -142,6 +142,58 @@ fn capture_blocking() -> HashMap<String, String> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Nothing outside this module may read `PATH` from the process.
+    ///
+    /// **The failure is invisible in development and total in a bundle.** `tauri dev` inherits the
+    /// shell's environment, so a caller using `std::env::var("PATH")` works perfectly on the machine
+    /// that wrote it; installed, the same code gets launchd's `/usr/bin:/bin:/usr/sbin:/sbin` and
+    /// concludes that Homebrew, mise and `~/.local/bin` do not exist. It has now cost two features —
+    /// the tmux integration, and the launcher panel telling a user their PATH did not contain a
+    /// directory that was first in it.
+    ///
+    /// A grep rather than a type, because the mistake is *reaching for the wrong function*, and no
+    /// signature can express that. It is cheap and it cannot be forgotten.
+    #[test]
+    fn only_this_module_reads_the_process_path() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut offenders = Vec::new();
+
+        fn walk(dir: &std::path::Path, offenders: &mut Vec<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, offenders);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    // This module is the one place allowed to — it is the fallback inside `path()`.
+                    if path.file_name().is_some_and(|n| n == "environment.rs") {
+                        continue;
+                    }
+                    // Comments are skipped: the very sentence explaining why not to do this
+                    // mentions the call, and a gate that flags its own documentation teaches the
+                    // next person to delete the documentation.
+                    let text = std::fs::read_to_string(&path).unwrap_or_default();
+                    let offends = text
+                        .lines()
+                        .filter(|line| !line.trim_start().starts_with("//"))
+                        .any(|line| line.contains("env::var(\"PATH\")"));
+                    if offends {
+                        offenders.push(path.display().to_string());
+                    }
+                }
+            }
+        }
+        walk(&src, &mut offenders);
+
+        assert!(
+            offenders.is_empty(),
+            "these read the process PATH instead of the login shell's \
+             (use terminal::environment::path()): {offenders:?}"
+        );
+    }
     use super::*;
 
     #[test]

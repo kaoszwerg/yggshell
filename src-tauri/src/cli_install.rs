@@ -255,6 +255,31 @@ mod tests {
     }
 
     #[test]
+    fn the_path_it_is_asked_about_is_the_one_it_answers_about() {
+        // The defect this pins, reported from the running app: the panel said "~/.local/bin is not
+        // on your PATH" about a directory that was FIRST in it. The lookup here was right; the
+        // caller handed it `std::env::var("PATH")` — the process's PATH, which on macOS is launchd's
+        // minimal one, not the login shell's. It never shows in `tauri dev`, because there the app
+        // DOES inherit the shell's environment. Callers now pass `terminal::environment::path()`.
+        let home = tempfile::tempdir().expect("tempdir");
+        let installed = install(SCRIPT, &only(home.path()), "").expect("install");
+
+        // The launchd-shaped PATH: none of the user's own entries.
+        let minimal = "/usr/bin:/bin:/usr/sbin:/sbin";
+        assert!(
+            !status(&only(home.path()), minimal).expect("found").on_path,
+            "a directory genuinely absent from the given PATH is absent"
+        );
+
+        // The login shell's, which has it.
+        let real = format!("{}:{minimal}", installed.directory);
+        assert!(
+            status(&only(home.path()), &real).expect("found").on_path,
+            "a directory present in the given PATH must be reported as present"
+        );
+    }
+
+    #[test]
     fn a_copy_the_user_put_somewhere_else_on_path_still_counts() {
         // Reporting "not installed" while `ygg` runs perfectly well would be worse than saying
         // nothing: the user would install a second copy over their own.

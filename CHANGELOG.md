@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **"That directory is not on your PATH" about a directory that was first in it.** The launcher panel
+  read the *process* `PATH`, which on macOS is the minimal one launchd hands a GUI app —
+  `~/.local/bin`, Homebrew and everything else a developer has only exist after a login shell has run.
+  It now asks the same module the terminal does. A test refuses any other file in the backend reading
+  `PATH` from the process, because this class of bug is invisible in `tauri dev` (where the app does
+  inherit the shell's environment) and total in an installed build.
+
 ### Added
 
 - **Keyboard shortcuts, and every one of them rebindable.** New/close tab, next/previous, jump to a

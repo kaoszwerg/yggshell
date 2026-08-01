@@ -185,7 +185,11 @@ pub fn cli_status(app: tauri::AppHandle) -> Result<Option<crate::cli_install::Cl
         .path()
         .home_dir()
         .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
-    let path_var = std::env::var("PATH").unwrap_or_default();
+    // The LOGIN shell's PATH, never this process's. A GUI app is started by launchd with a minimal
+    // one, so `~/.local/bin` — which the user has had in `.zprofile` for years — is invisible here,
+    // and the panel said "not on your PATH" about a directory that was first in it
+    // (`terminal::environment`, which exists for exactly this class of confusion).
+    let path_var = crate::terminal::environment::path().unwrap_or_default();
     let status =
         crate::cli_install::status(&crate::cli_install::default_candidates(&home), &path_var);
     tracing::debug!(installed = status.is_some(), "cli_status");
@@ -219,9 +223,10 @@ pub fn install_cli(app: tauri::AppHandle) -> Result<crate::cli_install::CliInsta
         .path()
         .home_dir()
         .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
-    // The PATH of the process, which on macOS is the login shell's — the app inherits it through the
-    // same mechanism that gives a terminal its environment.
-    let path_var = std::env::var("PATH").unwrap_or_default();
+    // The login shell's PATH — see `cli_status` above. This comment used to claim the process
+    // inherited it, which is exactly wrong on macOS: launchd hands a GUI app a minimal PATH, and the
+    // entries a developer actually has only exist after a login shell has run.
+    let path_var = crate::terminal::environment::path().unwrap_or_default();
 
     let result = crate::cli_install::install(
         &script,
