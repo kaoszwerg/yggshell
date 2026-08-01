@@ -475,6 +475,47 @@ change.
 
 ## Defects with a diagnosis, not yet closed
 
+- **Opening a NEW tab can land you in an old session, because nothing distinguishes "new" from
+  "recover".** Awaiting the maintainer's decision — 2026-08-01, raised by them.
+
+  `taken` is built from *this app's* open tabs (`terminal/mod.rs:203-209`) and `first_free` never asks
+  tmux; `has_session` is consulted only in `Attach` mode. So `AttachOrCreate` runs one path for two
+  different intentions, and the only thing that branches it is whether a name was remembered:
+
+  - a **restored** tab hands back its own name and attaches to its session — correct, that *is* recover;
+  - a **new** tab counts to the next name free **in the app**, and `new-session -A` then attaches if
+    tmux happens to hold it — which is recover behaviour wearing a new tab's clothes.
+
+  Close three tabs, press ⌘T tomorrow: `first_free` sees no tabs, picks `yggshell`, and you are inside
+  yesterday's session. For the FIRST tab this is documented intent (`tmux.rs:113` — "so a session the
+  user already has is the one they land in"); for every tab after it, it is a side effect of positional
+  naming that nobody decided.
+
+  Proposed, as one change, because the three pieces are the same question:
+  1. `first_free` also skips what **tmux** holds, so a new tab is genuinely new. **This costs the
+     documented first-tab behaviour — the maintainer's call, not an agent's.**
+  2. Attaching becomes its own action with a list of running sessions, instead of a side effect of ⌘T.
+     This also closes the gap that there is **no way back into tmux** today: only `detachToShell`
+     exists, and since `plain` now survives a restart (0.36.4) a detached tab stays plain until it is
+     closed.
+  3. `tmux: Option<TmuxMode>` on `TerminalProfile`, which is where a per-tab override belongs — the
+     profile already carries `shell`, `cwd` and `theme`, and its own doc comment already promises "its
+     tmux behaviour" without the field existing (`dto.rs:382-403`). A *global* third mode cannot express
+     "mixed": something has to choose per tab.
+
+     **And it needs NO "default profile" — asked and answered, 2026-08-01.** Settings already plays
+     that role by design, and `dto.rs:384-386` says so out loud: "there is no separate 'default profile'
+     document to keep in step (ADR-CORE-005)". A second document holding the same defaults is the
+     duplication that ADR forbids. The picker exists too — `TitleBar.tsx:98-102` offers "New Terminal"
+     (Settings) plus one entry per profile, via `openPane(profile.id)` — so a mixed workspace works
+     with no new mechanism, and works in EITHER direction: Settings `attach or create` + a "Plain
+     shell" profile, or Settings `Off` + a "tmux" profile.
+
+     The one real gap is smaller and has a different name: the **shortcut** ⌘T always opens the
+     Settings default (`useShortcuts.ts:76`); a profile is reachable only through the menu. The answer
+     to that is a shortcut per profile, or a Settings *pointer* at an existing profile — a reference,
+     not a second set of defaults.
+
 - **`zsh: locking failed for <appdata>/shell/.zsh_history: no such file or directory`** was seen once
   in a probe. macOS' `/etc/zshrc` sets `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` and runs *between*
   our generated `.zshenv` and `.zshrc`, which is why the repair line in `.zshrc` exists. Verified
