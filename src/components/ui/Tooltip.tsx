@@ -29,6 +29,15 @@ interface TriggerProps {
 /** How close to the window edge a tooltip may come. Matches the context menu's inset. */
 const EDGE = 8;
 
+/**
+ * How wide a bubble may get before it wraps.
+ *
+ * A line much longer than this stops being a hint and becomes a paragraph the eye has to track back
+ * across; a line much shorter turns every path into four lines. In a window narrower than this, the
+ * window wins — see `maxWidth` below.
+ */
+const MAX_WIDTH = 384;
+
 /** Where the trigger is, so the tooltip can be placed against it and then clamped. */
 interface Anchor {
   top: number;
@@ -49,6 +58,11 @@ interface Anchor {
  * trigger and hoping is what a tooltip usually does, and it is wrong precisely where tooltips are most
  * needed: on the icon buttons in the top-right corner, where the label ran off the edge of the window
  * and the last words simply could not be read.
+ *
+ * **Its content wraps, because the chamfer is a `clip-path`.** A clipped box does not merely hide an
+ * overflow, it slices it off — so a bubble that refused to wrap showed the working directory as
+ * `/Users/steve/git-projects/private/yggshe`, cut mid-word, with nothing to suggest text was missing.
+ * A tooltip that lies about its own content is worse than none. Nothing here may be `nowrap`.
  */
 export function Tooltip({ content, children }: TooltipProps) {
   const [open, setOpen] = useState(false);
@@ -130,8 +144,15 @@ export function Tooltip({ content, children }: TooltipProps) {
               ref={bubbleRef}
               role="tooltip"
               id={id}
-              className="hud-popover hud-clip-sm hud-accent-cyan text-fg pointer-events-none fixed z-[70] max-w-[240px] px-2 py-1 text-xs whitespace-nowrap"
-              style={{ top: pos.top, left: pos.left }}
+              className="hud-popover hud-clip-sm hud-accent-cyan text-fg pointer-events-none fixed z-[70] px-2 py-1 text-xs wrap-break-word"
+              style={{
+                top: pos.top,
+                left: pos.left,
+                // In JS, not in a class, for the same reason the position is: a `max-w-[…]` cannot
+                // see the window, and a bubble wider than the window cannot be clamped into it —
+                // it would simply be cut off at BOTH edges instead of one.
+                maxWidth: Math.min(MAX_WIDTH, window.innerWidth - EDGE * 2),
+              }}
             >
               {content}
             </div>,

@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A tooltip no longer cuts its own text off.** The working directory's showed
+  `/Users/steve/git-projects/private/yggshe` — sliced mid-word, with nothing on screen to suggest
+  anything was missing. The bubble's chamfer is a `clip-path`, which amputates an overflow rather
+  than hiding it, and the bubble refused to wrap. Its content wraps now, and its width is measured
+  against the window instead of fixed in a class, so a narrow window shortens the bubble rather than
+  the sentence.
 - **The status bar now shows a tmux session you started yourself.** It only ever knew about sessions
   the app opened, so somebody who typed `tmux` in the shell saw nothing — the item looked broken when
   it was merely uninformed. The session is found by terminal device: `tmux list-clients` reports the

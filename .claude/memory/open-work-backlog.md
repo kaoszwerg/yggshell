@@ -32,6 +32,15 @@ triggers:
     absolute,
     overlay,
     panel,
+    tooltip,
+    popover,
+    clip,
+    clip-path,
+    chamfer,
+    nowrap,
+    wrap,
+    truncate,
+    ellipsis,
     eslint,
     lint,
     gate,
@@ -113,6 +122,14 @@ later contradicted. The measurements are kept so the next agent does not pay for
   followed by a blank one.
 - **xterm.js `write()` is asynchronous.** A test that writes and immediately reads the buffer reads an
   empty one and passes for the wrong reason. Await the callback.
+- **A `hud-clip*` element does not hide an overflow — it AMPUTATES it.** `clip-path` cuts at the
+  polygon, with no ellipsis and no scrollbar, so nothing on screen says text is missing. The tooltip
+  carried `whitespace-nowrap` next to a `max-w-[240px]` and showed
+  `/Users/steve/git-projects/private/yggshe` — a control that lied about its own content. Anything
+  clipped **and** width-limited must be allowed to wrap (`wrap-break-word`). A `nowrap` element with
+  no width cap (a `Button`) is fine: it grows instead of overflowing. Pinned in `Tooltip.test.tsx`
+  (*"fitting its content"*); not lint-gated, because whether an element is width-limited depends on
+  its parent and the check would be guesswork.
 
 ## Things that are true and will bite you
 

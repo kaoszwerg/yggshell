@@ -66,6 +66,57 @@ describe("Tooltip", () => {
     expect(onFocus).toHaveBeenCalledOnce();
   });
 
+  // The bug this pins: the working directory's tooltip showed
+  // `/Users/steve/git-projects/private/yggshe` — the last two characters cut off mid-word.
+  describe("fitting its content", () => {
+    it("may not overflow, because the chamfer clips whatever does", () => {
+      // The three facts, together, ARE the bug: the bubble is clipped by a `clip-path`, so anything
+      // that leaves the box is not merely hidden but sliced off — and `whitespace-nowrap` guaranteed
+      // a long path would leave it. Asserted as classes because a wrap is a layout outcome and jsdom
+      // has no layout; what CAN be pinned is that the combination never returns.
+      render(
+        <Tooltip content="/Users/steve/git-projects/private/yggshell">
+          <button>cwd</button>
+        </Tooltip>,
+      );
+      fireEvent.focus(screen.getByRole("button", { name: "cwd" }));
+      const tip = screen.getByRole("tooltip");
+
+      expect(tip.className).toContain("hud-clip-sm");
+      expect(tip.className).not.toContain("whitespace-nowrap");
+      expect(tip.className).toContain("wrap-break-word");
+    });
+
+    it("is never wider than the window it has to fit in", () => {
+      const width = window.innerWidth;
+      try {
+        Object.defineProperty(window, "innerWidth", { value: 220, configurable: true });
+        render(
+          <Tooltip content="a label longer than a narrow window">
+            <button>t</button>
+          </Tooltip>,
+        );
+        fireEvent.focus(screen.getByRole("button", { name: "t" }));
+
+        // 220 − 2×8 of edge inset. A fixed `max-w` in a class cannot know this, which is why the
+        // measurement the clamp already does decides the width too.
+        expect(screen.getByRole("tooltip").style.maxWidth).toBe("204px");
+      } finally {
+        Object.defineProperty(window, "innerWidth", { value: width, configurable: true });
+      }
+    });
+
+    it("stays at a readable width in a window with room to spare", () => {
+      render(
+        <Tooltip content="short">
+          <button>t</button>
+        </Tooltip>,
+      );
+      fireEvent.focus(screen.getByRole("button", { name: "t" }));
+      expect(screen.getByRole("tooltip").style.maxWidth).toBe("384px");
+    });
+  });
+
   // The bug this pins: a tooltip on an icon button in the top-right corner ran off the edge of the
   // window, and its last words could not be read at all.
   describe("staying inside the window", () => {
