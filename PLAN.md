@@ -109,7 +109,71 @@ The column, the rail and the persistence are built (ADR-PROJ-001); a second tool
 content plus one entry in `TOOLS` and `ToolId`.
 
 - [ ] Remote branches in the Git graph (only local ones and HEAD are drawn today).
-- [ ] Whatever the harness workflow actually needs next — decided with the maintainer, not guessed.
+
+### The candidates, and what is already measured about them
+
+**Status: proposed, none agreed.** Recorded here so a compact or a fresh session does not lose them,
+and so nobody pays for the measurements twice. A tool is the *product* (mem:project-scope) — it is
+built when the maintainer says which one, not because it appears in this list.
+
+**The filter every candidate passed:** ADR-PROJ-001 §5 — no command line crosses the IPC boundary. A
+widget **observes**; it never runs anything. That rules out test-runner buttons and task launchers,
+and it is why everything below is a reader.
+
+- [ ] **Agent session.** What the harness in this tab is doing *right now*: last tool call, files
+      touched this session, context usage, model, elapsed time. The terminal shows a flow; this shows
+      the state, so coming back after twenty minutes does not mean scrolling back 300 lines.
+      **Measured:** the transcript is JSONL under `<claude-home>/projects/<slug>/<session>.jsonl`;
+      an `assistant` record carries `cwd`, `gitBranch`, `message.model`, `timestamp` and a full
+      `usage` block (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`). One
+      live session was 11 702 lines. **The format is internal and carries no compatibility promise** —
+      parse defensively, and let the widget disable *itself* on a shape it does not know, never the
+      app.
+- [ ] **Processes and ports.** Per tab, the process tree under the PTY and the ports being listened
+      on. Answers "what is still running in the background?" — the harness case being an agent that
+      started a dev server or a watcher nobody can see any more, where an orphaned port makes the
+      next run fail somewhere else entirely. **Groundwork exists:** `pty.rs` keeps the child pid, and
+      `terminal/attached.rs` already asks `ps`.
+- [ ] **Directory browser.** The tree of the active tab's working directory: folders and files,
+      expandable, with the file actions worth having — internal (open the diff, open the file) and
+      external (reveal in the file manager, copy the path). The only candidate that needs **no**
+      foreign data source at all, which makes it the cheapest to get right.
+- [ ] **Claude environments** — see the cross-cutting requirement below. Create and switch between
+      several Claude homes the way the maintainer does by hand today, and bind one to a terminal
+      profile. Creating one means making an empty directory and setting a variable; **credentials are
+      never touched** (rule:security).
+- [ ] **Worktrees.** Which ones the repository has, which tab sits in which, how far apart they are.
+      Agents increasingly work in an isolated worktree, and nothing in the app shows that today.
+- [ ] **Changes since this session started** — an extension of the Git tool, not a new one. The tool
+      shows the working tree; reviewing an agent's work wants a different boundary: a marker at the
+      start, and the diff against it.
+
+### Status bar elements proposed alongside them
+
+- [ ] **Context usage** of the session in the active tab, as a bar — the one number that decides when
+      a compact is due. Source is the `usage` block above.
+- [ ] **Agent status**, aggregated across tabs ("2 waiting · 1 working"). The real pain with several
+      sessions open is not knowing which tab wants an answer.
+
+### Cross-cutting: a Claude home is a property of the TAB, never of the machine
+
+The maintainer runs several Claude accounts side by side, separated by `CLAUDE_CONFIG_DIR` and
+selected per project by direnv. **Measured 2026-08-01:** `~/.claude` and `~/.claude-privat` both
+exist as complete, independent homes (own `settings.json`, `projects/`, `plugins/`, history), and
+four projects under `~/git-projects/private/` each carry an `.envrc` exporting one of them.
+
+**No widget may assume `~/.claude`.** The path comes from `CLAUDE_CONFIG_DIR` in the environment of
+*that tab's* PTY process, with `~/.claude` only as the fallback. Hard-coding it shows the wrong
+account in three of four of those projects — and shows it *plausibly*, which is worse than showing
+nothing.
+
+### Two measurements that shape how the signals are read
+
+- **Prefer a documented hook over the transcript.** Claude Code has `Notification` / `Stop` hooks;
+  YggShell can install one on a button, exactly as `cli_install` already does. That is a stable,
+  documented channel, unlike the JSONL. Use the transcript for enrichment, not for the signal.
+- **The terminal has no bell handling at all today** (`TerminalSurface`, `pty.rs` — nothing), so
+  "the agent wants you" cannot currently arrive that way either.
 
 ## Known gaps carried forward
 
