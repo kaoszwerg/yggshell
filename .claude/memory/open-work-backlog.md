@@ -130,10 +130,34 @@ upstream asks for something specific. What went out, in one line each — the nu
 - **No cadence band reads as stutter**, and the `steps(n)` travel arithmetic measures the wrong
   quantity: five stops across 360° means one 6° step is 6.7 % of a colour transition.
 
-**What we are waiting for:** their decision on `transform-spin`, and — per their §7 — a
-`docs/migrations/app-NNN-….md` briefing, because `src/**` is outside the published layer and the fix
-will NOT arrive via `governance:update`. It has to be ported by hand here. We ship `steps(60)` until
-then, which measured at +0.1 points over control and which the maintainer confirms looks normal.
+**CLOSED, 2026-08-01 — `transform-spin` shipped upstream and is ported here.** Template v0.10.4
+(`de5b97f`), briefing `docs/migrations/app-109-window-frame-composited.md`. The measurement settled it
+in one pass and **two of the upstream's own arguments went against them** — the memory cost they
+worried about did not materialise, and the `steps(n)` perceptibility objection was withdrawn.
+
+Ported by hand (`src/**` is outside the published layer, so `governance:update` will never deliver it):
+`src/styles/globals.css` + the glow element in `src/App.tsx`. Landed in **0.36.2**, `b818861`.
+
+**Why the better solution measures 0.3 points better and it still mattered.** `steps(60)` was +0.1
+over control; `transform-spin` is −0.2, i.e. the control floor. Both are free *today*. The point is
+that our number was small because we repainted **rarely** — five full-window repaints a second instead
+of sixty — and that cost still scales with the window's area and the display's density. A composited
+transform does not scale at all. It also returns the smooth 12 s revolution `steps(60)` had traded
+away, and removes a tuning knob whose comment had to *ask* the next agent to re-measure before raising
+it. Prefer the mechanism that cannot get expensive over the constant that happens to be small.
+
+**The trap in the port, and it is silent.** The animation moved to a new element; the
+`prefers-reduced-motion` query has to move with it (`.window-frame > .window-frame-glow::before`).
+Left pointing at `.window-frame`, **nothing errors and no style fails** — the frame simply keeps
+spinning for every user who asked it not to. Pinned by `src/styles/globals.test.ts`, which was
+verified by making that exact mistake and watching it fail.
+
+**A stylesheet was the one part of this app no test touched**, and it has now produced two defects
+that no type, lint or render test could see: a full-window repaint costing measurable CPU, and a
+stranded media query. jsdom does not apply stylesheets, so there is no computed style to assert on —
+the test reads the CSS **as text**, via `import css from "./globals.css?raw"`. Use `?raw`, never
+`node:fs`: the frontend `tsconfig` deliberately carries no Node types so that no component can reach
+the filesystem, and a test is not a reason to open that door.
 
 ### Round 6 — the measurement, for reference
 
