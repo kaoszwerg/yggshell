@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The launch queue could grow without limit.** `launch::Pending` holds directories handed in from
+  outside — every `ygg <dir>`, every Finder "Open With" — until the webview mounts and drains them. It
+  had no ceiling, so a webview that never starts, or a shell loop calling `ygg`, grew it for input the
+  app was never going to act on. Capped at 32, dropping the **oldest** (the newest request is the one
+  somebody is still waiting for), with a warning when it happens. Found by a targeted code audit; the
+  only finding in it, and the scanners in `check:all` could not have caught it.
+
 ### Added
 
 - **The Docker tool now shows what each container is consuming.** CPU and memory as bars, live, while

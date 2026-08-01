@@ -27,14 +27,39 @@ pub const EVENT: &str = "open-in-directory";
 /// `Opened` event fires while the webview is still loading, so an emit at that moment reaches
 /// nobody — the user typed `ygg .`, the app opened, and their terminal is in the wrong place. The
 /// frontend asks for what it missed as soon as it is listening.
+///
+/// **Bounded** — see `MAX_PENDING`: the source is outside this process.
 #[derive(Default)]
 pub struct Pending(Mutex<Vec<String>>);
+
+/// How many un-drained launch requests are kept.
+///
+/// Generous for the real case — nobody opens thirty-two directories before the window appears — and
+/// finite for the one that is not real: a webview that never mounts, or a script calling `ygg` in a
+/// loop.
+const MAX_PENDING: usize = 32;
 
 impl Pending {
     fn push(&self, path: String) {
         // Poisoned only if another thread panicked while holding it; a launch request is not worth
         // taking the process down over, and the list is replaceable.
         if let Ok(mut queue) = self.0.lock() {
+            // **Bounded, because the source is outside this process.** Every `ygg <dir>` and every
+            // Finder "Open With" appends here, and the queue is only emptied when the webview mounts
+            // and asks for it. If that never happens — a webview that fails to start, a shell loop
+            // calling `ygg` — an unbounded Vec is the app growing until it is killed, for input it
+            // was never going to act on (rule:security: the client is hostile even when you wrote it).
+            //
+            // The OLDEST goes, not the newest: these are directories somebody asked to open, and the
+            // most recent request is the one they are still waiting for.
+            if queue.len() >= MAX_PENDING {
+                let dropped = queue.remove(0);
+                tracing::warn!(
+                    dropped = %dropped,
+                    max = MAX_PENDING,
+                    "the launch queue is full — dropping the oldest request"
+                );
+            }
             queue.push(path);
         }
     }
@@ -189,6 +214,23 @@ mod tests {
 
         assert_eq!(pending.drain(), vec!["/tmp/one", "/tmp/two"]);
         assert!(pending.drain().is_empty(), "a second drain must be empty");
+    }
+
+    #[test]
+    fn the_queue_is_bounded_and_keeps_the_newest() {
+        // The source is outside the process: every `ygg <dir>` appends, and the queue only empties
+        // when the webview mounts and asks. If that never happens, an unbounded Vec is the app
+        // growing until it is killed — for requests it was never going to act on.
+        let pending = Pending::default();
+        for i in 0..MAX_PENDING + 5 {
+            pending.push(format!("/tmp/{i}"));
+        }
+
+        let queued = pending.drain();
+        assert_eq!(queued.len(), MAX_PENDING);
+        // The newest survive: the most recent request is the one somebody is still waiting for.
+        assert_eq!(queued.last().map(String::as_str), Some("/tmp/36"));
+        assert_eq!(queued.first().map(String::as_str), Some("/tmp/5"));
     }
 
     #[test]

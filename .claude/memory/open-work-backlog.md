@@ -208,6 +208,58 @@ falls back.
 **Needs a defined load the maintainer runs** (the agent cannot type into their terminals): idle, then
 moderate (`seq 1 500000`), then a flood (`yes | head -c 20000000`), measuring CPU per process.
 
+### Round 5 — DONE (2026-08-01). One finding, and the codebase held up.
+
+**Run before the measuring rounds** because it is load-independent — the maintainer's call, and the
+right one. Result, stated without inflation: **the boundary discipline is sound throughout.**
+
+| Axis | Result |
+| --- | --- |
+| Boundaries | `open_external` http(s) allow-list · `create_claude_home` character allow-list · `theme::slug` is an allow-list, tested against `../../evil` and `/etc/passwd` · `files::verify` canonicalises and checks the root · `is_container_id` hex only |
+| Concurrency | **No lock held across expensive work.** `logging::push` sends outside the lock; `TerminalRegistry::status` releases it before spawning tmux — both deliberate, both commented |
+| Resources | PTY threads have explicit exits (EOF, `Ended`, `Disconnected`) · log ring buffer bounded · **zero** listeners or timers without teardown in the whole frontend |
+| Unbounded growth | One finding, fixed below |
+
+**The finding:** `launch::Pending` was a `Mutex<Vec<String>>` with no ceiling, fed from *outside the
+process* — every `ygg <dir>` and every Finder "Open With" appends, and it is only emptied when the
+webview mounts and asks. A webview that never starts, or a shell loop calling `ygg`, grew it without
+limit for input the app was never going to act on. Now capped at 32, **dropping the oldest** (the
+newest request is the one somebody is still waiting for), with a `warn` when it happens.
+
+**What this round did NOT cover, deliberately:** CVEs and dependency health — `security-posture.json`
+has 12 active blocking safeties for exactly that (`cargo-audit`, `cargo-deny`, `npm audit`, secret
+scanning, `eslint-plugin-security`, `knip`, `clippy -D warnings`, `tsc --strict`, compiler/linker
+hardening, exact pins). Auditing what a scanner already gates is wasted attention.
+
+### Round 5 — scope, kept for the next audit
+
+**Why it comes before the measuring rounds**, decided by the maintainer and correct: static reading
+needs no quiet machine, and what it finds can invalidate or obviate a measurement. Rounds 2–4 all
+need a calm system; this one does not.
+
+**Why the existing gates do not cover it.** `security-posture.json` has 12 active safeties, all
+blocking, all pre-push: `cargo-audit`, `cargo-deny`, `npm audit`, secret scanning, `eslint-plugin-security`,
+`knip`, `clippy -D warnings`, `tsc --strict`, compiler and linker hardening, exact pins. CVEs and
+dependency health are therefore **not** what an audit should look for — that is done.
+
+**The evidence that an audit is still worth it:** five defects landed on 2026-08-01, and *not one*
+would have been caught by any of those tools — an animated `conic-gradient` burning 27 % CPU (valid
+CSS), `enabled: cwd !== null` (idiomatic TanStack Query), a query living in a component that is not
+always mounted (ordinary React), `TAURI_CONFIG` inherited from a dev build (not code at all), and a
+fixed candidate count against a growing source (clean, tested Rust). Scanners find known *patterns*;
+each of these was correct code resting on a wrong assumption.
+
+**Scope — not "read everything":**
+
+1. **Boundaries** — what arrives from outside (webview, filesystem, another program's working files)
+   and how it is validated at the point of entry.
+2. **Concurrency** — locks held across expensive calls, channel ordering, races between a poll and the
+   thing it polls.
+3. **Resource lifecycles** — anything that grows without a bound (the events file was exactly this),
+   threads/intervals/listeners without teardown.
+4. **Assumptions that only break under load or over time** — fixed limits against unbounded sources,
+   caches without eviction, first-run vs. hundredth-run behaviour.
+
 ### Round 4 — code-level analysis, measurement-led
 
 Worth doing, but **after** a measurement points at something, and it finds a different class:
