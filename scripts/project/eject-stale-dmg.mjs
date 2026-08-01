@@ -25,6 +25,14 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+// A DMG is a macOS artefact and `hdiutil` is a macOS tool. On any other platform there is nothing
+// mounted to get in the way, and running this would fail the build for a problem that cannot exist
+// there (rule:cross-platform: gate the platform-specific part, do not leave it broken elsewhere).
+if (process.platform !== "darwin") {
+  console.log("eject-stale-dmg: not macOS — nothing to unmount.");
+  process.exit(0);
+}
+
 const REPO = resolve(new URL("../..", import.meta.url).pathname);
 
 /** Everything hdiutil currently has mounted, as `{ image, volumes[] }`. */

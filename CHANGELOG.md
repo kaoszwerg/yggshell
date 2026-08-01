@@ -8,6 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The build command only worked on macOS.** Yesterday's identity gate introduced two Unix-only
+  dependencies into `app:build`: `env -u TAURI_CONFIG` (no `env` on Windows) and `strings` (not on
+  Windows either), plus `hdiutil` ran unconditionally although a DMG is a macOS artefact. A developer
+  on Windows or Linux would have hit an error — and whoever worked around it would have built
+  *without* the gate, on the platform where nobody would notice it had gone. The variable is now
+  stripped in Node (portable), the binary is read and searched directly instead of shelling out to
+  `strings`, and the DMG step exits early off macOS. The application code was already correct
+  throughout: every platform branch has a macOS, a Windows and a `unix, not(macos)` arm with
+  documented degradation.
+
+### Fixed
+
 - **The launch queue could grow without limit.** `launch::Pending` holds directories handed in from
   outside — every `ygg <dir>`, every Finder "Open With" — until the webview mounts and drains them. It
   had no ceiling, so a webview that never starts, or a shell loop calling `ygg`, grew it for input the

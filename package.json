@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "app:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
-    "app:build": "node scripts/project/eject-stale-dmg.mjs && env -u TAURI_CONFIG tauri build && node scripts/project/check-release-identity.mjs",
+    "app:build": "node scripts/project/eject-stale-dmg.mjs && node scripts/project/build-release.mjs && node scripts/project/check-release-identity.mjs",
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
     "identity:sync": "node scripts/sync-identity.mjs",

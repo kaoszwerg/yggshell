@@ -36,7 +36,6 @@
  * `npx tauri build`, a CI runner that inherited the variable, and whatever the next way in turns out
  * to be.
  */
-import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -60,10 +59,20 @@ function devIdentifier() {
   return typeof conf.identifier === "string" ? conf.identifier : null;
 }
 
-function stringsOf(binary) {
-  // `strings` is macOS/BSD's own tool and is declared in knip.project.json for the same reason
-  // `hdiutil` is (rule:code-quality — name the binary rather than relax the check).
-  return execFileSync("strings", [binary], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+/**
+ * The binary as searchable text.
+ *
+ * **Read directly rather than shelling out to `strings`** — which is what this did first, and it made
+ * the gate macOS/Linux-only: `strings` does not exist on Windows, so a developer building there would
+ * have lost the check silently, on the one platform where nobody would notice it was missing
+ * (rule:cross-platform). Reading the file and searching it needs no external tool at all, and the
+ * identifiers we look for are plain ASCII in the embedded configuration.
+ *
+ * `latin1` because it maps every byte to exactly one character: a binary is not valid UTF-8, and a
+ * lossy decode could destroy the very bytes being searched for.
+ */
+function binaryAsText(binary) {
+  return readFileSync(binary).toString("latin1");
 }
 
 const expected = expectedIdentifier();
@@ -93,7 +102,7 @@ if (!existsSync(BINARY)) {
  */
 const embedded = (identifier) => `${identifier}index.html`;
 
-const text = stringsOf(BINARY);
+const text = binaryAsText(BINARY);
 const problems = [];
 
 if (dev !== null && text.includes(embedded(dev))) {
