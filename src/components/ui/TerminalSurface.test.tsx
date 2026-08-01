@@ -29,6 +29,7 @@ const term = {
   getSelection: vi.fn(() => ""),
   hasSelection: vi.fn(() => false),
   onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
+  onBell: vi.fn(() => ({ dispose: vi.fn() })),
   onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
   onData: vi.fn(() => ({ dispose: vi.fn() })),
   attachCustomKeyEventHandler: vi.fn((fn: (event: KeyboardEvent) => boolean) => {

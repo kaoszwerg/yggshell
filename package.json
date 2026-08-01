@@ -1,6 +1,6 @@
 {
   "name": "yggshell",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "private": true,
   "type": "module",
   "description": "A Norse-inspired developer terminal: a full replacement for the system terminal with multiple independent tabs, iTerm2-compatible themes and a theme editor — built to enrich AI development harnesses such as Claude Code with tools in the sidebar, starting with a Git integration.",

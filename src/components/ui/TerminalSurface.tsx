@@ -84,6 +84,18 @@ export interface TerminalSurfaceProps {
   onCwd?: (path: string) => void;
   /** What the shell says it is doing (OSC 133). Never fires for a shell without the hook. */
   onActivity?: (activity: Activity) => void;
+  /**
+   * A program rang the terminal bell (`\a`).
+   *
+   * Deliberately plain: the bell carries no information beyond "something happened here", and it is
+   * rung by plenty of things that are not asking for attention — zsh on an ambiguous completion,
+   * `less` at the end of a search. The caller decides what it is worth; this only reports it.
+   *
+   * **It is also the one signal that survives tmux.** Measured: tmux registers a bell
+   * (`window_bell_flag`) and forwards it with `bell-action any`, while it swallows OSC sequences
+   * entirely — the same finding as OSC 7.
+   */
+  onBell?: () => void;
   className?: string;
 }
 
@@ -109,6 +121,7 @@ export function TerminalSurface({
   onSelectionChange,
   onCwd,
   onActivity,
+  onBell,
   fontSize,
   theme,
   copyOnSelect,
@@ -133,6 +146,7 @@ export function TerminalSurface({
     onSelectionChange,
     onCwd,
     onActivity,
+    onBell,
     fontSize,
     theme,
     copyOnSelect,
@@ -150,6 +164,7 @@ export function TerminalSurface({
       onSelectionChange,
       onCwd,
       onActivity,
+      onBell,
       fontSize,
       theme,
       copyOnSelect,
@@ -163,6 +178,7 @@ export function TerminalSurface({
     onSelectionChange,
     onCwd,
     onActivity,
+    onBell,
     fontSize,
     theme,
     copyOnSelect,
@@ -335,6 +351,7 @@ export function TerminalSurface({
     host.addEventListener("mouseup", copySelection);
     // Shift+arrows select without the mouse ever being involved.
     host.addEventListener("keyup", copySelection);
+    const bellSub = term.onBell(() => handlers.current.onBell?.());
     const titleSub = term.onTitleChange((title) => {
       if (title.trim() !== "") handlers.current.onTitle?.(title);
     });
@@ -450,6 +467,7 @@ export function TerminalSurface({
       host.removeEventListener("keyup", copySelection);
       host.removeEventListener("mousedown", onMiddleDown, true);
       selectionSub.dispose();
+      bellSub.dispose();
       titleSub.dispose();
       dataSub.dispose();
       term.dispose();

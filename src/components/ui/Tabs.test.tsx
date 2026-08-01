@@ -341,3 +341,23 @@ describe("a strip with more tabs than fit", () => {
     );
   });
 });
+
+it("marks a tab that is asking for attention, without out-shouting the selected one", () => {
+  // The bell says "something happened here" and nothing more. A dot rather than a recolouring: the
+  // selected tab has to stay the loudest thing in the strip, and a tab that changes colour competes
+  // with it.
+  render(
+    <Tabs
+      label="Terminals"
+      items={[
+        { id: "a", label: "one" },
+        { id: "b", label: "two", attention: true },
+      ]}
+      activeId="a"
+      onSelect={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByTestId("tab-attention-b")).toBeInTheDocument();
+  expect(screen.queryByTestId("tab-attention-a")).toBeNull();
+});

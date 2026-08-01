@@ -274,6 +274,7 @@ function Pane({
   const setTitle = useTerminalStore((s) => s.setTitle);
   const setCwd = useTerminalStore((s) => s.setCwd);
   const setPaneTmuxSession = useTerminalStore((s) => s.setPaneTmuxSession);
+  const ringBell = useTerminalStore((s) => s.ringBell);
   const closePane = useTerminalStore((s) => s.closePane);
 
   // The session is opened from the FIRST measurement, never before it: the shell must be told the
@@ -393,6 +394,9 @@ function Pane({
   // The result is HELD for a moment and then cleared: a command's outcome is announced once, and a
   // state that never settles stops being a signal. Driven from the event rather than from an effect,
   // because that is what it is.
+  // A program rang the bell. The tab is marked unless it is the one in front — see `ringBell`.
+  const onBell = useCallback(() => ringBell(paneKey), [ringBell, paneKey]);
+
   const onActivity = useCallback(
     (next: Activity) => {
       if (activityTimer.current !== null) clearTimeout(activityTimer.current);
@@ -569,6 +573,7 @@ function Pane({
             onSelectionChange={setHasSelection}
             onCwd={onCwd}
             onActivity={onActivity}
+            onBell={onBell}
             fontSize={fontSize}
             theme={theme}
             copyOnSelect={settings.data?.copy_on_select ?? false}

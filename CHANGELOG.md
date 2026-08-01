@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The terminal bell is no longer thrown away.** A tab that rings while you are somewhere else gets
+  a mark, and the status bar can show how many are waiting — the mark says *which*, the counter says
+  *whether*, which matters when the strip is scrolled and the tab in question is off screen. The bell
+  is the only attention signal that survives tmux (measured: tmux registers and forwards it, while it
+  swallows OSC sequences whole). Visiting the tab clears it. Deliberately no system notification: a
+  bell is also rung by an ambiguous completion, and a notification that cries wolf gets switched off.
+
+### Fixed
+
+- **Placeholders looked like configured values.** Dimmed and italic now, so an empty field reads as
+  empty — otherwise nobody fills in what they believe is already set.
+
+### Added
+
 - **Subscription usage, as bars.** How full the session and weekly limits are, read from Claude Code
   itself (`/usage`) — which answers for **free**: no turn, no API call, measured. The transcript
   cannot answer this at all, because it records tokens and never limits, which is why the context

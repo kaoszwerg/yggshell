@@ -29,6 +29,15 @@ export interface TerminalPane {
    *  without the hook never does, and guessing would point the Git tool at the wrong repository. */
   cwd: string | null;
   /**
+   * A program in this tab rang the bell and the tab has not been looked at since.
+   *
+   * The classic terminal signal, and the only one that survives tmux — measured: tmux registers a
+   * bell and forwards it, while it swallows OSC sequences whole. It says "something happened here"
+   * and nothing more, which is why it marks a tab rather than raising a notification: a bell is also
+   * rung by an ambiguous completion, and a system notification that cries wolf gets turned off.
+   */
+  bell: boolean;
+  /**
    * The backend session this tab is talking to, once the PTY is open.
    *
    * It used to live only inside the pane component, which was right while nothing outside needed
@@ -142,6 +151,8 @@ export interface TerminalState {
   setPaneTmuxSession: (key: string, session: string | null) => void;
   /** Record (or clear) the backend session this tab is talking to. */
   setPaneSession: (key: string, sessionId: number | null) => void;
+  /** A program in this tab rang the bell. Ignored for the tab that is already in front. */
+  ringBell: (key: string) => void;
   /**
    * Record what this tab is doing.
    *
@@ -191,6 +202,7 @@ export const useTerminalStore = create<TerminalState>()(
               key,
               title: "Terminal",
               sessionId: null,
+              bell: false,
               cwd,
               profileId,
               themeId: null,
@@ -216,7 +228,13 @@ export const useTerminalStore = create<TerminalState>()(
           activeKey: s.activeKey === key ? neighbourOf(s.panes, key) : s.activeKey,
         })),
 
-      setActive: (activeKey) => set({ activeKey }),
+      setActive: (activeKey) =>
+        // Visiting a tab clears its bell: the mark exists to say "look here", and it has served its
+        // purpose the moment you do. Anything else would need a second gesture to dismiss.
+        set((s) => ({
+          activeKey,
+          panes: s.panes.map((p) => (p.key === activeKey && p.bell ? { ...p, bell: false } : p)),
+        })),
 
       setTitle: (key, title) =>
         set((s) => ({
@@ -276,6 +294,16 @@ export const useTerminalStore = create<TerminalState>()(
           ),
         })),
 
+      ringBell: (key) =>
+        set((s) => ({
+          // Never the active tab: you are looking at it, so a mark you would clear in the same
+          // breath is noise. Everything else keeps its mark until it is visited.
+          panes:
+            s.activeKey === key
+              ? s.panes
+              : s.panes.map((p) => (p.key === key && !p.bell ? { ...p, bell: true } : p)),
+        })),
+
       setPaneSession: (key, sessionId) =>
         set((s) => ({
           panes: s.panes.map((p) =>
@@ -313,6 +341,7 @@ export const useTerminalStore = create<TerminalState>()(
             key: p.key,
             title: "Terminal",
             sessionId: null,
+            bell: false,
             cwd: typeof p.cwd === "string" ? p.cwd : null,
             profileId: typeof p.profileId === "string" ? p.profileId : null,
             themeId: typeof p.themeId === "string" ? p.themeId : null,

@@ -22,12 +22,21 @@ const MAIN_NAV: NavItem[] = [{ id: "terminal", Icon: TerminalSquare, label: "nav
 
 /** Tools open the column beside this rail. They never replace what is on screen — that is what a view
  *  does, and the difference is the reason the column exists. */
+/**
+ * The tools, in the order they are reached for.
+ *
+ * Git and Files first and unmoved — they are about the code in front of you, they are what the
+ * column was built for, and their position is muscle memory by now. Then Agent, which is about the
+ * work being done to that code; then Activity and Docker, which are about the machine it runs on.
+ * The rail reads from "what am I editing" outwards to "what is this box doing", which is the order
+ * somebody actually asks those questions in.
+ */
 const TOOLS: ToolItem[] = [
   { id: "git", Icon: GitBranch, label: "nav.git" },
   { id: "files", Icon: FolderTree, label: "nav.files" },
+  { id: "agent", Icon: Bot, label: "nav.agent" },
   { id: "activity", Icon: Activity, label: "nav.activity" },
   { id: "docker", Icon: Box, label: "nav.docker" },
-  { id: "agent", Icon: Bot, label: "nav.agent" },
 ];
 
 const BOTTOM_NAV: NavItem[] = [

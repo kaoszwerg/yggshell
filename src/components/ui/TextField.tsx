@@ -17,7 +17,11 @@ export function TextField({ ref, className = "", ...rest }: TextFieldProps) {
     <input
       ref={ref}
       type="text"
-      className={`hud-clip-sm bg-elevated text-fg focus:ring-cyan/60 px-2 py-1 text-xs outline-none focus:ring-1 ${className}`.trim()}
+      // `placeholder:` styling is not decoration. A placeholder rendered at the same weight as a
+      // value reads AS a value — the field looks configured when it is empty, and the user does not
+      // fill in what they believe is already set. Dimmed and italic, so the difference is visible
+      // without reading the text.
+      className={`hud-clip-sm bg-elevated text-fg focus:ring-cyan/60 placeholder:text-dim/50 px-2 py-1 text-xs outline-none placeholder:italic focus:ring-1 ${className}`.trim()}
       {...rest}
     />
   );

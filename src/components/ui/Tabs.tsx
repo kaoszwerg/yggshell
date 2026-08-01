@@ -11,6 +11,13 @@ import { IconButton } from "./IconButton";
 interface TabItem {
   id: string;
   label: string;
+  /**
+   * Something in this tab asked for attention and it has not been looked at since.
+   *
+   * A mark rather than a recolouring: the selected tab must stay the loudest thing in the strip, and
+   * a tab that changes colour competes with it.
+   */
+  attention?: boolean;
 }
 
 export interface TabsProps {
@@ -245,6 +252,15 @@ export function Tabs({
               vertical ? "w-full" : "max-w-[13rem] min-w-[5.5rem] shrink snap-start"
             }`}
           >
+            {item.attention === true ? (
+              // A dot, not a colour change: it says "here" without competing with the selected tab,
+              // which must stay the loudest thing in the strip.
+              <span
+                aria-hidden
+                data-testid={`tab-attention-${item.id}`}
+                className="bg-gold ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+              />
+            ) : null}
             <button
               type="button"
               role="tab"

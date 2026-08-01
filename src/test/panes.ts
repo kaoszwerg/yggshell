@@ -13,6 +13,7 @@ export function pane(over: Partial<TerminalPane> & { key: string }): TerminalPan
     title: "Terminal",
     cwd: null,
     sessionId: null,
+    bell: false,
     profileId: null,
     themeId: null,
     plain: false,

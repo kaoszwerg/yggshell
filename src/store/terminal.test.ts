@@ -211,3 +211,48 @@ describe("opening a tab in a named directory", () => {
     expect(useTerminalStore.getState().panes.find((p) => p.key === key)?.cwd).toBeNull();
   });
 });
+
+describe("the bell", () => {
+  it("marks a tab that rang while you were somewhere else", () => {
+    // The classic terminal signal, and the only one that survives tmux — measured: tmux registers a
+    // bell and forwards it, while it swallows OSC sequences whole.
+    useTerminalStore.setState({
+      panes: [pane({ key: "a" }), pane({ key: "b" })],
+      activeKey: "a",
+    });
+
+    useTerminalStore.getState().ringBell("b");
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "b")?.bell).toBe(true);
+  });
+
+  it("never marks the tab you are already looking at", () => {
+    // A mark you would clear in the same breath is noise, and a bell is rung by an ambiguous
+    // completion as often as by anything worth crossing the room for.
+    useTerminalStore.setState({ panes: [pane({ key: "a" })], activeKey: "a" });
+
+    useTerminalStore.getState().ringBell("a");
+    expect(useTerminalStore.getState().panes[0]?.bell).toBe(false);
+  });
+
+  it("clears the mark when the tab is visited", () => {
+    // The mark exists to say "look here" and has served its purpose the moment you do; needing a
+    // second gesture to dismiss it would make it a chore.
+    useTerminalStore.setState({
+      panes: [pane({ key: "a" }), pane({ key: "b", bell: true })],
+      activeKey: "a",
+    });
+
+    useTerminalStore.getState().setActive("b");
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "b")?.bell).toBe(false);
+  });
+
+  it("leaves other tabs' marks alone when one is visited", () => {
+    useTerminalStore.setState({
+      panes: [pane({ key: "a", bell: true }), pane({ key: "b", bell: true })],
+      activeKey: "c",
+    });
+
+    useTerminalStore.getState().setActive("b");
+    expect(useTerminalStore.getState().panes.find((p) => p.key === "a")?.bell).toBe(true);
+  });
+});

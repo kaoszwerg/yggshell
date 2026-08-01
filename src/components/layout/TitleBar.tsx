@@ -109,7 +109,7 @@ export function TitleBar() {
             <div className="flex min-w-0 flex-1">
               <Tabs
                 label={t("titlebar.terminals")}
-                items={panes.map((p) => ({ id: p.key, label: p.title }))}
+                items={panes.map((p) => ({ id: p.key, label: p.title, attention: p.bell }))}
                 activeId={activeKey ?? ""}
                 onSelect={show}
                 onClose={closePane}

@@ -10,7 +10,15 @@
  * Showing "—" for each of those would fill the strip with absences.
  */
 import { useEffect, useState } from "react";
-import { Activity, Bot, Folder, GitBranch, Layers, Terminal as TerminalIcon } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  Bot,
+  Folder,
+  GitBranch,
+  Layers,
+  Terminal as TerminalIcon,
+} from "lucide-react";
 import { Button } from "../ui/Button";
 import { Tooltip } from "../ui/Tooltip";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
@@ -242,6 +250,29 @@ function AgentItem() {
 }
 
 /**
+ * How many tabs have rung and not been looked at.
+ *
+ * The second half of the bell: the tab mark says *which* tab, this says *whether* — useful when the
+ * strip is scrolled and the tab in question is off-screen, which is exactly when the mark cannot be
+ * seen. Renders nothing when nothing is waiting; an element that permanently reads "0" is spending
+ * the bar's width to say nothing.
+ */
+function BellsItem() {
+  const t = useT();
+  const waiting = useTerminalStore((s) => s.panes.filter((p) => p.bell).length);
+  if (waiting === 0) return null;
+
+  return (
+    <Tooltip content={t("statusbar.bells", { count: String(waiting) })}>
+      <span className="flex items-center gap-1.5">
+        <Bell size={11} strokeWidth={2} className="text-gold shrink-0" aria-hidden />
+        <span className="text-gold">{waiting}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
  * One item of the bar.
  *
  * Spacer and separator are drawn by the bar itself, not here: a spacer is a flex property of the
@@ -264,6 +295,8 @@ export function StatusItemView({ id }: { id: StatusItemId }) {
       return <LoadItem />;
     case "agent":
       return <AgentItem />;
+    case "bells":
+      return <BellsItem />;
     default:
       return null;
   }
@@ -329,6 +362,13 @@ export function StatusItemSample({ id }: { id: StatusItemId }) {
         <span className="flex items-center gap-1.5">
           <Bot size={11} strokeWidth={2} className="text-dim shrink-0" aria-hidden />
           <span className="text-fg">128k</span>
+        </span>
+      );
+    case "bells":
+      return (
+        <span className="flex items-center gap-1.5">
+          <Bell size={11} strokeWidth={2} className="text-gold shrink-0" aria-hidden />
+          <span className="text-gold">2</span>
         </span>
       );
     default:
