@@ -18,6 +18,14 @@ triggers:
     ctrl,
     cmd,
     meta,
+    enter,
+    return,
+    shift-enter,
+    newline,
+    escape-sequence,
+    encoding,
+    xterm,
+    kitty,
     sigint,
     help,
   ]
@@ -73,6 +81,32 @@ runner does, so it cannot go stale.
   else must still reach the terminal.
 - **Recording captures.** While a row is recording, the editor listens in the **capture phase** and
   stops the event, or binding `⌘W` would close the tab on the way to being bound.
+
+## The other layer: keys the WIRE cannot spell
+
+A shortcut is a key the app **takes**. There is a second, opposite thing — a key the app must hand
+over *better than the emulator would*, and it lives in `src/lib/terminalKeys.ts`, not here.
+
+The classic terminal encoding has no room for a modifier on Enter: `Enter` and `Shift+Enter` both
+arrive as a bare `CR`, so a program cannot tell them apart. An AI harness needs that distinction
+constantly — submit versus new line — so `Shift+Enter` is sent as `ESC CR`, which is verbatim the
+binding Claude Code's own `/terminal-setup` installs (`{"text": "\r"}`, read out of its bundle).
+
+Two things to keep straight:
+
+- **This is not a shortcut and the ⌘/Ctrl+Shift rule does not apply.** Nothing is taken from the
+  shell; one keystroke is merely spelled differently on the wire — the same category as `clear()`
+  sending `Ctrl+L`, and deliberately not a general "send this string" channel (ADR-PROJ-001 §5).
+- **The modern answer does not apply here.** The Kitty keyboard protocol exists for exactly this and
+  would leave every other program untouched, but `@xterm/xterm` does not implement it *and* the
+  harness does not speak it — measured, `0` occurrences in the CLI binary. Do not "fix" the escape
+  prefix by reaching for it until both halves change.
+
+**xterm keeps only the LAST `attachCustomKeyEventHandler` registered.** There is therefore exactly
+one in `TerminalSurface`, and everything that inspects a keystroke goes inside it. A second call
+anywhere silently replaces the first — no error, no warning, just a feature that stopped existing.
+It was also registered only on non-macOS once, inside the copy/paste branch; both traps are pinned
+by `TerminalSurface.test.tsx`.
 
 ## Clearing the screen sends a key, not a command
 

@@ -12,6 +12,7 @@ import { parseOsc7 } from "../../lib/osc7";
 import { parseOsc133, type Activity } from "../../lib/osc133";
 import { isLinux, isMac } from "../../lib/platform";
 import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
+import { encodeKey } from "../../lib/terminalKeys";
 import { resolveTheme } from "../../lib/terminalTheme";
 import type { TerminalTheme } from "../../bindings/TerminalTheme";
 
@@ -382,39 +383,51 @@ export function TerminalSurface({
     };
     if (!isLinux()) host.addEventListener("mousedown", onMiddleDown, true);
 
-    // Copy and paste on NON-macOS only.
-    //
-    // On macOS the WebView already handles ⌘C/⌘V natively — Tauri's default Edit menu supplies the
-    // key equivalents, and xterm listens for the resulting `copy`/`paste` DOM events. Intercepting
-    // them here pasted everything TWICE, because `return false` stops xterm's own key handling but
-    // not the browser default that produces the paste event. So on macOS we stay out of the way.
-    //
-    // Ctrl+Shift+C / Ctrl+Shift+V are not browser shortcuts, so on Windows and Linux nothing happens
-    // unless we do it — and the bare Ctrl+C a terminal owes to SIGINT can never be used for copy.
-    if (!isMac()) {
-      term.attachCustomKeyEventHandler((event) => {
-        if (event.type !== "keydown") return true;
-        if (!(event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey)) return true;
+    // ONE key handler for the whole surface. xterm keeps only the last custom key-event handler it
+    // was given, so a second registration anywhere would silently replace this one — everything
+    // that inspects a keystroke has to live in here.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") return true;
 
-        switch (event.key.toLowerCase()) {
-          case "c": {
-            const selection = term.getSelection();
-            // Nothing selected: let it through rather than becoming a key that silently does nothing.
-            if (selection === "") return true;
-            void navigator.clipboard.writeText(selection);
-            return false;
-          }
-          case "v": {
-            void navigator.clipboard.readText().then((text) => {
-              if (text !== "") term.paste(text);
-            });
-            return false;
-          }
-          default:
-            return true;
+      // Keys the classic encoding cannot express — Shift+Enter, which the harness needs constantly
+      // (lib/terminalKeys). Sent as INPUT, exactly as if the user had typed those bytes; the webview
+      // never decides what runs (ADR-PROJ-001 §5).
+      const encoded = encodeKey(event);
+      if (encoded !== null) {
+        handlers.current.onData(encoded);
+        return false;
+      }
+
+      // Copy and paste on NON-macOS only.
+      //
+      // On macOS the WebView already handles ⌘C/⌘V natively — Tauri's default Edit menu supplies the
+      // key equivalents, and xterm listens for the resulting `copy`/`paste` DOM events. Intercepting
+      // them here pasted everything TWICE, because `return false` stops xterm's own key handling but
+      // not the browser default that produces the paste event. So on macOS we stay out of the way.
+      //
+      // Ctrl+Shift+C / Ctrl+Shift+V are not browser shortcuts, so on Windows and Linux nothing
+      // happens unless we do it — and the bare Ctrl+C a terminal owes to SIGINT can never be copy.
+      if (isMac()) return true;
+      if (!(event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey)) return true;
+
+      switch (event.key.toLowerCase()) {
+        case "c": {
+          const selection = term.getSelection();
+          // Nothing selected: let it through rather than becoming a key that silently does nothing.
+          if (selection === "") return true;
+          void navigator.clipboard.writeText(selection);
+          return false;
         }
-      });
-    }
+        case "v": {
+          void navigator.clipboard.readText().then((text) => {
+            if (text !== "") term.paste(text);
+          });
+          return false;
+        }
+        default:
+          return true;
+      }
+    });
 
     const observer = new ResizeObserver(measure);
     observer.observe(host);

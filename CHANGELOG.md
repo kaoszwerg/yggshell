@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Shift+Enter reaches the program as its own key.** The classic terminal encoding has no room for
+  a modifier on Enter — both arrive as a bare `CR` — so an AI harness could not offer "submit" and
+  "new line" as two different keys. It is now sent as `ESC CR`, which is verbatim the binding Claude
+  Code's own `/terminal-setup` installs elsewhere. Every other key, with or without Shift, is left
+  exactly as it was: a terminal that rewrites keys is a terminal that takes them away.
+
 ### Fixed
 
 - **A tooltip no longer cuts its own text off.** The working directory's showed
