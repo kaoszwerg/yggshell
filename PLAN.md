@@ -110,81 +110,41 @@ content plus one entry in `TOOLS` and `ToolId`.
 
 - [ ] Remote branches in the Git graph (only local ones and HEAD are drawn today).
 
-### The candidates, and what is already measured about them
+### Built (2026-08-01)
 
-**Status: proposed, none agreed.** Recorded here so a compact or a fresh session does not lose them,
-and so nobody pays for the measurements twice. A tool is the *product* (mem:project-scope) — it is
-built when the maintainer says which one, not because it appears in this list.
+Four tools and one status item, in one pass. Each is read-only, and each says so where a reader might
+expect a control: the terminal is beside the panel and already has every signal a process
+understands.
 
-**The filter every candidate passed:** ADR-PROJ-001 §5 — no command line crosses the IPC boundary. A
-widget **observes**; it never runs anything. That rules out test-runner buttons and task launchers,
-and it is why everything below is a reader.
+- [x] **Files** — the tree of the tab's working directory, one directory per open, capped and saying
+      so when it caps. Reveal in the file manager, copy the path. The backend refuses any path
+      outside the tab's own tree.
+- [x] **Activity** — the process tree and the listening ports. **Inside tmux the roots come from
+      tmux**, because everything the user runs there is a child of the tmux server; walking our own
+      tree would find one thing, the client.
+- [x] **Docker** — containers grouped by compose project, the health verdict verbatim, only the ports
+      published to the host, and the last 200 log lines on demand.
+- [x] **Agent** — what the harness in this tab is doing, plus a status bar element with the context
+      count. **No percentage**: the transcript never records the size of the window a turn went into.
+- [x] **Claude accounts** — which one a project uses, and choosing, creating and applying one:
+      writing the `.envrc`, approving it, installing direnv where it is missing.
 
-- [ ] **Agent session.** What the harness in this tab is doing *right now*: last tool call, files
-      touched this session, context usage, model, elapsed time. The terminal shows a flow; this shows
-      the state, so coming back after twenty minutes does not mean scrolling back 300 lines.
-      **Measured:** the transcript is JSONL under `<claude-home>/projects/<slug>/<session>.jsonl`;
-      an `assistant` record carries `cwd`, `gitBranch`, `message.model`, `timestamp` and a full
-      `usage` block (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`). One
-      live session was 11 702 lines. **The format is internal and carries no compatibility promise** —
-      parse defensively, and let the widget disable *itself* on a shape it does not know, never the
-      app.
-- [ ] **Processes and ports.** Per tab, the process tree under the PTY and the ports being listened
-      on. Answers "what is still running in the background?" — the harness case being an agent that
-      started a dev server or a watcher nobody can see any more, where an orphaned port makes the
-      next run fail somewhere else entirely. **Groundwork exists:** `pty.rs` keeps the child pid, and
-      `terminal/attached.rs` already asks `ps`.
-- [ ] **Directory browser.** The tree of the active tab's working directory: folders and files,
-      expandable, with the file actions worth having — internal (open the diff, open the file) and
-      external (reveal in the file manager, copy the path). The only candidate that needs **no**
-      foreign data source at all, which makes it the cheapest to get right.
-- [ ] **Claude environments** — see the cross-cutting requirement below. Create and switch between
-      several Claude homes the way the maintainer does by hand today, and bind one to a terminal
-      profile. Creating one means making an empty directory and setting a variable; **credentials are
-      never touched** (rule:security).
+**The measurement that shaped the last two, and must not be repeated:** the tab's Claude home cannot
+be read from its shell's environment. macOS does not expose a process environment — `ps eww`
+returned nothing for a child process the same code had just spawned with the variable set. The home
+comes from the `.envrc` declaration instead, walked upwards as direnv does.
 
-      Requested with it, and each part raises a question that must be answered *before* it is built,
-      not during:
+### Still open
 
-      - **Set up what the mechanism needs, including installing `direnv` when it is missing.**
-        Installing software is a step beyond anything the app does today (`cli_install` writes two
-        script files into a directory the user already owns). It means invoking a package manager,
-        which is a *command* — permitted only if the backend holds the whole command and the webview
-        merely asks for "install the prerequisite" (ADR-PROJ-001 §5), never if a name or an argument
-        travels over IPC. Which manager, on which platform, and what happens when there is none, is
-        an ADR, not an implementation detail.
-      - **Write the `.envrc` files** — the mechanical half, and the safe one.
-      - **Run `direnv allow`.** Note what that *is*: direnv refuses to load an `.envrc` until a human
-        has approved that exact content, precisely because an `.envrc` is executable code that runs
-        on `cd`. An app that approves on the user's behalf has spent that safety. Defensible only
-        under conditions worth writing down: the file was written by YggShell itself, in this same
-        action, at the user's request, and the app shows what it approved. Approving a file it did
-        not author, or one it did not just write, is not on the table.
-
-      A profile-level `CLAUDE_CONFIG_DIR` needs none of this (the app sets the variable when it
-      spawns the PTY, as it already does for shell and directory). direnv is for the case the
-      maintainer actually has: **the environment must also be right for every tool started outside
-      YggShell** — an editor, another terminal, a script. That is the reason to support it, and it
-      belongs in the ADR as the justification.
-- [ ] **Docker.** Used constantly in development, and invisible from the terminal until something
-      is already wrong: the containers belonging to *this* project (the compose project follows from
-      the tab's working directory), their state, their published ports, health, and a way into their
-      logs. Reading is unproblematic (`docker ps`, the compose labels); **starting and stopping is a
-      decision, not a reflex** — it is a command, so it is only permissible if the backend owns the
-      whole of it and the webview merely names an action (ADR-PROJ-001 §5). Whether the tool acts at
-      all, or only shows and lets the terminal act, is the first question its ADR answers.
 - [ ] **Worktrees.** Which ones the repository has, which tab sits in which, how far apart they are.
-      Agents increasingly work in an isolated worktree, and nothing in the app shows that today.
-- [ ] **Changes since this session started** — an extension of the Git tool, not a new one. The tool
-      shows the working tree; reviewing an agent's work wants a different boundary: a marker at the
-      start, and the diff against it.
-
-### Status bar elements proposed alongside them
-
-- [ ] **Context usage** of the session in the active tab, as a bar — the one number that decides when
-      a compact is due. Source is the `usage` block above.
-- [ ] **Agent status**, aggregated across tabs ("2 waiting · 1 working"). The real pain with several
-      sessions open is not knowing which tab wants an answer.
+- [ ] **Changes since this session started** — an extension of the Git tool: a marker at the start of
+      a session and the diff against it, rather than the working tree.
+- [ ] **An "agent is waiting for you" signal.** The remaining half of the status bar proposal, and it
+      needs a channel: the terminal has no bell handling at all today, and Claude Code's documented
+      `Notification` / `Stop` hooks are the stable route (`cli_install` is the pattern for offering
+      to install one).
+- [ ] **Acting on a container** — start, stop, restart. A command, so it is a decision for an ADR
+      rather than for a widget (ADR-PROJ-001 §5), and deliberately not taken while building the rest.
 
 ### Cross-cutting: a Claude home is a property of the TAB, never of the machine
 
