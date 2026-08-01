@@ -514,15 +514,23 @@ input[type="range"]:disabled::-moz-range-thumb {
     opacity 250ms ease,
     background-color 250ms ease;
 }
+/* ONE colour, travelling — not four.
+   The first version swept green → cyan → purple → gold, which is the same set the window frame's own
+   conic gradient is already rotating through. Two multicoloured animations a few pixels apart do not
+   read as two signals; they read as one restless edge, and the line stopped saying anything.
+   Gold, because it is the only colour in the palette that is not already spoken for: green means
+   FINISHED and danger means FAILED, one line below, and cyan is the accent on every panel, tab and
+   button in the app — a busy indicator in it would disappear into the furniture. Warm against a cool
+   frame also separates the two by more than brightness.
+   The movement stays; only the hue stops changing. The sweep is the same gradient at three
+   opacities, so it still travels and still reads as "something is happening". */
 .hud-activity-running {
   opacity: 1;
   background: linear-gradient(
     90deg,
-    var(--saga-neon-green),
-    var(--saga-neon-cyan),
-    var(--saga-rune-purple),
+    rgb(var(--saga-gold-rgb) / 0.25),
     var(--saga-gold),
-    var(--saga-neon-green)
+    rgb(var(--saga-gold-rgb) / 0.25)
   );
   background-size: 200% 100%;
   animation: activity-sweep 2.4s linear infinite;
@@ -540,8 +548,9 @@ input[type="range"]:disabled::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .hud-activity-running {
     animation: none;
-    /* Still unmistakably "busy", without anything moving. */
-    background: var(--saga-neon-cyan);
+    /* Still unmistakably "busy", without anything moving — and the same colour as the moving
+       version, so reduced motion changes the motion and not the meaning. */
+    background: var(--saga-gold);
     opacity: 0.85;
   }
 }

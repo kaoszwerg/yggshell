@@ -428,6 +428,9 @@ function Pane({
         .then((status) => {
           if (stopped) return;
           if (status.cwd !== null) setCwd(paneKey, status.cwd);
+          // Also when WE did not start it: somebody who typed `tmux` in the shell is in a session
+          // the app was never told about, and the status bar showed nothing for them.
+          setPaneTmuxSession(paneKey, status.session);
           // Inside tmux this poll is the only source of activity: OSC 133 is swallowed there, so
           // there is no exit status to be had — only whether something is running.
           if (status.command !== null) {
@@ -445,7 +448,7 @@ function Pane({
       stopped = true;
       clearInterval(timer);
     };
-  }, [active, sessionOpen, paneKey, setCwd, setActivity]);
+  }, [active, sessionOpen, paneKey, setCwd, setActivity, setPaneTmuxSession]);
 
   // The search shortcut is matched centrally (`useShortcuts`) and arrives here as an event, because
   // the KEY is configurable and having two places decide what "find" means is how they drift apart.

@@ -4,6 +4,7 @@
 //! **The backend owns the sessions.** The frontend holds an id and its own view state — tab order,
 //! which tab is in front — and nothing else. A session outlives every render.
 
+pub mod attached;
 pub mod environment;
 pub mod pty;
 pub mod shell_integration;
@@ -97,6 +98,13 @@ struct Session {
     /// The program this session started, kept so "is something running" can be answered: tmux names
     /// the shell itself when a prompt is waiting, and the only way to know that is to know its name.
     shell: String,
+    /// The terminal device this session's shell runs on, when it could be determined.
+    ///
+    /// Looked up ONCE, when the session opens, because it never changes and `ps` is a process. It is
+    /// what lets the status poll notice a tmux session the **user** started by typing `tmux` — that
+    /// one has no name we were told, and a client on this tty is by definition this tab's
+    /// (`terminal::attached`).
+    tty: Option<String>,
 }
 
 /// Every live terminal in this process. Managed by Tauri, so a command reaches it as `State`.
@@ -323,6 +331,11 @@ impl TerminalRegistry {
             }
         });
 
+        // Looked up once, here, rather than on the status timer: the device never changes, and this
+        // is a process spawn. `None` when the platform will not say — the feature it enables is then
+        // simply absent, which is the honest outcome (rule:cross-platform).
+        let tty = spawned.pid.and_then(attached::tty_of);
+
         let tmux_session = launch.tmux_session.clone();
         self.sessions.lock().map_err(poisoned)?.insert(
             id,
@@ -330,6 +343,7 @@ impl TerminalRegistry {
                 pty: spawned.pty,
                 tmux_session: launch.tmux_session,
                 shell: shell.clone(),
+                tty,
             },
         );
         // The tmux session travels back with the id: a tab that knows which session it landed on can
@@ -383,7 +397,7 @@ impl TerminalRegistry {
         // The name is copied out and the lock released before tmux is asked: that call spawns a
         // process, and holding the registry lock across it would stall every keystroke in every other
         // terminal for as long as it takes.
-        let (name, shell) = {
+        let (name, shell, tty) = {
             let sessions = self.sessions.lock().map_err(poisoned)?;
             match sessions.get(&id) {
                 // Not an error: a poll can outlive the tab it was polling for.
@@ -391,18 +405,33 @@ impl TerminalRegistry {
                     return Ok(crate::dto::TerminalStatus {
                         cwd: None,
                         command: None,
+                        session: None,
                         busy: false,
                     })
                 }
-                Some(session) => (session.tmux_session.clone(), session.shell.clone()),
+                Some(session) => (
+                    session.tmux_session.clone(),
+                    session.shell.clone(),
+                    session.tty.clone(),
+                ),
             }
         };
+
+        // The session we started, or — when we started none — one the USER started by typing `tmux`
+        // in this very shell. The second case was invisible until now: nothing tells the app it
+        // happened, so the status bar showed nothing for somebody sitting in tmux.
+        let name = match name {
+            Some(name) => Some(name),
+            None => tty.as_deref().and_then(attached::session_on_tty),
+        };
+
         let Some(name) = name else {
             // Outside tmux there is nothing to poll for: OSC 7 and OSC 133 both reach the emulator
             // directly, instantly, and with more detail than a poll could give.
             return Ok(crate::dto::TerminalStatus {
                 cwd: None,
                 command: None,
+                session: None,
                 busy: false,
             });
         };
@@ -422,6 +451,7 @@ impl TerminalRegistry {
         Ok(crate::dto::TerminalStatus {
             cwd: tmux::pane_cwd(&name),
             command,
+            session: Some(name),
             busy,
         })
     }

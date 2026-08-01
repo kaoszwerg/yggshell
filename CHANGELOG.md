@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The status bar now shows a tmux session you started yourself.** It only ever knew about sessions
+  the app opened, so somebody who typed `tmux` in the shell saw nothing — the item looked broken when
+  it was merely uninformed. The session is found by terminal device: `tmux list-clients` reports the
+  tty each client is on, and a client on this tab's tty is by definition this tab's session. Exact
+  device match, so one tab's session can never appear on another's.
+- **The activity line is one colour instead of four.** It swept green → cyan → purple → gold, which
+  is the same set the window frame's own gradient rotates through; two multicoloured animations a few
+  pixels apart read as one restless edge rather than as two signals. It is gold now — the only colour
+  in the palette not already spoken for, with green meaning *finished* and red *failed* on the same
+  line. The movement stays; only the hue stops changing.
+
+### Fixed
+
 - **The status bar could not be edited at all.** Tauri intercepts drag events at the OS level by
   default, so HTML5 drag-and-drop inside the window never fires — the editor was correct and inert.
   The window now declares `dragDropEnabled: false`. This is the class of defect that passes every

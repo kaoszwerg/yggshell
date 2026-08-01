@@ -62,6 +62,12 @@ pub struct Spawned {
     pub output: Output,
     pub wait: Wait,
     pub program: String,
+    /// The child's process id, when the platform reports one.
+    ///
+    /// Kept so the session can learn which terminal device it runs on — which is how a tmux session
+    /// the *user* started is recognised later (`terminal::attached`). Read here rather than derived
+    /// afterwards: this is the only moment the child object exists in one piece.
+    pub pid: Option<u32>,
 }
 
 /// How a session should be started: the program, its arguments, and how it must be ended.
@@ -211,6 +217,7 @@ pub fn spawn(request: Spawn<'_>) -> Result<Spawned> {
         .slave
         .spawn_command(cmd)
         .map_err(|e| AppError::Other(format!("spawn {program}: {e}")))?;
+    let pid = child.process_id();
     // The slave is the child's end. Held open here it would keep the PTY alive after the child dies,
     // and the reader would never see EOF — the session would look alive forever.
     drop(pair.slave);
@@ -235,6 +242,7 @@ pub fn spawn(request: Spawn<'_>) -> Result<Spawned> {
         output,
         wait: Wait(child),
         program: program.to_string(),
+        pid,
     })
 }
 
@@ -305,6 +313,7 @@ mod tests {
             mut output,
             wait,
             program,
+            ..
         } = spawned;
         assert!(!program.is_empty());
 

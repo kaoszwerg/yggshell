@@ -1,4 +1,4 @@
-import { render, act, screen, fireEvent } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TerminalView } from "./TerminalView";
 import { useTerminalStore } from "../store/terminal";
@@ -39,7 +39,7 @@ vi.mock("../api/terminal", () => ({
     open: vi.fn(),
     resize: vi.fn(() => Promise.resolve()),
     write: vi.fn(() => Promise.resolve()),
-    status: vi.fn(() => Promise.resolve({ cwd: null, command: null, busy: false })),
+    status: vi.fn(() => Promise.resolve({ cwd: null, command: null, session: null, busy: false })),
     close: vi.fn(() => Promise.resolve()),
     onExit: vi.fn(() => Promise.resolve(() => {})),
   },
@@ -527,6 +527,7 @@ describe("TerminalView", () => {
       vi.mocked(terminalApi.status).mockResolvedValue({
         cwd: "/repo",
         command: "cargo",
+        session: null,
         busy: true,
       });
       const opened = deferOpen(62);
@@ -601,6 +602,49 @@ describe("TerminalView", () => {
 
       const panel = screen.getByRole("tabpanel", { name: "Terminal" });
       expect(panel.style.backgroundColor).not.toBe("");
+    });
+  });
+
+  describe("a tmux session the app did not start", () => {
+    it("is picked up from the status poll", async () => {
+      // The reported case: tmux_mode is off, the app started no session, but the user typed `tmux`
+      // in the shell. Nothing told the app it happened, so the status bar showed nothing for
+      // somebody who was demonstrably sitting in tmux. The backend now finds it by terminal device.
+      vi.mocked(terminalApi.status).mockResolvedValue({
+        cwd: null,
+        command: null,
+        session: "34",
+        busy: false,
+      });
+      const opened = deferOpen(70);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      await waitFor(() => expect(useTerminalStore.getState().panes.at(-1)?.tmuxSession).toBe("34"));
+    });
+
+    it("is cleared again when the user leaves tmux", async () => {
+      // Detaching inside the shell is the same event in reverse, and a stale name would claim a
+      // session the terminal is no longer in.
+      vi.mocked(terminalApi.status).mockResolvedValue({
+        cwd: null,
+        command: null,
+        session: null,
+        busy: false,
+      });
+      const opened = deferOpen(71);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(useTerminalStore.getState().panes.at(-1)?.tmuxSession).toBeNull();
     });
   });
 });

@@ -51,7 +51,7 @@ vi.mock("./api/terminal", () => ({
     open: vi.fn().mockResolvedValue(1),
     write: vi.fn().mockResolvedValue(undefined),
     resize: vi.fn().mockResolvedValue(undefined),
-    status: vi.fn().mockResolvedValue({ cwd: null, command: null, busy: false }),
+    status: vi.fn().mockResolvedValue({ cwd: null, command: null, session: null, busy: false }),
     close: vi.fn().mockResolvedValue(undefined),
     onExit: vi.fn().mockResolvedValue(() => undefined),
   },

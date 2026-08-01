@@ -417,6 +417,12 @@ pub struct TerminalStatus {
     pub cwd: Option<String>,
     /// The command tmux says is running, or `null` outside tmux.
     pub command: Option<String>,
+    /// The tmux session this tab is in, whoever started it.
+    ///
+    /// Separate from what `terminal_open` returned, because it answers a different question: that one
+    /// is "which session did WE join", this one is "which session is this terminal in right now" —
+    /// and a user who typed `tmux` themselves is only visible in the second.
+    pub session: Option<String>,
     /// True when that command is something other than the shell itself.
     pub busy: bool,
 }

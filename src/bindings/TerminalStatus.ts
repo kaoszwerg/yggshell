@@ -18,6 +18,14 @@ cwd: string | null,
  */
 command: string | null, 
 /**
+ * The tmux session this tab is in, whoever started it.
+ *
+ * Separate from what `terminal_open` returned, because it answers a different question: that one
+ * is "which session did WE join", this one is "which session is this terminal in right now" —
+ * and a user who typed `tmux` themselves is only visible in the second.
+ */
+session: string | null, 
+/**
  * True when that command is something other than the shell itself.
  */
 busy: boolean, };
