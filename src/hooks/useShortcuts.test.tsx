@@ -172,6 +172,33 @@ describe("useShortcuts", () => {
     expect(useUiStore.getState().activeTool).toBeNull();
   });
 
+  it("toggles every other tool too, not just Git", () => {
+    // Git had a shortcut and the other four did not — an inconsistency nobody would guess at, and one
+    // that made the tool column reachable by keyboard only by accident of which tool you wanted.
+    renderHook(() => useShortcuts());
+    for (const [key, tool] of [
+      ["e", "files"],
+      ["j", "activity"],
+      ["d", "docker"],
+      ["i", "agent"],
+    ] as const) {
+      press(key, { metaKey: true });
+      expect(useUiStore.getState().activeTool).toBe(tool);
+      press(key, { metaKey: true });
+      expect(useUiStore.getState().activeTool).toBeNull();
+    }
+  });
+
+  it("switches straight from one tool to another", () => {
+    // Pressing another tool's key while one is open must swap, not close — otherwise every switch
+    // costs two keystrokes and the shortcuts are worse than the mouse.
+    renderHook(() => useShortcuts());
+    press("g", { metaKey: true });
+    expect(useUiStore.getState().activeTool).toBe("git");
+    press("d", { metaKey: true });
+    expect(useUiStore.getState().activeTool).toBe("docker");
+  });
+
   it("asks the visible pane to open its search", () => {
     const heard = vi.fn();
     window.addEventListener("yggshell:find", heard);

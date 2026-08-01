@@ -317,6 +317,10 @@ export const de: Translations = {
   "keys.action.openSettings": "Einstellungen öffnen",
   "keys.action.openLogs": "Protokoll öffnen",
   "keys.action.toggleGitTool": "Git-Werkzeug ein- oder ausblenden",
+  "keys.action.toggleFilesTool": "Dateien-Werkzeug ein- oder ausblenden",
+  "keys.action.toggleActivityTool": "Aktivitäts-Werkzeug ein- oder ausblenden",
+  "keys.action.toggleDockerTool": "Docker-Werkzeug ein- oder ausblenden",
+  "keys.action.toggleAgentTool": "Agent-Werkzeug ein- oder ausblenden",
 
   // ── Things the mouse does ───────────────────────────────────────────────────────────────────
   "keys.mouse.title": "Maus",

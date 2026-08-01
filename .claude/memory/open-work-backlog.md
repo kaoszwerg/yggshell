@@ -202,7 +202,32 @@ of the questions below. A clean baseline needs a window with **no agent session 
 | Rust async paths | **0** async commands doing blocking work — the "we built it blocking" premise was wrong |
 | Polling inventory | `tmux display-message` 8.9 ms ×2 per 2 s (~0.9 %); `git_snapshot` ~25 ms per 4 s (~0.6 %) |
 
-### Round 2 — widget switching: React is NOT the cause (measured 2026-08-01)
+### Round 2 — MEASURED end to end (2026-08-01). It is not React, it is the backend.
+
+**Click-to-visible**, driven by keyboard shortcuts through a dev instance, two passes, `<Profiler>` plus
+two nested `requestAnimationFrame`:
+
+| tool | React | click → visible (mount) |
+| --- | --- | --- |
+| files | 2–4 ms | 27 ms |
+| activity | 0–1 ms | 30–62 ms |
+| docker | 0–1 ms | 29 ms |
+| git | 5 ms | **470 ms** |
+| **agent** | 0–1 ms | **1562 / 1591 ms** |
+
+**The Agent tool takes over a second and a half to show anything**, reproducibly. React renders in about
+one millisecond, so the time is spent *after* React and *before* the frame — i.e. waiting on the
+backend, not on the component tree. Prime suspects, in order: `agent_usage` shells out to the `claude`
+CLI, `agent_session` reads a transcript tail, `agent_attention` reads the events file; the Git tool's
+470 ms lines up with `git_snapshot` spawning `git`. **Not yet confirmed which** — measure per query
+before changing anything.
+
+**The fix direction that is now ruled out:** keeping tools mounted. React was never the cost, so it
+would buy nothing and would undo the maintainer's decision that the Docker monitor polls only while
+visible. What would help is the ordinary one: render the panel's shell immediately and let each query
+fill in as it lands, rather than holding the first paint until the slowest call returns.
+
+**Superseded — the earlier partial finding:**
 
 **Measured with React's `<Profiler>` around `ToolPanel`, dev build, real clicks through all five
 tools:**

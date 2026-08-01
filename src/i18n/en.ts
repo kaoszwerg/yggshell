@@ -323,6 +323,10 @@ export const en = {
   "keys.action.openSettings": "Open settings",
   "keys.action.openLogs": "Open the log",
   "keys.action.toggleGitTool": "Show or hide the Git tool",
+  "keys.action.toggleFilesTool": "Show or hide the Files tool",
+  "keys.action.toggleActivityTool": "Show or hide the Activity tool",
+  "keys.action.toggleDockerTool": "Show or hide the Docker tool",
+  "keys.action.toggleAgentTool": "Show or hide the Agent tool",
 
   // ── Things the mouse does ───────────────────────────────────────────────────────────────────
   "keys.mouse.title": "Mouse",

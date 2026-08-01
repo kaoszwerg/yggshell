@@ -38,6 +38,10 @@ export const ACTIONS = [
   "openSettings",
   "openLogs",
   "toggleGitTool",
+  "toggleFilesTool",
+  "toggleActivityTool",
+  "toggleDockerTool",
+  "toggleAgentTool",
 ] as const;
 
 export type ActionId = (typeof ACTIONS)[number];
@@ -104,6 +108,13 @@ export function defaultBindings(mac: boolean = isMacPlatform()): Record<ActionId
     openSettings: mod(","),
     openLogs: mod("l"),
     toggleGitTool: mod("g"),
+    // One per tool, because Git having one and the rest not is an inconsistency a user has to
+    // discover. Letters chosen to be free of the shell's own set and of the bindings above:
+    // E for the file tree, J for activity, D for Docker, I for the agent.
+    toggleFilesTool: mod("e"),
+    toggleActivityTool: mod("j"),
+    toggleDockerTool: mod("d"),
+    toggleAgentTool: mod("i"),
   };
 }
 

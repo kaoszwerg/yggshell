@@ -115,6 +115,18 @@ export function useShortcuts(): void {
         case "toggleGitTool":
           toggleTool("git");
           return;
+        case "toggleFilesTool":
+          toggleTool("files");
+          return;
+        case "toggleActivityTool":
+          toggleTool("activity");
+          return;
+        case "toggleDockerTool":
+          toggleTool("docker");
+          return;
+        case "toggleAgentTool":
+          toggleTool("agent");
+          return;
         default: {
           // `selectTab1`…`selectTab9`. Derived rather than nine cases: the number IS the index, and
           // nine near-identical branches is nine places for one of them to be wrong.

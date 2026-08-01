@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Every sidebar tool now has a keyboard shortcut, not just Git.** `⌘G` existed and the other four did
+  not — an inconsistency nobody would guess at, and one that made the tool column reachable by keyboard
+  only by accident of which tool you happened to want. Added `⌘E` (Files), `⌘J` (Activity), `⌘D`
+  (Docker) and `⌘I` (Agent), each `Ctrl+Shift+…` off macOS, each rebindable in Settings like every other
+  binding. Pressing another tool's key while one is open switches straight to it rather than closing
+  first — pinned by a test, because two keystrokes per switch would make the shortcuts worse than the
+  mouse.
+
 ### Fixed
 
 - **The build command only worked on macOS.** Yesterday's identity gate introduced two Unix-only
