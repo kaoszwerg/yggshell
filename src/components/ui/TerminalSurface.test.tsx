@@ -76,8 +76,9 @@ function keydown(over: Partial<KeyboardEvent> = {}) {
     ctrlKey: false,
     altKey: false,
     metaKey: false,
+    preventDefault: vi.fn(),
     ...over,
-  } as KeyboardEvent;
+  } as unknown as KeyboardEvent;
 }
 
 describe("TerminalSurface key handling", () => {
@@ -118,6 +119,27 @@ describe("TerminalSurface key handling", () => {
     expect(onData).toHaveBeenCalledWith("\x1b\r");
     // `false` tells xterm not to encode the key itself — otherwise the program gets both.
     expect(handled).toBe(false);
+  });
+
+  it("also stops the BROWSER default, which is what made it fail in a real build", () => {
+    // The defect: returning `false` stops xterm (`if (handler(e) === false) return false` in its
+    // source) but xterm therefore never reaches the `preventDefault` it would have called. The
+    // browser then puts a newline into the hidden textarea, xterm forwards it as input, and the
+    // program gets ESC CR *and* a bare newline — the newline being the one that submits.
+    //
+    // Invisible in jsdom, which has no such default. Hence this test asserts the CALL.
+    const event = keydown({ shiftKey: true });
+    handlers.key?.(event);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("does not stop the default for a key it is passing through", () => {
+    // Calling it unconditionally would break every key the terminal does not rewrite.
+    const event = keydown();
+    handlers.key?.(event);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
   it("leaves plain Enter entirely alone", () => {

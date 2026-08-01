@@ -72,3 +72,19 @@ describe("Row", () => {
     ).toBeTruthy();
   });
 });
+
+it("forwards a right-click, so a ContextMenu wrapped around it actually opens", () => {
+  // This component has no `...rest` spread, so a prop it does not name is dropped in silence.
+  // `ContextMenu` attaches `onContextMenu` to whatever child it is given — which made the file
+  // browser's menu exist in the source and never open. The same defect shipped once before on the
+  // tab strip; this is the test that stops it shipping a third time.
+  const onContextMenu = vi.fn();
+  render(
+    <Row label="file" onActivate={vi.fn()} onContextMenu={onContextMenu}>
+      x
+    </Row>,
+  );
+
+  fireEvent.contextMenu(screen.getByRole("button", { name: "file" }));
+  expect(onContextMenu).toHaveBeenCalledOnce();
+});

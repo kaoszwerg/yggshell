@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEventHandler, ReactNode } from "react";
 
 export interface RowProps {
   /** What activating this row does. */
@@ -9,6 +9,16 @@ export interface RowProps {
   selected?: boolean;
   children: ReactNode;
   className?: string;
+  /**
+   * Right-click handler, forwarded to the button.
+   *
+   * **Declared explicitly rather than left to a `...rest` spread**, and that is the point: this
+   * component has no spread, so anything not named here is dropped SILENTLY. `ContextMenu` attaches
+   * its handler to whatever child it is given, so wrapping a `Row` in one produced a menu that
+   * never opened and said nothing about it — the same defect that shipped once already on the tab
+   * strip. Naming the prop is what makes losing it a compile error rather than a mystery.
+   */
+  onContextMenu?: MouseEventHandler<HTMLButtonElement>;
   /**
    * Inline style, for what a class cannot express.
    *
@@ -38,6 +48,7 @@ export function Row({
   children,
   className = "",
   style,
+  onContextMenu,
 }: RowProps) {
   // Enter and Space come free with a real button; this only exists so a row can be activated from a
   // keyboard without the caller wiring it up.
@@ -52,6 +63,7 @@ export function Row({
       type="button"
       aria-label={label}
       style={style}
+      onContextMenu={onContextMenu}
       aria-current={selected ? "true" : undefined}
       onClick={onActivate}
       onKeyDown={onKeyDown}

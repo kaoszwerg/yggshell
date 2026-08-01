@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The file browser had no context menu at all.** `Row` does not forward props it has not named, so
+  `ContextMenu`'s handler was dropped in silence — the menu existed in the source and could not be
+  opened. The same defect shipped once before on the tab strip; the prop is named explicitly now and
+  a test holds it.
+- **Shift+Enter did nothing.** The sequence was sent, but returning `false` from the key handler
+  stops xterm's own handling *before* it calls `preventDefault` — so the browser put a newline into
+  the hidden textarea, xterm forwarded that as input, and the newline is what submits. The program
+  was getting `ESC CR` **and** a plain newline.
+- **"That directory is not on your PATH" — again, and for a different reason.** The `PATH` an app can
+  read is a *login* shell's, built by `.zprofile`; `~/.local/bin` is very often set in `.zshrc`, the
+  *interactive* configuration. The panel was formally right and practically wrong, because every
+  shell you open is interactive. It now asks the shell itself — `command -v ygg` — which is the
+  question that was meant all along, and only when the cheap check has already said no.
+
 ### Added
 
 - **The agent tool, and the Claude account manager with it.** What the harness in this tab is doing —

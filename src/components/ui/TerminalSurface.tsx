@@ -394,6 +394,13 @@ export function TerminalSurface({
       // never decides what runs (ADR-PROJ-001 §5).
       const encoded = encodeKey(event);
       if (encoded !== null) {
+        // `preventDefault` FIRST, and it is not optional. Returning `false` stops xterm's own
+        // handling — its source reads `if (handler(e) === false) return false` — and xterm never
+        // gets as far as the `preventDefault` it would otherwise call. The browser default then
+        // runs: Enter puts a newline into the hidden textarea, which xterm forwards as input. The
+        // program received ESC CR *and* a bare newline, and the newline is what submits. That is
+        // exactly why Shift+Enter appeared to do nothing but send.
+        event.preventDefault();
         handlers.current.onData(encoded);
         return false;
       }

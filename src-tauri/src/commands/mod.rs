@@ -224,7 +224,8 @@ pub fn cli_status(app: tauri::AppHandle) -> Result<Option<crate::cli_install::Cl
     // (`terminal::environment`, which exists for exactly this class of confusion).
     let path_var = crate::terminal::environment::path().unwrap_or_default();
     let status =
-        crate::cli_install::status(&crate::cli_install::default_candidates(&home), &path_var);
+        crate::cli_install::status(&crate::cli_install::default_candidates(&home), &path_var)
+            .map(confirm_with_the_shell);
     tracing::debug!(installed = status.is_some(), "cli_status");
     Ok(status)
 }
@@ -261,11 +262,11 @@ pub fn install_cli(app: tauri::AppHandle) -> Result<crate::cli_install::CliInsta
     // entries a developer actually has only exist after a login shell has run.
     let path_var = crate::terminal::environment::path().unwrap_or_default();
 
-    let result = crate::cli_install::install(
+    let result = confirm_with_the_shell(crate::cli_install::install(
         &script,
         &crate::cli_install::default_candidates(&home),
         &path_var,
-    )?;
+    )?);
     tracing::info!(directory = %result.directory, on_path = result.on_path, "install_cli ok");
     Ok(result)
 }
@@ -652,4 +653,31 @@ pub fn create_claude_home(app: tauri::AppHandle, name: String) -> Result<String>
 pub fn install_direnv() -> Result<String> {
     tracing::info!("install_direnv");
     crate::agent::direnv::install()
+}
+
+/// Give the shell the last word on whether it can find the launcher.
+///
+/// **The defect this closes.** The `PATH` the backend can read is a LOGIN shell's, and the
+/// maintainer — like a great many people — puts `~/.local/bin` in `.zshrc`, the INTERACTIVE
+/// configuration. The panel therefore announced "that directory is not on your PATH" about a
+/// directory from which `ygg` runs every time they type it, because every shell they open is
+/// interactive. Twice now, which is why it is no longer a string comparison that decides.
+///
+/// Only asked when the cheap check has already said no: an interactive shell loads the user's whole
+/// prompt framework, and that is not something to do for an answer already in hand.
+///
+/// At the command layer rather than inside `cli_install`, so the library stays a pure function of
+/// its arguments — a test of it must not depend on what happens to be installed on the machine
+/// running the test (rule:testing).
+fn confirm_with_the_shell(
+    mut install: crate::cli_install::CliInstall,
+) -> crate::cli_install::CliInstall {
+    if !install.on_path && crate::cli_install::interactive_shell_finds_it() {
+        tracing::info!(
+            directory = %install.directory,
+            "not on the login PATH, but an interactive shell finds it — reporting it as available"
+        );
+        install.on_path = true;
+    }
+    install
 }
