@@ -43,11 +43,17 @@ mkdir -p "$dir"
 #
 # The events file's mtime is not a substitute: any event, from any project, moves it.
 #
+# WHY THE PID: the payload says which DIRECTORY the agent works in, and a directory is not a tab. Two
+# tabs open on the same repository — one running the agent, one running a build — are indistinguishable
+# by cwd, so the build's tab was told "the agent is idle" and showed nothing while it worked. `$PPID`
+# is the process that ran this hook, which is the harness itself; the app then asks whether that pid is
+# in a given tab's process tree. That is a question about a TAB.
+#
 # `sed` on the FIRST line only, inserting after the opening brace — the payload is one JSON object,
 # so this stays valid JSON without needing a JSON tool the user may not have. `>>` on a short write
 # is atomic enough that two agents finishing at the same moment cannot interleave halfway through a
 # line, which is the only interleaving that would matter. `sed` rather than a shell `read`: the
 # payload is one line, but `read` would strip a backslash.
-sed "1s/^{/{\"recorded_at\":$(date +%s),/" >>"$dir/agent-events.jsonl"
+sed "1s/^{/{\"recorded_at\":$(date +%s),\"agent_pid\":$PPID,/" >>"$dir/agent-events.jsonl"
 
 exit 0

@@ -8,6 +8,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A directory is not a tab.** The turn state added a version ago was matched by `cwd` alone, so two
+  tabs open on the same repository — one running the agent, one running a build — were
+  indistinguishable: the build's tab was told the agent was idle and showed nothing while it worked.
+  The hook script now records the harness's own pid (`$PPID`), and a tab claims an event only when
+  that process is in **its** process tree. An event with no pid, from an older script, matches no tab,
+  so those tabs keep the behaviour they had.
+
+- **The activity line flickered at its right end** — sometimes reaching the edge, sometimes stopping a
+  few pixels short. The travelling child was two periods wide and shifted by one, which put its edge
+  exactly on the strip's at one phase of every loop; sub-pixel rounding there opened and closed a gap.
+  It is three periods wide now and hangs a whole period off each side, so neither edge ever comes near
+  the strip's at any phase. Pinned as a relationship between the numbers rather than as the numbers.
+
+### Fixed
+
 - **The activity line now says whether the agent is working, not whether a harness is open.** Reported
   as running with no discernible relation to anything — and it was not inverted, it was measuring the
   wrong thing. An AI harness **is** a command that runs for hours, so both of the terminal's own

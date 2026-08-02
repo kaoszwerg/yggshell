@@ -17,7 +17,8 @@
 //!
 //! ## What is written, and what is not
 //!
-//! Exactly two entries, `Notification` and `Stop`, each pointing at a script this app installed. The
+//! Three entries — `UserPromptSubmit`, `Notification` and `Stop` — each pointing at a script this
+//! app installed. Together they bracket a turn: it opens, it may block on you, it ends. The
 //! rest of `settings.json` is read, modified in memory and written back whole — it is the user's
 //! file, holding their permissions, their model choice and their own hooks, and a rewrite that lost
 //! any of that would be a far worse failure than the feature is worth. A backup is written first.
@@ -28,9 +29,13 @@ use std::path::{Path, PathBuf};
 
 /// The events worth listening for.
 ///
-/// `Notification` is the agent asking for something — a permission, an answer. `Stop` is it having
-/// finished, which is the other moment you want to be told about. The rest (`PreToolUse` and
-/// friends) fire constantly and would say nothing a person can act on.
+/// `UserPromptSubmit` opens a turn, `Stop` ends it, and `Notification` is the agent asking for
+/// something in between. Three events bracket the one question a terminal cannot answer for itself:
+/// is the agent working *for me* right now.
+///
+/// `PreToolUse` and `PostToolUse` would be finer — a line per tool call rather than per turn — and
+/// were weighed and declined with the maintainer: the events file is append-only and nobody prunes
+/// it, so the cost is permanent while the extra precision answers a question nobody asked.
 const EVENTS: [&str; 3] = ["UserPromptSubmit", "Notification", "Stop"];
 
 /// The event that opens a turn: the user has just sent something and the agent is working on it.
@@ -183,6 +188,16 @@ pub struct AgentEvent {
     /// The agent's transcript. **This is what ages an event**: if it has been written to since
     /// `recorded_at`, the agent has produced something, and whatever it was asking for is answered.
     pub transcript: Option<String>,
+    /// The harness process that raised this event, stitched in by our hook script as `$PPID`.
+    ///
+    /// **A directory is not a tab, and this is the difference.** Two tabs open on the same repository
+    /// — one running the agent, one running a build — cannot be told apart by `cwd`, so the build's
+    /// tab was told the agent was idle and showed nothing while it worked. A pid can be looked for in
+    /// a particular tab's process tree, which is a question about a tab.
+    ///
+    /// `None` for a line written by a script installed before this existed. Such an event matches no
+    /// tab, so those tabs simply fall back to the terminal's own signal — the behaviour they had.
+    pub agent_pid: Option<u32>,
 }
 
 /// The `notification_type` of an idle prompt: finished and unattended, nothing asked.
@@ -226,14 +241,21 @@ pub fn read_events(path: &Path, keep: usize) -> Vec<AgentEvent> {
 /// opens a turn, and anything after it closes one — `Stop` because the turn ended, `Notification`
 /// because the agent is blocked on an answer and is no longer working *for* you. A turn that is
 /// still open is the one thing a terminal's own activity signal cannot see.
-pub fn turn_state(events: Vec<AgentEvent>, dir: &str) -> Option<bool> {
-    // `None` means "no agent has ever reported from this directory", which is a different answer from
-    // "an agent is here and idle" — and the difference decides whether the terminal's own activity
-    // signal is overridden at all. Getting it wrong makes every plain shell look permanently idle.
-    let latest = newest_per_directory(events)
+pub fn turn_state(events: Vec<AgentEvent>, dir: &str, pids: &[u32]) -> Option<bool> {
+    // `None` means "no agent of THIS TAB has reported", which is a different answer from "an agent is
+    // here and idle" — and the difference decides whether the terminal's own activity signal is
+    // overridden at all. Getting it wrong makes a plain shell look permanently idle.
+    //
+    // Matched on the pid, not only the directory: two tabs open on the same repository, one running
+    // the agent and one running a build, are indistinguishable by `cwd`. The build's tab was told the
+    // agent was idle and showed nothing while it worked — reported. An event with no pid (an older
+    // hook script) matches no tab, so that tab keeps the terminal's own signal.
+    let mine: Vec<AgentEvent> = events
         .into_iter()
-        .find(|event| event.cwd == dir)?;
-    Some(latest.event == TURN_START)
+        .filter(|event| event.cwd == dir)
+        .filter(|event| event.agent_pid.is_some_and(|pid| pids.contains(&pid)))
+        .collect();
+    Some(mine.last()?.event == TURN_START)
 }
 
 /// The directories whose agent is working right now.
@@ -297,6 +319,10 @@ pub fn parse_event(line: &str) -> Option<AgentEvent> {
             .and_then(Value::as_str)
             .map(str::to_string),
         recorded_at: value.get("recorded_at").and_then(Value::as_u64),
+        agent_pid: value
+            .get("agent_pid")
+            .and_then(Value::as_u64)
+            .and_then(|pid| u32::try_from(pid).ok()),
         transcript: value
             .get("transcript_path")
             .and_then(Value::as_str)
@@ -493,6 +519,7 @@ mod tests {
             kind: Some("permission_prompt".into()),
             recorded_at: Some(1_000),
             transcript: Some("/t".into()),
+            agent_pid: None,
         };
 
         assert!(has_moved_on(&event, |_| Some(1_600)), "ten minutes of work");
@@ -515,6 +542,7 @@ mod tests {
             cwd: "/repo".into(),
             message: None,
             kind: None,
+            agent_pid: None,
             recorded_at: None,
             transcript: Some("/t".into()),
         };
@@ -550,18 +578,54 @@ mod tests {
         // starts until it exits — correct, and useless. Only the turn boundaries say whether it is
         // doing something FOR YOU.
         let submit = event(TURN_START, "/repo");
-        assert_eq!(turn_state(vec![submit.clone()], "/repo"), Some(true));
+        assert_eq!(
+            turn_state(vec![submit.clone()], "/repo", &[MINE]),
+            Some(true)
+        );
 
         // `Stop` ends it; so does a `Notification`, because an agent blocked on an answer has stopped
         // working for you — that state belongs to the bell, not to the activity line.
         assert_eq!(
-            turn_state(vec![submit.clone(), event("Stop", "/repo")], "/repo"),
+            turn_state(
+                vec![submit.clone(), event("Stop", "/repo")],
+                "/repo",
+                &[MINE]
+            ),
             Some(false)
         );
         assert_eq!(
-            turn_state(vec![submit, event("Notification", "/repo")], "/repo"),
+            turn_state(
+                vec![submit, event("Notification", "/repo")],
+                "/repo",
+                &[MINE]
+            ),
             Some(false)
         );
+    }
+
+    #[test]
+    fn another_tab_in_the_same_repository_is_not_this_tab() {
+        // THE reason the pid is recorded at all. Two tabs open on one repository — the agent in one,
+        // a build in the other — are indistinguishable by `cwd`, and the build's tab was told the
+        // agent was idle and showed nothing while it worked. Reported.
+        let theirs = from_pid(TURN_START, "/repo", 99);
+
+        // This tab does not have that process in its tree, so it has no agent state at all and keeps
+        // the terminal's own signal.
+        assert_eq!(turn_state(vec![theirs.clone()], "/repo", &[MINE]), None);
+        // The tab that does have it sees its own turn.
+        assert_eq!(turn_state(vec![theirs], "/repo", &[99]), Some(true));
+    }
+
+    #[test]
+    fn an_event_from_a_script_with_no_pid_matches_no_tab() {
+        // A line written before the pid existed. It cannot be attributed, so no tab claims it and
+        // every tab keeps the behaviour it had — degradation, not a guess.
+        let old = AgentEvent {
+            agent_pid: None,
+            ..event(TURN_START, "/repo")
+        };
+        assert_eq!(turn_state(vec![old], "/repo", &[MINE]), None);
     }
 
     #[test]
@@ -569,8 +633,11 @@ mod tests {
         // `None` and `Some(false)` are different answers and the difference decides whether the
         // terminal's own activity signal is overridden at all. Confusing them makes every plain shell
         // look permanently idle — a build running in one would show nothing.
-        assert_eq!(turn_state(vec![], "/repo"), None);
-        assert_eq!(turn_state(vec![event("Stop", "/other")], "/repo"), None);
+        assert_eq!(turn_state(vec![], "/repo", &[MINE]), None);
+        assert_eq!(
+            turn_state(vec![event("Stop", "/other")], "/repo", &[MINE]),
+            None
+        );
     }
 
     #[test]
@@ -582,7 +649,7 @@ mod tests {
             event("Stop", "/repo"),
             event(TURN_START, "/repo"),
         ];
-        assert_eq!(turn_state(events, "/repo"), Some(true));
+        assert_eq!(turn_state(events, "/repo", &[MINE]), Some(true));
     }
 
     #[test]
@@ -668,10 +735,19 @@ mod tests {
     }
 
     fn event(name: &str, cwd: &str) -> AgentEvent {
+        from_pid(name, cwd, MINE)
+    }
+
+    /// The harness pid a test's tab is running. Any value; what matters is which tree it is in.
+    const MINE: u32 = 4242;
+
+    /// The same event raised by a DIFFERENT harness — another tab, same repository.
+    fn from_pid(name: &str, cwd: &str, pid: u32) -> AgentEvent {
         AgentEvent {
             kind: None,
             recorded_at: None,
             transcript: None,
+            agent_pid: Some(pid),
             event: name.to_string(),
             cwd: cwd.to_string(),
             message: None,

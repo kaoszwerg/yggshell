@@ -167,20 +167,26 @@ describe("the activity line", () => {
     // left" and moved right: a percentage position resolves against `element − image`, the image was
     // twice the element, so the bracket is negative and the sign flips. A translate says what it
     // does — which is why porting one has to state a direction, and why getting it backwards is
-    // silent. Rightward means starting shifted left and ending at zero.
+    // silent. Rightward means the offset INCREASES.
     const block = atRule("@keyframes activity-sweep");
-    const from = block.slice(block.indexOf("from"), block.indexOf("  to {"));
-    const to = block.slice(block.indexOf("  to {"));
-    expect(from).toContain("translateX(-50%)");
-    expect(to).toContain("translateX(0)");
+    const from = Number(/from\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]);
+    const to = Number(/to\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]);
+    expect(Number.isNaN(from)).toBe(false);
+    expect(to).toBeGreaterThan(from);
   });
 
-  it("moves a strip that is two periods wide, so the loop has no seam", () => {
-    // Shifting by exactly one period lands on an identical frame. A strip only one period wide would
-    // run out and snap back.
+  it("shifts by exactly one period, so the loop has no seam", () => {
+    // Landing on an identical frame is what makes the loop invisible. The shift is a percentage of
+    // the CHILD, the period is a fraction of the child — they only mean anything together, which is
+    // why they are asserted together rather than as two magic numbers.
     const rule = declarations(".hud-activity-running::before");
-    expect(rule).toContain("width: 400%");
-    expect(rule).toContain("background-size: 50% 100%");
+    const block = atRule("@keyframes activity-sweep");
+    const shift = Math.abs(
+      Number(/to\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]) -
+        Number(/from\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]),
+    );
+    const tile = Number(/background-size:\s*([\d.]+)%/.exec(rule)?.[1]);
+    expect(shift).toBeCloseTo(tile, 3);
     expect(rule).toContain("repeat-x");
   });
 
@@ -189,14 +195,25 @@ describe("the activity line", () => {
     // so the visible strip showed half a period — one smooth ramp, brightest in the middle, never
     // dark at an edge. Halving that to a one-width period puts the gradient's faint ends AT both
     // edges and the line reads as not reaching them. Reported that way after the first port.
-    //
-    // Child 400% wide, gradient 50% of the child = 200% of the element. The two numbers only mean
-    // anything together, which is why they are asserted together.
     const rule = declarations(".hud-activity-running::before");
-    const width = /width:\s*(\d+)%/.exec(rule);
-    const size = /background-size:\s*(\d+)%/.exec(rule);
-    const periodInWindows = (Number(width?.[1]) / 100) * (Number(size?.[1]) / 100);
-    expect(periodInWindows).toBe(2);
+    const width = Number(/width:\s*([\d.]+)%/.exec(rule)?.[1]);
+    const size = Number(/background-size:\s*([\d.]+)%/.exec(rule)?.[1]);
+    expect((width / 100) * (size / 100)).toBeCloseTo(2, 2);
+  });
+
+  it("hangs a whole period off each side, so no edge can ever meet the strip's", () => {
+    // The flicker: with the child only two periods wide, one phase of the loop put its edge exactly
+    // on the parent's, and sub-pixel rounding there opened and closed a gap — "sometimes to the edge,
+    // sometimes a few pixels short". Slack is the fix, and it has to be at least a full period or the
+    // shift walks an edge back into view.
+    const rule = declarations(".hud-activity-running::before");
+    const width = Number(/width:\s*([\d.]+)%/.exec(rule)?.[1]);
+    const tile = (Number(/background-size:\s*([\d.]+)%/.exec(rule)?.[1]) / 100) * width;
+    const hang = Math.abs(Number(/margin-left:\s*(-?[\d.]+)%/.exec(rule)?.[1]));
+
+    expect(hang).toBeGreaterThanOrEqual(tile);
+    // …and enough left over on the right after a full shift: the child must still reach past 100%.
+    expect(width - hang - 100).toBeGreaterThanOrEqual(tile);
   });
 
   it("honours reduced motion on the element that actually animates", () => {

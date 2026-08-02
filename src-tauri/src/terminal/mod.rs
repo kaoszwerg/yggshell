@@ -550,7 +550,18 @@ impl TerminalRegistry {
             // The agent's own turn state, where there is one, because a harness is a command that
             // runs for hours and `busy` therefore says "yes" for all of them.
             agent_turn: cwd.as_deref().and_then(|dir| {
-                crate::agent::hooks::turn_state(crate::agent::hooks::read_events(events, 50), dir)
+                // The pane's whole process tree, because the harness is a descendant of the pane's
+                // own process rather than the pane itself. Only asked for when there is a directory
+                // to match against, so a tab with no tmux session pays nothing.
+                let pids: Vec<u32> = crate::procs::tree(&tmux::pane_pids(&name))
+                    .into_iter()
+                    .map(|process| process.pid)
+                    .collect();
+                crate::agent::hooks::turn_state(
+                    crate::agent::hooks::read_events(events, 50),
+                    dir,
+                    &pids,
+                )
             }),
             cwd,
             command,

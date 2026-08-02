@@ -393,13 +393,15 @@ input[type="range"]:disabled::-webkit-slider-thumb,
        RIGHT: a percentage background position resolves against `element width − image width`, and the
        image was twice the element, so the bracket is negative and the sign flips. Translating is
        honest about its direction, which is exactly why the port had to state one.
-       Both ends cover the strip: at -50% the child spans -100%…+100% of it, at 0% it spans 0…200%.
-       One full period apart, so the loop is seamless and there is nothing to reset. */
+       One period is a THIRD of the child (six element-widths, three periods), so shifting by 33.3333%
+       lands on an identical frame — seamless, nothing to reset. The child hangs a period off each
+       side (`margin-left: -300%`), so neither of its edges ever comes near the strip's at any phase;
+       that is what stopped the flicker. */
     from {
-      transform: translateX(-50%);
+      transform: translateX(0);
     }
     to {
-      transform: translateX(0);
+      transform: translateX(33.3333%);
     }
   }
 
@@ -683,22 +685,29 @@ input[type="range"]:disabled::-webkit-slider-thumb,
        horizontally and is clipped by it needs nothing from the cascade the caller also writes to. */
     display: block;
     height: 100%;
-    /* Four element-widths: two periods of a gradient that is itself TWO element-widths long.
-       The period is the part that had to be kept, and I halved it on the first attempt: the original
-       put `background-size: 200%` on the element, so one period spanned two window widths and the
-       visible strip showed half a period — a single smooth ramp, brightest somewhere in the middle,
-       never dark at an edge. A one-width period puts the gradient's own faint ends AT both edges, and
-       the line reads as not reaching them. Reported exactly that way.
-       Two periods wide so shifting by one lands on an identical frame: no seam, no reset. */
-    width: 400%;
+    /* SIX element-widths — three periods of a gradient that is itself two element-widths long — and
+       hung one period to the left of the strip. Two things had to be true at once and the first
+       attempt only managed one.
+
+       The PERIOD is two element-widths, which is the original's geometry: the visible strip then
+       shows half a period, one smooth ramp, never dark at an edge. Halving it put the gradient's own
+       faint ends exactly on both edges and the line read as not reaching them.
+
+       The SLACK is the second: with four widths and a shift of one period, one phase of the loop put
+       the child's edge precisely on the parent's, and sub-pixel rounding there opened and closed a
+       gap — reported as flickering, sometimes to the edge and sometimes a few pixels short. Three
+       periods with one hanging off each side means the child's edges are never within a whole period
+       of the parent's, at any phase. */
+    width: 600%;
+    margin-left: -300%;
     background-image: linear-gradient(
       90deg,
       rgb(var(--saga-gold-rgb) / 0.25),
       var(--saga-gold),
       rgb(var(--saga-gold-rgb) / 0.25)
     );
-    /* Half the child = one period = two element-widths, which is the original's geometry. */
-    background-size: 50% 100%;
+    /* A third of the child = one period = two element-widths, which is the original's geometry. */
+    background-size: 33.3333% 100%;
     background-repeat: repeat-x;
     animation: activity-sweep 2.4s linear infinite;
     /* NO `will-change`. It was here for a day and it was cargo-cult: an animated `transform` is
