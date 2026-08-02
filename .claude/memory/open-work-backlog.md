@@ -473,6 +473,26 @@ algorithmic complexity that only bites under load, memory growth over time (WebC
 tick already stops when nothing runs, and the `s.panes` selectors only re-render on a real reference
 change.
 
+## Planned, awaiting a decision before any code
+
+- **The Notes tool — a staging area between the maintainer and the agent.** Asked for 2026-08-02:
+  tasks per project, checkable, as rendered markdown, with priorities, notes that can be found again,
+  search, and copying content out (all of it, a code block, a text block).
+
+  **The plan is `docs/plans/notes-tool.md`. Read it before writing anything** — it holds six marked
+  decisions, and three of them change the data model, not the styling.
+
+  The one sentence that matters if the plan is ever skimmed: **this is not a notes app.** Every part
+  of the description points at the same purpose — what the next prompt should say, what is still to be
+  discussed with the agents, copy code blocks *because the destination is a prompt*. So the test for
+  every feature in it is whether it makes the hand-over to the agent shorter. Two things follow that
+  were not asked for and matter more than most of what was: **capture must be one gesture** (a staging
+  area you retype into gets abandoned), and **hand-over should reuse "type into the terminal"** from
+  0.40.0 rather than the clipboard.
+
+  And one explicit NO, from the maintainer's own words about the attention signal: no due dates, no
+  reminders. *"Ich will das nicht zu einer Arbeitsquelle machen die ich auch noch managen muss."*
+
 ## Defects with a diagnosis, not yet closed
 
 - **Reported upstream 2026-08-02, answer pending:** that every `.hud-*` class is unlayered and so
