@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Removed a `will-change: transform` that had been in the activity line for a day.** It was
+  cargo-cult — an animated `transform` is composited without it, so the hint bought nothing — and it
+  is not free. The window frame's spun square exists **once** and may carry the hint; this one exists
+  **once per terminal**, so every pane running something would hold a permanently promoted, full-width
+  layer for as long as it ran. Over-promotion costs memory and is a documented cause of exactly the
+  rendering artefacts it looks like it prevents. Pinned by a test, since the next person will be
+  tempted the same way.
+
+### Fixed
+
 - **The activity line travels by `transform` now, not by `background-position`.** Reported as the fast
   border animation stuttering. Animating `background-position` re-rasterises the gradient across the
   element on every frame — the identical defect the window frame was cured of two versions ago, one

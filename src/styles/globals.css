@@ -608,7 +608,11 @@ input[type="range"]:disabled::-moz-range-thumb {
   background-size: 50% 100%;
   background-repeat: repeat-x;
   animation: activity-sweep 2.4s linear infinite;
-  will-change: transform;
+  /* NO `will-change`. It was here for a day and it was cargo-cult: an animated `transform` is
+     composited without it, so the hint bought nothing — and it is not free. The frame's spun square
+     exists ONCE; this exists once per terminal, and every pane that is running something would hold a
+     permanently promoted, full-width layer for as long as it runs. Over-promotion costs memory and is
+     a documented cause of exactly the artefacts this was meant to prevent. */
 }
 /* What the command DID, which is the part you miss when you look away. Held briefly, then faded back
    to rest by the transition above. */

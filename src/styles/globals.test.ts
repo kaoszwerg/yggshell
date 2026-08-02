@@ -130,4 +130,13 @@ describe("the activity line", () => {
     const query = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
     expect(query).toContain(".hud-activity-running::before");
   });
+
+  it("does not promote a layer per terminal", () => {
+    // `will-change: transform` was here for a day, and it was cargo-cult: an animated transform is
+    // composited without it. The frame's spun square exists ONCE and may carry the hint; this exists
+    // once per terminal, so every pane running something would hold a permanently promoted
+    // full-width layer. Over-promotion costs memory and is a documented cause of the artefacts it
+    // looks like it prevents.
+    expect(declarations(".hud-activity-running::before")).not.toContain("will-change");
+  });
 });
