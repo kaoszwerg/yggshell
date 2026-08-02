@@ -302,11 +302,7 @@ pub fn sessions() -> Vec<crate::dto::TmuxSession> {
         return Vec::new();
     };
     let output = match Command::new(&tmux)
-        .args([
-            "list-sessions",
-            "-F",
-            "#{session_name}\t#{session_windows}\t#{session_attached}\t#{pane_current_command}",
-        ])
+        .args(["list-sessions", "-F", SESSION_FORMAT])
         .stdin(Stdio::null())
         .output()
     {
@@ -328,6 +324,16 @@ pub fn sessions() -> Vec<crate::dto::TmuxSession> {
         return Vec::new();
     }
     let sessions = parse_sessions(&String::from_utf8_lossy(&output.stdout));
+    // COUNTS, not a dump. The first attempt logged the bytes as an escaped string and could not
+    // answer the one question that mattered: whether the separator tmux sent was the one we asked
+    // for. A tab and an underscore are both one byte, `{:?}` renders a real tab as `\t`, and the JSON
+    // writer may substitute a raw control character — so every rendering of that string was
+    // ambiguous, and reading it as evidence was guessing with extra steps. A number cannot be
+    // mangled by anything downstream.
+    let tabs = output.stdout.iter().filter(|b| **b == b'\t').count();
+    let seps = output.stdout.iter().filter(|b| **b == b':').count();
+    let unders = output.stdout.iter().filter(|b| **b == b'_').count();
+    tracing::debug!(tabs, colons = seps, underscores = unders, "tmux separators");
     tracing::debug!(
         tmux = %tmux.display(),
         found = sessions.len(),
@@ -345,7 +351,26 @@ pub fn sessions() -> Vec<crate::dto::TmuxSession> {
     sessions
 }
 
-/// Pick the sessions out of the tab-separated listing.
+/// The `-F` format, and its separator is a **printable** character on purpose.
+///
+/// It was a tab, and something between this argv and the log turned that tab into `_` — measured on
+/// the maintainer's machine: tmux answered 93 bytes reading `0_1_0_zsh\nlysis_1_0_zsh\n…` while the
+/// binary demonstrably holds a real 0x09, and the parse then dropped every line. **What performs that
+/// substitution was not identified.** It could not be reproduced from a shell under any combination
+/// of PATH, TMPDIR, locale, `TMUX`, a null stdin, a pipe or a missing controlling terminal, and the
+/// same build listed its sessions correctly from a dev bundle.
+///
+/// What the evidence does establish is the *class*: a control character was replaced while every
+/// printable one — including the `#{}` syntax either side of it — came through untouched. So the fix
+/// is not to find the culprit but to stop handing it anything to transform.
+///
+/// `:` is the separator because **tmux itself forbids it in a session name** (it is the
+/// `session:window.pane` addressing separator, which is why [`is_valid_session_name`] rejects it
+/// too). The command is parsed as the remainder, so a `:` inside *it* is harmless.
+const SESSION_FORMAT: &str =
+    "#{session_name}:#{session_windows}:#{session_attached}:#{pane_current_command}";
+
+/// Pick the sessions out of the listing.
 ///
 /// A line that does not parse is **skipped, not defaulted**: a session reported with zero windows and
 /// no command would look like an empty one worth ending, which is the opposite of what an unreadable
@@ -354,7 +379,10 @@ fn parse_sessions(stdout: &str) -> Vec<crate::dto::TmuxSession> {
     stdout
         .lines()
         .filter_map(|line| {
-            let mut parts = line.split('\t');
+            // `splitn(4, …)`: the command takes the remainder, so a separator inside it costs
+            // nothing. The three fields before it cannot contain one — tmux forbids `:` in a session
+            // name, and the other two are digits.
+            let mut parts = line.splitn(4, ':');
             let name = parts.next()?.trim().to_string();
             if name.is_empty() {
                 return None;
@@ -703,7 +731,7 @@ mod tests {
         // Names alone are useless after a crash: `yggshell`, `yggshell-2`, `yggshell-3` say nothing
         // about which one holds the build. What it is running and how long it has been there are what
         // make "end it or attach to it" a decision rather than a guess.
-        let out = "yggshell\t2\t1\tzsh\nbuild\t1\t0\tcargo\n";
+        let out = "yggshell:2:1:zsh\nbuild:1:0:cargo\n";
         let sessions = parse_sessions(out);
 
         assert_eq!(sessions.len(), 2);
@@ -719,14 +747,38 @@ mod tests {
     fn an_unreadable_line_is_skipped_rather_than_defaulted() {
         // A session reported with zero windows and no command reads as an empty one worth ending —
         // the opposite of what "this line did not parse" means. Dropping it is the honest failure.
-        let sessions = parse_sessions("good\t1\t0\tzsh\nbroken\tnope\t0\tzsh\n\n");
+        let sessions = parse_sessions("good:1:0:zsh\nbroken:nope:0:zsh\n\n");
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].name, "good");
 
         // A command tmux left empty is not a parse failure — it is a session with nothing named.
-        let bare = parse_sessions("x\t1\t0\t");
+        let bare = parse_sessions("x:1:0:");
         assert_eq!(bare.len(), 1);
         assert_eq!(bare[0].command, "");
+    }
+
+    #[test]
+    fn a_separator_inside_the_command_does_not_shift_the_fields() {
+        // `splitn(4, …)` is why: the command is the remainder. The three fields before it cannot
+        // carry one — tmux forbids `:` in a session name and the other two are digits — so only the
+        // command can, and there it is data rather than structure.
+        let sessions = parse_sessions("build:1:0:ssh host:2222\n");
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "build");
+        assert_eq!(sessions[0].windows, 1);
+        assert_eq!(sessions[0].command, "ssh host:2222");
+    }
+
+    #[test]
+    fn the_format_never_asks_tmux_for_a_control_character() {
+        // The defect this replaced: the separator was a tab, and something between the argv and the
+        // log turned it into `_` — unidentified, unreproducible from a shell, and fatal to the parse.
+        // Every printable character survived. So the format may not contain one at all, and this is
+        // the check that stops a later "let's line the columns up" from reintroducing it.
+        assert!(
+            !SESSION_FORMAT.chars().any(|c| c.is_control()),
+            "the tmux format must stay printable: {SESSION_FORMAT:?}"
+        );
     }
 
     #[test]

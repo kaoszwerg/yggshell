@@ -8,6 +8,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The tmux tool listed nothing while six sessions were running.** tmux answered every time — 93
+  bytes of it — and the parser dropped every line, because the separator it arrived with was not the
+  one that was sent. The format asked for a tab; what came back was `0_1_0_zsh`, with a literal
+  underscore where each tab should be, while the binary demonstrably holds a real `0x09` and the
+  newlines came through untouched.
+
+  **What performs that substitution was not identified, and this does not claim to have found it.**
+  It could not be reproduced from a shell under any combination of `PATH`, `TMPDIR`, locale, `TMUX`,
+  a null stdin, a pipe or a missing controlling terminal, and the same build listed its sessions
+  correctly from a dev bundle whose only differences are its name and identifier.
+
+  What the evidence *does* establish is the class: a control character was replaced while every
+  printable one — including the `#{}` syntax on either side of it — survived. So the fix is to stop
+  handing anything a control character to transform. The separator is now `:`, which tmux itself
+  forbids in a session name, and the command is parsed as the remainder so a `:` inside it is data
+  rather than structure. A test refuses any control character in the format, so the next person who
+  wants to line the columns up cannot reintroduce it.
+
+### Fixed
+
 - **`tmux::sessions` was silent about every way it can fail, which is why an empty list could not be
   diagnosed.** The tool reported "no tmux session is running" next to four that were, and nothing in
   the log could say whether tmux was missing, refused, or answered something unparseable — an empty
