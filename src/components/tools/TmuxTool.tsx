@@ -39,6 +39,7 @@ export function TmuxTool() {
   const renamePaneSession = useTerminalStore((s) => s.renamePaneSession);
 
   const [ending, setEnding] = useState<TmuxSession | null>(null);
+  const [bulk, setBulk] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
@@ -66,10 +67,47 @@ export function TmuxTool() {
     },
   });
 
+  /**
+   * Ending several at once — the accumulation this tool exists for, cleared in one action.
+   *
+   * **Only the DETACHED ones**, and that is a safety property, not a convenience. A session open in a
+   * tab is attached: killing it would leave the user staring at a dead shell in a tab they did not
+   * touch. So the bulk action operates on exactly what nothing else in the app is holding, which is
+   * also exactly what accumulates.
+   *
+   * `allSettled` rather than `all`: one session refusing to die must not abandon the rest half-done,
+   * and the count that failed is reported instead of a single opaque error.
+   */
+  const detached = (sessions.data ?? []).filter(
+    (s) => !panes.some((p) => p.tmuxSession === s.name),
+  );
+
+  const endMany = useMutation({
+    mutationFn: async (names: string[]) => {
+      const results = await Promise.allSettled(names.map((name) => terminalApi.killSession(name)));
+      return results.filter((r) => r.status === "rejected").length;
+    },
+    onSuccess: refresh,
+  });
+
   const list = sessions.data ?? [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {detached.length === 0 ? null : (
+        <div className="border-cyan/20 flex shrink-0 items-center justify-end border-b px-2 py-1">
+          <Button
+            accent="danger"
+            variant="ghost"
+            tooltip={t("tmux.bulk.tooltip")}
+            disabled={endMany.isPending}
+            onClick={() => setBulk(true)}
+          >
+            {t("tmux.bulk.action", { count: detached.length })}
+          </Button>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-auto" style={{ fontSize }}>
         {sessions.isPending ? (
           <Note>{t("tmux.loading")}</Note>
@@ -106,6 +144,27 @@ export function TmuxTool() {
         <p className="text-danger px-2 py-1 font-mono text-[10px]">
           {String(end.error ?? rename.error)}
         </p>
+      )}
+
+      {endMany.data === undefined || endMany.data === 0 ? null : (
+        <p className="text-danger px-2 py-1 font-mono text-[10px]">
+          {t("tmux.bulk.failed", { count: endMany.data })}
+        </p>
+      )}
+
+      {!bulk ? null : (
+        <ConfirmDialog
+          label={t("tmux.bulk.title")}
+          question={t("tmux.bulk.question", { count: detached.length })}
+          detail={t("tmux.bulk.detail")}
+          confirmLabel={t("tmux.bulk.confirm")}
+          cancelLabel={t("tmux.rename.cancel")}
+          onConfirm={() => {
+            endMany.mutate(detached.map((s) => s.name));
+            setBulk(false);
+          }}
+          onCancel={() => setBulk(false)}
+        />
       )}
 
       {ending === null ? null : (

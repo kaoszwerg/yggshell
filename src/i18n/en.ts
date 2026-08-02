@@ -55,6 +55,14 @@ export const en = {
   "tmux.end.detail":
     "Everything running in it stops — {windows} windows, currently {command}. Closing a tab only detaches; this does not.",
   "tmux.end.confirm": "End it",
+  "tmux.bulk.action": "End {count} detached",
+  "tmux.bulk.tooltip": "End every session that is not open in a tab",
+  "tmux.bulk.title": "End detached sessions",
+  "tmux.bulk.question": "End {count} tmux sessions that are not open in a tab?",
+  "tmux.bulk.detail":
+    "Whatever is running in them stops. Sessions open in a tab are left alone — ending one would kill the shell you are looking at.",
+  "tmux.bulk.confirm": "End them",
+  "tmux.bulk.failed": "{count} could not be ended.",
   "tabs.close.title": "Close terminal",
   "tabs.close.question": "Close this terminal and end its tmux session?",
   "tabs.close.detail":

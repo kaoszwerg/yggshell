@@ -91,8 +91,18 @@ export function ToolPanel() {
         </header>
         {/* `min-h-0` and no scrolling of its own: a tool owns the scrolling inside it — the Git tool
             has two independently scrollable regions — and a scroll container wrapped around that
-            would give the column a second scrollbar that moves both at once. */}
-        <div className="min-h-0 flex-1 overflow-hidden">
+            would give the column a second scrollbar that moves both at once.
+
+            FLEX COLUMN, and that is the load-bearing part. This was a plain block, so a tool rooted
+            with `flex-1` — which is all of them except Git — had no definite height at all: `flex-1`
+            means nothing to a block-level child of a block container, so the root fell back to its
+            content height, grew past this box, and `overflow-hidden` CLIPPED it. Every one of those
+            tools looked like it simply refused to scroll, and the `overflow-auto` inside them never
+            had a height to scroll against. Git was the exception only because it roots itself with
+            `h-full`.
+            Fixed here rather than by giving six tools `h-full`: the container is what owes its
+            children a definite height. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activeTool === "git" ? <GitTool /> : null}
           {activeTool === "files" ? <FilesTool /> : null}
           {activeTool === "activity" ? <ActivityTool /> : null}

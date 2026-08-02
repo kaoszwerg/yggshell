@@ -6,7 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The tmux tool ends the detached sessions in one action.** Sessions only ever accumulate — closing a
+  tab detaches on purpose — and clearing them one confirm at a time was the whole cost of that
+  decision. The action deliberately spares any session open in a tab: that one is attached, and ending
+  it would leave a dead shell in a tab nobody touched. One stubborn session no longer abandons the
+  rest half-done; the count that refused is reported.
+
 ### Fixed
+
+- **No tool panel could scroll.** The tool column's content wrapper was a plain block with
+  `overflow-hidden`, so a tool rooted with `flex-1` — which is all of them except Git — had no definite
+  height: its root fell back to its content height, grew past the box and was clipped, and the
+  `overflow-auto` region inside it never had a height to scroll against. Git was the exception only
+  because it roots itself with `h-full`. Fixed once in the container, which is what owes its children a
+  height, rather than in six tools.
 
 - **The window frame flickered at a corner after every resize.** The band was painted by a `145vmax`
   square carrying the gradient and spun by a transform — a composited layer growing with the *square*

@@ -52,6 +52,14 @@ export const de: Translations = {
   "tmux.end.detail":
     "Alles darin wird gestoppt — {windows} Fenster, aktuell {command}. Einen Tab zu schließen löst nur; dies nicht.",
   "tmux.end.confirm": "Beenden",
+  "tmux.bulk.action": "{count} gelöste beenden",
+  "tmux.bulk.tooltip": "Jede Session beenden, die in keinem Tab offen ist",
+  "tmux.bulk.title": "Gelöste Sessions beenden",
+  "tmux.bulk.question": "{count} tmux-Sessions beenden, die in keinem Tab offen sind?",
+  "tmux.bulk.detail":
+    "Alles darin wird gestoppt. Sessions, die in einem Tab offen sind, bleiben unangetastet — eine davon zu beenden würde die Shell killen, auf die du gerade schaust.",
+  "tmux.bulk.confirm": "Alle beenden",
+  "tmux.bulk.failed": "{count} konnten nicht beendet werden.",
   "tabs.close.title": "Terminal schließen",
   "tabs.close.question": "Dieses Terminal schließen und seine tmux-Session beenden?",
   "tabs.close.detail":

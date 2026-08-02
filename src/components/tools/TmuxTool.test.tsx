@@ -147,4 +147,65 @@ describe("TmuxTool", () => {
 
     expect(await screen.findByText(/no such session/)).toBeTruthy();
   });
+
+  it("ends the detached sessions in one action, and ONLY those", async () => {
+    // The accumulation this tool exists for, cleared in one go. The safety property is the second
+    // half and it is the one worth pinning: a session open in a tab is ATTACHED, so ending it would
+    // leave the user looking at a dead shell in a tab they never touched. The bulk action therefore
+    // operates on exactly what nothing else in the app is holding — which is also exactly what
+    // accumulates.
+    vi.mocked(terminalApi.sessions).mockResolvedValue([
+      session("build"),
+      session("yggshell"),
+      session("open-here"),
+    ]);
+    useTerminalStore.setState({
+      panes: [pane({ key: "a", tmuxSession: "open-here" })],
+      activeKey: "a",
+      bootstrapped: true,
+      closing: null,
+    });
+    renderTool();
+
+    // Two of the three are detached, and the button says so rather than making the user count.
+    fireEvent.click(await screen.findByRole("button", { name: "End 2 detached" }));
+    fireEvent.click(screen.getByRole("button", { name: "End them" }));
+
+    await waitFor(() => expect(vi.mocked(terminalApi.killSession).mock.calls.length).toBe(2));
+    const killed = vi.mocked(terminalApi.killSession).mock.calls.map(([name]) => name);
+    expect(killed).toContain("build");
+    expect(killed).toContain("yggshell");
+    expect(killed).not.toContain("open-here");
+  });
+
+  it("offers no bulk action when every session is open in a tab", async () => {
+    // Nothing has accumulated, so the button would be a control that does nothing — and one whose
+    // label ("End 0 detached") invites a click that cannot help.
+    vi.mocked(terminalApi.sessions).mockResolvedValue([session("open-here")]);
+    useTerminalStore.setState({
+      panes: [pane({ key: "a", tmuxSession: "open-here" })],
+      activeKey: "a",
+      bootstrapped: true,
+      closing: null,
+    });
+    renderTool();
+
+    await screen.findByText("open-here");
+    expect(screen.queryByRole("button", { name: /detached/ })).toBeNull();
+  });
+
+  it("reports how many refused to die rather than one opaque failure", async () => {
+    // `allSettled`, not `all`: one stubborn session must not abandon the rest half-done, and "3 of 4
+    // are gone and one is not" is actionable where a single rejection is not.
+    vi.mocked(terminalApi.sessions).mockResolvedValue([session("a"), session("b")]);
+    vi.mocked(terminalApi.killSession).mockImplementation((name: string) =>
+      name === "a" ? Promise.reject(new Error("no such session")) : Promise.resolve(),
+    );
+    renderTool();
+
+    fireEvent.click(await screen.findByRole("button", { name: "End 2 detached" }));
+    fireEvent.click(screen.getByRole("button", { name: "End them" }));
+
+    expect(await screen.findByText("1 could not be ended.")).toBeTruthy();
+  });
 });

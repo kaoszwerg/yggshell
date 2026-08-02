@@ -123,4 +123,23 @@ describe("ToolPanel", () => {
       expect(screen.queryByText("tmp")).toBeNull();
     });
   });
+
+  it("gives the tool it renders a definite height, or nothing inside can scroll", () => {
+    // **Every tool but Git silently refused to scroll**, and this one class is why. The wrapper was a
+    // plain block with `overflow-hidden`. A tool roots itself with `flex-1`, which means nothing to a
+    // block-level child of a block container — so the root fell back to its content height, grew past
+    // this box and was CLIPPED, and the `overflow-auto` region inside it never had a height to scroll
+    // against. Git was the exception only because it happens to root itself with `h-full`.
+    //
+    // Asserted on the class rather than on a measurement: jsdom lays nothing out, so a height here
+    // would be 0 either way. This is the property that was missing, and it is checked where it is
+    // owed — by the container, not by six tools each remembering to ask for it.
+    reset({ activeTool: "files" });
+    const { container } = renderPanel();
+
+    const wrapper = container.querySelector("aside > div:last-of-type");
+    expect(wrapper?.className).toContain("flex");
+    expect(wrapper?.className).toContain("flex-col");
+    expect(wrapper?.className).toContain("min-h-0");
+  });
 });
