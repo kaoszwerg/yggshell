@@ -163,7 +163,6 @@ export const en = {
   "clipboard.selection": "Selection copied",
   "clipboard.note": "Copied",
   "nav.notes": "Notes",
-  "keys.action.toggleNotesTool": "Notes",
   "notes.capture": "Note something…",
   "notes.captureHint": "Enter files it, Shift+Enter adds a line",
   "notes.add": "File this note",
@@ -425,6 +424,8 @@ export const en = {
   "keys.action.toggleActivityTool": "Show or hide the Activity tool",
   "keys.action.toggleDockerTool": "Show or hide the Docker tool",
   "keys.action.toggleAgentTool": "Show or hide the Agent tool",
+  "keys.action.toggleTmuxTool": "Show or hide the tmux tool",
+  "keys.action.toggleNotesTool": "Show or hide the Notes tool",
 
   // ── Things the mouse does ───────────────────────────────────────────────────────────────────
   "keys.mouse.title": "Mouse",

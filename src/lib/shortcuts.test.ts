@@ -1,6 +1,7 @@
 import { en } from "../i18n/en";
 import { de } from "../i18n/de";
 import { describe, it, expect } from "vitest";
+import { TOOL_IDS } from "../store/ui";
 import {
   ACTIONS,
   bindingFor,
@@ -220,5 +221,32 @@ describe("isActionId", () => {
     expect(isActionId("newTab")).toBe(true);
     expect(isActionId("teleport")).toBe(false);
     expect(isActionId(null)).toBe(false);
+  });
+});
+
+describe("every tool is reachable from the keyboard", () => {
+  it("has a toggle action for each tool the rail offers", () => {
+    // **The gap this closes shipped.** The tmux tool went out reachable only by a mouse: it had a
+    // rail entry, a panel and tests, and no action at all — so the checks that every ACTION has a
+    // binding and a name were both green while one tool had neither, because it was not in the list
+    // they iterate. The invariant is the other direction: every TOOL must have an action.
+    //
+    // Derived from the tool list rather than written out, or this test becomes the next place a
+    // seventh tool is forgotten.
+    const missing = TOOL_IDS.filter(
+      (tool) => !isActionId(`toggle${tool.charAt(0).toUpperCase()}${tool.slice(1)}Tool`),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("binds each of them to something the shell never sees", () => {
+    // The rule that is not configurable: without ⌘ (or Ctrl+Shift) the combination belongs to the
+    // program running in the terminal, and binding it would take SIGINT or EOF away from it.
+    // `Object.entries`, never `bindings[action]`: a computed member access is an object-injection
+    // sink and the gate runs at --max-warnings 0 (the same reason `toolLabelKey` is a switch).
+    for (const [action, binding] of Object.entries(defaultBindings(true))) {
+      if (!action.startsWith("toggle")) continue;
+      expect(isReservedForShell(binding, true), `${action} takes a key from the shell`).toBe(false);
+    }
   });
 });

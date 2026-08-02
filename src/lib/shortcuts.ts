@@ -42,6 +42,7 @@ export const ACTIONS = [
   "toggleActivityTool",
   "toggleDockerTool",
   "toggleAgentTool",
+  "toggleTmuxTool",
   "toggleNotesTool",
 ] as const;
 
@@ -116,6 +117,11 @@ export function defaultBindings(mac: boolean = isMacPlatform()): Record<ActionId
     toggleActivityTool: mod("j"),
     toggleDockerTool: mod("d"),
     toggleAgentTool: mod("i"),
+    // U for tmux, and the letter is arbitrary because the good ones are gone: T is a new tab, M is
+    // the system's Minimize, S/P/R/A/Z/C/V belong to the webview's own editing and reload. What is
+    // NOT arbitrary is that it exists at all — the tmux tool shipped reachable only by mouse, which
+    // made it the one tool with no keyboard route while the other five had one.
+    toggleTmuxTool: mod("u"),
     // N for notes. Free in this app, and the view is reached FROM the tool rather than by a second
     // near-identical combination nobody would remember which of.
     toggleNotesTool: mod("n"),

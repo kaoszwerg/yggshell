@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The tmux tool was reachable only with a mouse.** It shipped with a rail entry, a panel and its own
+  tests, and no keyboard action at all — while the other five tools each had one. `⌘U` (`Ctrl+Shift+U`
+  elsewhere) now toggles it, and a test asserts the invariant that let it slip: the existing checks
+  walked the list of ACTIONS and were both green, because the missing tool was not in the list they
+  walked. The new one goes the other way — every TOOL must have an action.
+
 - **The first sync against an empty repository failed, twice.** A repository being used for the first
   time has no commits, so `git pull` answered with *"Your configuration specifies to merge with the
   ref 'refs/heads/main'"* and `git push` with *"has no upstream branch"* — and both would have been

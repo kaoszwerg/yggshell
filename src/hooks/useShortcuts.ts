@@ -124,9 +124,12 @@ export function useShortcuts(): void {
         case "toggleDockerTool":
           toggleTool("docker");
           return;
+        case "toggleTmuxTool":
+          toggleTool("tmux");
+          return;
         case "toggleNotesTool":
           toggleTool("notes");
-          break;
+          return;
         case "toggleAgentTool":
           toggleTool("agent");
           return;

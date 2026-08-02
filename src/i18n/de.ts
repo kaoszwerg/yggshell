@@ -155,7 +155,6 @@ export const de: Translations = {
   "clipboard.selection": "Auswahl kopiert",
   "clipboard.note": "Kopiert",
   "nav.notes": "Notizen",
-  "keys.action.toggleNotesTool": "Notizen",
   "notes.capture": "Notieren…",
   "notes.captureHint": "Enter legt ab, Shift+Enter macht eine Zeile",
   "notes.add": "Notiz ablegen",
@@ -416,6 +415,8 @@ export const de: Translations = {
   "keys.action.toggleActivityTool": "Aktivitäts-Werkzeug ein- oder ausblenden",
   "keys.action.toggleDockerTool": "Docker-Werkzeug ein- oder ausblenden",
   "keys.action.toggleAgentTool": "Agent-Werkzeug ein- oder ausblenden",
+  "keys.action.toggleTmuxTool": "tmux-Tool ein- oder ausblenden",
+  "keys.action.toggleNotesTool": "Notizen-Tool ein- oder ausblenden",
 
   // ── Things the mouse does ───────────────────────────────────────────────────────────────────
   "keys.mouse.title": "Maus",

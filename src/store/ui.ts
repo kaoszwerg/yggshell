@@ -19,7 +19,9 @@ const VIEWS: ViewId[] = ["terminal", "logs", "settings", "notes"];
  */
 export type ToolId = "git" | "files" | "activity" | "docker" | "agent" | "tmux" | "notes";
 
-const TOOLS: ToolId[] = ["git", "files", "activity", "docker", "agent", "tmux", "notes"];
+/** Every tool the rail offers. Exported so a test can assert that each one is reachable from the
+ *  keyboard — the tmux tool once shipped with a panel, a rail entry and no shortcut at all. */
+export const TOOL_IDS: ToolId[] = ["git", "files", "activity", "docker", "agent", "tmux", "notes"];
 
 /** Bounds of the tool column, in pixels. Below the minimum a file path is unreadable; above the
  *  maximum the terminal stops being the main thing on screen. */
@@ -222,7 +224,8 @@ export const useUiStore = create<UiState>()(
         if (!VIEWS.includes(state.view)) state.view = "terminal";
         // Likewise for a tool that has since been removed or renamed: collapse rather than render
         // nothing in a column that is taking up space.
-        if (state.activeTool !== null && !TOOLS.includes(state.activeTool)) state.activeTool = null;
+        if (state.activeTool !== null && !TOOL_IDS.includes(state.activeTool))
+          state.activeTool = null;
         // A width outside the bounds — an older build's, or a hand-edited payload — would leave the
         // column unusable and unresizable.
         state.toolWidth = clampWidth(state.toolWidth);
