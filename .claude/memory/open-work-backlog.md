@@ -146,8 +146,16 @@ transform does not scale at all. It also returns the smooth 12 s revolution `ste
 away, and removes a tuning knob whose comment had to *ask* the next agent to re-measure before raising
 it. Prefer the mechanism that cannot get expensive over the constant that happens to be small.
 
+**And that conclusion was half wrong — corrected 2026-08-02 (ADR-PROJ-003).** "A composited transform
+does not scale" is true of the CPU and false of everything else: the layer it composites scaled with
+the **square** of the window, and past a few thousand device pixels a side WebKit stops re-rasterising
+it correctly after a resize. Trading a cost that scales for a *size* that scales is not a win, it is a
+different scaling problem with no counter attached to it. What was actually wrong in both versions was
+never the mechanism — it was producing a window-sized image to show 1.5 px of it. The rule worth
+keeping from all of this: **ask what the change makes bigger, not only what it makes cheaper.**
+
 **The trap in the port, and it is silent.** The animation moved to a new element; the
-`prefers-reduced-motion` query has to move with it (`.window-frame > .window-frame-glow::before`).
+`prefers-reduced-motion` query has to move with it (today: `.window-frame > .window-frame-band`).
 Left pointing at `.window-frame`, **nothing errors and no style fails** — the frame simply keeps
 spinning for every user who asked it not to. Pinned by `src/styles/globals.test.ts`, which was
 verified by making that exact mistake and watching it fail.
@@ -507,21 +515,27 @@ change.
 
 ## Defects with a diagnosis, not yet closed
 
-- **Resizing the window makes the top-left corner flicker black.** Reported 2026-08-02 against 0.40.4,
-  right after a resize; not investigated yet.
+- **CLOSED 2026-08-02 — the corner that flickered after a resize.** Diagnosis, measurement and the
+  design that replaced it are in [ADR-PROJ-003](../../docs/adr/project/proj-003-window-frame-paints-only-the-band.md).
+  Two things from it are worth carrying here, because they are about **how it was found**, not about
+  the frame:
 
-  **First suspect, unverified:** the frame's glow is a `145vmax` square carrying a conic gradient and
-  a `will-change: transform`, spun by an animation. On a resize `vmax` changes, so that layer — the
-  largest in the app by far — is re-rasterised while the window is still moving. The top-left chamfer
-  is where the clip cuts, and the window is transparent behind it, so a frame that has not been
-  painted yet shows as black rather than as anything.
+  - **Every cheap explanation was wrong, and each was disproved by a number rather than by an
+    argument.** `145vmax` going stale after a resize: disproved — the computed width is exactly
+    `1.45 × vmax` at every size, with 190–610 px of margin over the diagonal. Too tight a margin:
+    disproved by `hypot()`. The `will-change` hint: disproved by removing it. All four combinations
+    still flickered, which is what finally pointed at the covering layer itself.
+  - **"It does not happen on the other machine" was the decisive measurement**, and only because the
+    maintainer said *which* other machine: same screen size, but **Windows**. That turns a "works
+    here, not there" into "Blink tiles this layer, WebKit does not" — an engine fact, reproducible on
+    demand, and the reason the defect is in every app on this template on macOS and Linux while being
+    invisible to anyone developing on Windows.
 
-  If that is it, the fix is about the RESIZE path, not the geometry: the square only needs to cover
-  the diagonal, and it is re-sized continuously during a drag for a band 1.5px wide.
-
-  **Do not start by changing the size.** The measurement that matters is whether the flicker follows
-  the layer at all — a static frame (reduced motion) that still flickers on resize would rule the
-  animation out entirely and cost one setting to check.
+  **The harness is worth rebuilding if this ever recurs:** a static page serving the *built* CSS over
+  `python3 -m http.server`, opened in Safari (same engine as the webview), with a magenta body so an
+  unpainted band pixel is unmistakable, and a `fetch("/probe?…")` per resize so the server's access
+  log becomes the transcript — measurements without taking the maintainer's screen. Variants side by
+  side in one page let them answer a 2×2 in one look instead of one build per hypothesis.
 
 - **Reported upstream 2026-08-02, answer pending:** that every `.hud-*` class is unlayered and so
   overrides any utility passed through `className` — which makes the `className` prop a promise the

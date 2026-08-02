@@ -262,23 +262,38 @@ input[type="range"]:disabled::-webkit-slider-thumb,
 /* ── Neon glow helpers ── */
 
 /* ── Animated neon window frame around the app shell. ──
-   The gradient is painted ONCE onto .window-frame-glow and then spun by a `transform`, so every frame
-   is a compositor operation and NOT a repaint.
+   PAINT ONLY THE BAND. Both previous versions got that wrong, in opposite directions, and each was
+   reported from a running build (ADR-PROJ-003):
 
-   It used to animate a registered custom property (`--frame-angle`) feeding a conic-gradient on
-   .window-frame itself. That is a paint: the gradient was re-rasterised across the element's full box —
-   the entire window — on every frame, forever, in order to show a 1.5px band. Measured on WebKit
-   (Safari 26.5, 3898x2232 device px): 60 repaint triggers/s costing +4.4pp of a core over an
-   animation-off control. The version below measures at the control floor (-0.2pp) with no memory
-   change, and is visually identical — rotating a conic gradient about its own centre is exactly
-   equivalent to advancing its `from` angle. See docs/migrations/app-109.
+   - The FIRST painted a conic-gradient across `.window-frame` — the whole window — and animated its
+     `from` angle. That re-rasterises the entire window on every frame, for ever, to show 1.5px.
+     Measured on WebKit (Safari 26.5, 3898x2232 device px): 45% of a core in the GPU process at
+     `linear`, and still +4.4pp after being cut to `steps(60)`, which also made the motion visibly
+     stepped. Reported as "tab switches feel sluggish".
+   - The SECOND (app-109) fixed the paint by compositing instead: one square of 145vmax carrying the
+     gradient, spun by a `transform`. The paint cost went to the floor and the MEMORY went up in its
+     place — a layer growing with the SQUARE of the window, ~5650x5650 device px on this display. On
+     WebKit that layer stops being re-rasterised correctly after a window resize: a corner loses its
+     band and flickers, and which corner depends on how the window was dragged. Measured here:
+     `145vmax` never goes stale (it is exactly 1.45 x vmax at every size, 190-610px clear of the
+     diagonal), and shrinking it to `hypot()` or dropping `will-change` changes nothing — it is the
+     covering layer itself. NOT reproducible on Windows at the same size, because Blink tiles such
+     layers; which is why it survived upstream and why it is a defect for every app on this template
+     on macOS and Linux.
+
+   Both were the same mistake: produce a window-sized (or larger) image and throw 99.9% of it away
+   through a clip. What is left is the third design, and it is cheaper than both — ONE conic gradient,
+   anchored to the window, sampled by FOUR STRIPS that between them cover exactly the region a 1.5px
+   border can occupy. Nothing is larger than its own strip, so the compositing failure is unreachable;
+   the painted area is ~7% of the window, so the angle can be animated `linear` again.
 
    Two structural constraints, both learned the hard way — do not "simplify" either away:
-   - The glow is a SEPARATE element. `clip-path`/`mask` apply to an element AND its descendants, and
-     .window-frame is the container the whole app renders inside; clipping it to the band would erase
-     the application, not the covered gradient.
-   - The spun element must be SQUARE and cover the window's diagonal. A rotated non-square box would
-     deform the gradient rather than merely advance its phase. */
+   - The band is a SEPARATE element from `.window-frame`. `clip-path`/`mask` apply to an element AND
+     its descendants, and `.window-frame` is the container the whole app renders inside; clipping it
+     to the band would erase the application, not the covered gradient.
+   - Do not put the gradient back on ONE element covering the window, in any form. That is the shape
+     of both failures above, and the third time will be somebody else's engine. `globals.test.ts`
+     fails the build if any part of the frame is sized to cover the window. */
 
 
 /* The band itself: an even-odd ring clip (the window chamfer, minus the same chamfer inset by the band
@@ -288,10 +303,11 @@ input[type="range"]:disabled::-webkit-slider-thumb,
    Scoped to the explicit wrapper so it never applies to sibling overlays (e.g. the About dialog), which
    must keep their own position: fixed. */
 
-/* The animation lives on the spun square, so this must target THAT element — targeting .window-frame
-   (where it used to live) would leave the frame spinning for users who asked it not to. */
+/* The animation lives on the band container, so this must target THAT element — targeting
+   `.window-frame` (where it used to live) would leave the frame spinning for users who asked it not
+   to, and the same trap has now been walked into twice. */
 @media (prefers-reduced-motion: reduce) {
-  .window-frame > .window-frame-glow::before {
+  .window-frame > .window-frame-band {
     animation: none;
   }
 }
@@ -303,14 +319,14 @@ input[type="range"]:disabled::-webkit-slider-thumb,
 
    Only as wide as the terminal it belongs to: the rail and the tool column are not part of what is
    running, and a line sweeping across them would be claiming otherwise. */
-/* Moved by a TRANSFORM, not by `background-position`.
-   Animating `background-position` re-rasterises the gradient across the element's box on every
-   frame — the identical defect the window frame was just cured of, one component over, and reached
-   the same way: the property looks like a position and behaves like a repaint. It is a 2px strip
-   rather than a whole window, so the cost is smaller, but it is paid at 60fps for as long as
-   something is running, on every terminal that is running something.
-   The gradient is painted ONCE onto the strip's `::before`, which is two periods wide, and shifted
-   by exactly one period — so the loop is seamless and every frame is a compositor operation. */
+/* Moved by `background-position`, ON THE ELEMENT — and that is a decision, not an oversight.
+   It was ported to a composited `transform` on an oversized `::before` for one release, by analogy
+   with the window frame, where animating a position had been a full-window repaint. The analogy was
+   never checked against this element: the frame is the whole window, this is a 2px strip, and at a
+   1500px terminal the repaint is 3000 pixels a frame against the frame's 2.2 million. The port cost
+   five reported defects and bought a saving nobody has ever measured. Reverted; the rule below says
+   what each of those defects was, so the next person can weigh the trade with the evidence rather
+   than by the analogy that misled this one. */
 
 /* ONE colour, travelling — not four.
    The first version swept green → cyan → purple → gold, which is the same set the window frame's own
@@ -327,14 +343,11 @@ input[type="range"]:disabled::-webkit-slider-thumb,
    to rest by the transition above. */
 
 @media (prefers-reduced-motion: reduce) {
-  /* The animation lives on the ::before now, so this must target THAT element — the same trap the
-     window frame's reduced-motion query walked into: move the animation, leave the query behind,
-     and nothing errors while the preference is quietly ignored. */
-  .hud-activity-running::before {
-    animation: none;
-    display: none;
-  }
+  /* The animation is back on the element itself, so this targets the element — the trap here is
+     always the same one: move the animation, leave the query behind, and nothing errors while the
+     preference is quietly ignored. */
   .hud-activity-running {
+    animation: none;
     /* Still unmistakably "busy", without anything moving — and the same colour as the moving
        version, so reduced motion changes the motion and not the meaning. */
     background: var(--saga-gold);
@@ -369,39 +382,48 @@ input[type="range"]:disabled::-webkit-slider-thumb,
 /* A row that exists on one side only. Deliberately unlike an empty line — a blank line is a line. */
 
 @layer components {
-  /* The keyframes live INSIDE the layer, beside the rules that use them, and that is not tidiness.
-     Lightning CSS eliminates keyframes it believes are unused, and it did not match a usage inside
-     `@layer components` against a definition at column 0: the production build shipped
-     `animation: … frame-spin` with no `@keyframes frame-spin` at all. With no keyframes there is no
-     `translate(-50%, -50%)` either — that lives only in them — so the spun square sat with its CORNER
-     at the window's centre and only the bottom-right of the border was ever painted. Reported as "the
-     border died and only the bottom-right corner is left".
-     It survived for `activity-sweep` by accident of ordering, which is exactly why neither is left
-     outside now. */
-  @keyframes frame-spin {
-    from {
-      transform: translate(-50%, -50%) rotate(0deg);
-    }
+  /* The keyframes — and the `@property` — live INSIDE the layer, beside the rules that use them, and
+     that is not tidiness. Lightning CSS eliminates keyframes it believes are unused, and it did not
+     match a usage inside `@layer components` against a definition at column 0: the production build
+     shipped `animation: … frame-spin` with no `@keyframes frame-spin` at all, and the frame stood
+     still with only one corner painted. Reported as "the border died and only the bottom-right corner
+     is left".
+     It survived for `activity-sweep` by accident of ordering, which is exactly why nothing is left
+     outside now — a registered property dropped the same way would leave `--frame-angle` untyped, and
+     an untyped custom property does not interpolate at all. */
+  /* `inherits: true` is load-bearing: the animation runs on `.window-frame-band` and the four strips
+     read the value from it. Registered rather than a plain custom property because only a registered
+     one has a type, and only a typed one INTERPOLATES — an unregistered `--frame-angle` would jump
+     from 0deg to 360deg at the end of the cycle and stand still in between. */
+  @property --frame-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: true;
+  }
+
+  @keyframes frame-rotate {
     to {
-      transform: translate(-50%, -50%) rotate(360deg);
+      --frame-angle: 360deg;
     }
   }
 
   @keyframes activity-sweep {
-    /* LEFT to RIGHT, and the direction is not a detail — it was reversed for one version and reported.
-       The old rule animated `background-position` to `-200%`, which reads as "move left" and moved
-       RIGHT: a percentage background position resolves against `element width − image width`, and the
-       image was twice the element, so the bracket is negative and the sign flips. Translating is
-       honest about its direction, which is exactly why the port had to state one.
-       One period is a THIRD of the child (six element-widths, three periods), so shifting by 33.3333%
-       lands on an identical frame — seamless, nothing to reset. The child hangs a period off each
-       side (`margin-left: -300%`), so neither of its edges ever comes near the strip's at any phase;
-       that is what stopped the flicker. */
+    /* LEFT to RIGHT, and `-200%` is genuinely what moves it that way — this reads backwards and is
+       not a typo. A percentage `background-position` resolves against `element width − image width`;
+       the image is twice the element (`background-size: 200%`), so that bracket is NEGATIVE and the
+       sign flips. It was "corrected" to a positive translate once, which reversed the sweep on
+       screen, and the report is what put this sentence here.
+
+       The shift is exactly one image width, so the loop lands on an identical frame — seamless, with
+       nothing to reset. The background repeats, and the repeats are resolved INSIDE one paint of this
+       element, at exact device positions, which is the whole reason this is a position animation and
+       not a composited child: independently rounded tiles in a moving layer is what made the last
+       version blink. */
     from {
-      transform: translateX(0);
+      background-position: 0 0;
     }
     to {
-      transform: translateX(33.3333%);
+      background-position: -200% 0;
     }
   }
 
@@ -585,16 +607,24 @@ input[type="range"]:disabled::-webkit-slider-thumb,
        up for the window). The inner wrapper reuses this same polygon (inherited custom property), so the
        1.5px animated band follows the chamfer cleanly — the corners outside it are clipped to transparent
        and reveal the desktop (main window is transparent). */
+    --hud-chamfer-lg: 20px;
+    --hud-chamfer-sm: 10px;
     --hud-window-clip: polygon(
-      20px 0,
-      calc(100% - 10px) 0,
-      100% 10px,
-      100% calc(100% - 20px),
-      calc(100% - 20px) 100%,
-      10px 100%,
-      0 calc(100% - 10px),
-      0 20px
+      var(--hud-chamfer-lg) 0,
+      calc(100% - var(--hud-chamfer-sm)) 0,
+      100% var(--hud-chamfer-sm),
+      100% calc(100% - var(--hud-chamfer-lg)),
+      calc(100% - var(--hud-chamfer-lg)) 100%,
+      var(--hud-chamfer-sm) 100%,
+      0 calc(100% - var(--hud-chamfer-sm)),
+      0 var(--hud-chamfer-lg)
     );
+    /* The strips that supply the band's colour, with a little margin over the deepest chamfer.
+       DERIVED, not written out again: four strips are only enough because no point of the outline is
+       further from a border than `--hud-chamfer-lg`. As two literals that would be a coupling held by
+       memory — grow the chamfer past the strip and the band falls out of it at the corners, which is
+       exactly the kind of geometry defect that renders as *something* and passes every gate. */
+    --frame-strip: calc(var(--hud-chamfer-lg) + 4px);
     --frame-band: 1.5px;
     position: relative;
     overflow: hidden;
@@ -602,12 +632,16 @@ input[type="range"]:disabled::-webkit-slider-thumb,
     clip-path: var(--hud-window-clip);
   }
 
-  .window-frame > .window-frame-glow {
+  .window-frame > .window-frame-band {
     position: absolute;
     inset: 0;
     z-index: 0;
     pointer-events: none;
     overflow: hidden;
+    /* Animated ONCE, here, and inherited by all four strips — so they cannot drift out of phase with
+       each other. Four independently animated gradients would meet at the corners with a seam that
+       moved, which is precisely what this design must not have. */
+    animation: frame-rotate 12s linear infinite;
     /* The OUTER chamfer only — one closed contour, and that is the whole point.
        
        This used to be an `evenodd` ring: the outer contour followed by an inset one, in a single point
@@ -625,24 +659,53 @@ input[type="range"]:disabled::-webkit-slider-thumb,
     clip-path: var(--hud-window-clip);
   }
 
-  .window-frame > .window-frame-glow::before {
-    content: "";
+  /* ONE gradient, four windows onto it — never four gradients.
+     Each strip paints the SAME conic gradient at the SAME size (the window) and pushes it to the SAME
+     absolute place, so a point at window coordinate (x, y) resolves to one colour no matter which
+     strip covers it. That is what makes the run round the frame seamless, and it is the CSS painting
+     model rather than a tuning: same image, same used size, same placement, same pixel. The corners
+     are the proof — the top strip spans the full width and the left strip the full height, so they
+     overlap in a `--frame-strip` square, and any disagreement would show there first. */
+  .window-frame > .window-frame-band > .window-frame-edge {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    /* Square, and wide enough that its inscribed circle still covers the window diagonal at any aspect
-       ratio up to square. vmax (not %) keeps it square without a second length. */
-    width: 145vmax;
-    height: 145vmax;
-    background: conic-gradient(
+    background-image: conic-gradient(
+      from var(--frame-angle),
       var(--saga-neon-green),
       var(--saga-neon-cyan),
       var(--saga-rune-purple),
       var(--saga-gold),
       var(--saga-neon-green)
     );
-    animation: frame-spin 12s linear infinite;
-    will-change: transform;
+    background-size: 100vw 100vh;
+    background-repeat: no-repeat;
+  }
+
+  /* Four BANDS OF THE PLANE, not four edges. The outline has eight sides — four straight, four
+     chamfers — and none of them is drawn here: `clip-path` above draws it. These only supply colour
+     where the 1.5px band can appear, and it can only appear within `--hud-chamfer-lg` of a border,
+     which is what `--frame-strip` is derived from. */
+  .window-frame > .window-frame-band > .edge-top {
+    inset: 0 0 auto 0;
+    height: var(--frame-strip);
+    background-position: 0 0;
+  }
+
+  .window-frame > .window-frame-band > .edge-bottom {
+    inset: auto 0 0 0;
+    height: var(--frame-strip);
+    background-position: 0 100%;
+  }
+
+  .window-frame > .window-frame-band > .edge-left {
+    inset: 0 auto 0 0;
+    width: var(--frame-strip);
+    background-position: 0 0;
+  }
+
+  .window-frame > .window-frame-band > .edge-right {
+    inset: 0 0 0 auto;
+    width: var(--frame-strip);
+    background-position: 100% 0;
   }
 
   .window-frame > .window-frame-inner {
@@ -660,13 +723,10 @@ input[type="range"]:disabled::-webkit-slider-thumb,
     height: 2px;
     background: var(--saga-neon-cyan);
     opacity: 0.18;
-    /* The travelling strip is wider than this and must not escape it. */
-    overflow: hidden;
-    /* NO `position` here, deliberately. Every `.hud-*` class in this file sits OUTSIDE `@layer`, so it
-       beats every Tailwind utility — a `position: relative` here silently overrode the caller's
+    /* NO `position` here, deliberately. A `position: relative` here silently overrode the caller's
        `absolute inset-x-0 top-0` and the line dropped out of the top edge into normal flow. Reported.
-       The travelling child needs no positioned ancestor: it is a block in normal flow that is simply
-       wider than its parent, and `overflow: hidden` above is what clips it. */
+       (The class was unlayered then, so it beat every utility; it is layered now, but the rule stands
+       — the caller places this, not the design system.) */
     transition:
       opacity 250ms ease,
       background-color 250ms ease;
@@ -674,47 +734,38 @@ input[type="range"]:disabled::-webkit-slider-thumb,
 
   .hud-activity-running {
     opacity: 1;
-    /* The gradient lives on the ::before now; the line itself carries no colour of its own while it
-       runs, or the moving strip would travel over a static copy of itself. */
-    background: transparent;
-  }
+    /* The gradient is painted BY THE ELEMENT and moved by its own `background-position`. It is not a
+       travelling child, and this is a deliberate return to the version that worked.
 
-  .hud-activity-running::before {
-    content: "";
-    /* In flow, not positioned — see the note in `.hud-activity`. A block that overflows its parent
-       horizontally and is clipped by it needs nothing from the cascade the caller also writes to. */
-    display: block;
-    height: 100%;
-    /* SIX element-widths — three periods of a gradient that is itself two element-widths long — and
-       hung one period to the left of the strip. Two things had to be true at once and the first
-       attempt only managed one.
+       For one release the sweep was a `::before` six times the strip's width, moved by a `transform`
+       — ported by analogy with the window frame, where animating a position had been a full-window
+       repaint costing 45% of a core. The analogy did not hold and was never measured: the frame is
+       the whole window, this is a 2px strip. At a 1500px terminal that is 3000 pixels a frame against
+       the frame's 2.2 million.
 
-       The PERIOD is two element-widths, which is the original's geometry: the visible strip then
-       shows half a period, one smooth ramp, never dark at an edge. Halving it put the gradient's own
-       faint ends exactly on both edges and the line read as not reaching them.
+       What the port DID cost, every item of it reported from a running build: the sweep ran
+       backwards; the period was halved so the line read as not reaching its ends; a `position` needed
+       for the child knocked the line out of the top edge; the tiled background's seams opened and
+       closed with the fractional part of the terminal's width; and the loop visibly restarted while
+       the left end came up one or two pixels short — WORSE the narrower the strip, because the child
+       was six times its width, so the rounding error stayed the same size while the visible part
+       shrank.
 
-       The SLACK is the second: with four widths and a shift of one period, one phase of the loop put
-       the child's edge precisely on the parent's, and sub-pixel rounding there opened and closed a
-       gap — reported as flickering, sometimes to the edge and sometimes a few pixels short. Three
-       periods with one hanging off each side means the child's edges are never within a whole period
-       of the parent's, at any phase. */
-    width: 600%;
-    margin-left: -300%;
-    background-image: linear-gradient(
+       An element painting its own background has none of those failure modes: it is its own size, it
+       is rasterised at exact device positions every frame, and the repeats are resolved inside a
+       single paint instead of being composited as independently rounded tiles. Do not port this to a
+       transform again without measuring THIS element first. */
+    background: linear-gradient(
       90deg,
       rgb(var(--saga-gold-rgb) / 0.25),
       var(--saga-gold),
       rgb(var(--saga-gold-rgb) / 0.25)
     );
-    /* A third of the child = one period = two element-widths, which is the original's geometry. */
-    background-size: 33.3333% 100%;
-    background-repeat: repeat-x;
+    /* One period is TWO strip-widths, so the visible strip shows half a period — one smooth ramp,
+       brightest in the middle, never dark at an edge. Halving it puts the faint ends on both edges
+       and the line reads as not reaching them. Reported that way once; not a free parameter. */
+    background-size: 200% 100%;
     animation: activity-sweep 2.4s linear infinite;
-    /* NO `will-change`. It was here for a day and it was cargo-cult: an animated `transform` is
-       composited without it, so the hint bought nothing — and it is not free. The frame's spun square
-       exists ONCE; this exists once per terminal, and every pane that is running something would hold a
-       permanently promoted, full-width layer for as long as it runs. Over-promotion costs memory and is
-       a documented cause of exactly the artefacts this was meant to prevent. */
   }
 
   .hud-activity-ok {

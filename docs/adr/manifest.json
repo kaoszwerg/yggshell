@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "count": 32,
+  "count": 33,
   "adrs": [
     {
       "id": "ADR-APP-001",
@@ -949,6 +949,53 @@
       "supersededBy": null,
       "path": "docs/adr/project/proj-002-git-auto-fetch.md",
       "hash": "d3d75e4d1c61b064"
+    },
+    {
+      "id": "ADR-PROJ-003",
+      "layer": "proj",
+      "title": "The window frame paints only the band",
+      "tldr": "The frame is one conic gradient sampled by four thin strips — never a window-sized element clipped to 1.5px. Both earlier designs did that; both failed.",
+      "scope": "frontend",
+      "load": "conditional",
+      "status": "accepted",
+      "triggers": [
+        "frame",
+        "window-frame",
+        "border",
+        "band",
+        "glow",
+        "conic",
+        "conic-gradient",
+        "gradient",
+        "chamfer",
+        "clip-path",
+        "animation",
+        "animated",
+        "spin",
+        "rotate",
+        "resize",
+        "flicker",
+        "flickering",
+        "corner",
+        "repaint",
+        "composite",
+        "compositing",
+        "layer",
+        "will-change",
+        "vmax",
+        "texture",
+        "webkit",
+        "blink",
+        "gpu"
+      ],
+      "applies-to": [
+        "src/styles/globals.css",
+        "src/styles/globals.test.ts",
+        "src/App.tsx"
+      ],
+      "supersededBy": null,
+      "path": "docs/adr/project/proj-003-window-frame-paints-only-the-band.md",
+      "hash": "0c8bb6c7f3816715"
     }
   ]
 }

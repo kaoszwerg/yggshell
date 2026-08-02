@@ -48,8 +48,20 @@ export default function App() {
     <div className="window-frame h-full">
       {/* The animated band. A separate element on purpose: `clip-path` applies to an element AND its
           descendants, and `.window-frame` is the container the whole app renders inside — clipping it
-          to the band would erase the application, not the covered gradient (app-109). */}
-      <div className="window-frame-glow" aria-hidden="true" />
+          to the band would erase the application, not the covered gradient (app-109).
+
+          The four children are not the outline's edges — it has eight sides, and `clip-path` draws
+          all of them. They are four bands of the plane that between them contain every place a
+          1.5px border can be, each showing the same window-sized gradient at the same absolute
+          position, so the colour runs round the frame without a seam. Four, rather than one element
+          covering the window, because covering the window is what broke: see the note in
+          globals.css above `.window-frame-band`. */}
+      <div className="window-frame-band" aria-hidden="true">
+        <div className="window-frame-edge edge-top" />
+        <div className="window-frame-edge edge-right" />
+        <div className="window-frame-edge edge-bottom" />
+        <div className="window-frame-edge edge-left" />
+      </div>
       <div className="window-frame-inner hud-grid-bg flex h-full flex-col">
         <TitleBar />
         {/* Shown only when the previous run left a crash report (ADR-APP-032) — the one place a

@@ -2,7 +2,7 @@
 
 # Current ADRs (accepted snapshot)
 
-31 accepted decisions. Superseded/deprecated ADRs are omitted here; see the full index
+32 accepted decisions. Superseded/deprecated ADRs are omitted here; see the full index
 in [../README.md](../README.md).
 
 | ADR | Layer | Title | Load |
@@ -38,3 +38,4 @@ in [../README.md](../README.md).
 | [ADR-CORE-039](../core-039-maximum-defensible-security-posture.md) | core | Maximum defensible security posture — the gate seeks the ceiling, not the floor | conditional |
 | [ADR-PROJ-001](../project/proj-001-terminal-architecture.md) | proj | Terminal architecture — emulator, PTY, transport and the session model | conditional |
 | [ADR-PROJ-002](../project/proj-002-git-auto-fetch.md) | proj | The Git tool may fetch, and nothing else may reach the network | conditional |
+| [ADR-PROJ-003](../project/proj-003-window-frame-paints-only-the-band.md) | proj | The window frame paints only the band | conditional |

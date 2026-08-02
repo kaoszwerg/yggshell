@@ -149,6 +149,21 @@ describe("the cascade layers", () => {
     }
   });
 
+  it("defines every registered property in the layer that uses it", () => {
+    // The same elimination risk as the keyframes above, with a quieter symptom. `@property` is what
+    // gives `--frame-angle` a type, and ONLY a typed custom property interpolates: drop the
+    // registration and the animation still runs, still validates and still lints — it just steps from
+    // 0deg to 360deg once per cycle and stands still in between. A frame that has stopped moving is
+    // exactly what a user reports, and nothing upstream of the built file can see why.
+    const defined = [...code.matchAll(/@property\s+(--[\w-]+)/g)].map((match) => match[1] ?? "");
+    expect(defined.length).toBeGreaterThan(0);
+
+    const inLayer = layer("components");
+    for (const name of defined) {
+      expect(inLayer, `@property ${name} must sit with its users`).toContain(`@property ${name}`);
+    }
+  });
+
   it("leaves the reduced-motion overrides UNLAYERED, deliberately", () => {
     // The one exception, and it is not an oversight. An accessibility override has to outrank
     // everything — including a utility the caller passes — so it stays at column 0 as an at-rule.

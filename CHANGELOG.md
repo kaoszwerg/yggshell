@@ -8,6 +8,28 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The window frame flickered at a corner after every resize.** The band was painted by a `145vmax`
+  square carrying the gradient and spun by a transform — a composited layer growing with the *square*
+  of the window, ~5650×5650 device px on a large display. WebKit stops re-rasterising that layer
+  correctly once the window is resized, so a corner loses its band; which corner depends on how it was
+  dragged. Measured out: `145vmax` never goes stale, and neither shrinking the square to the exact
+  diagonal nor dropping `will-change` changed anything — it is the covering layer itself. It does not
+  reproduce on Windows, where Blink tiles such layers, which is why it survived upstream and why it
+  affects every app on this template on macOS and Linux.
+
+  The frame now paints **only the band**: one conic gradient anchored to the window, sampled by four
+  thin strips that between them cover every place a 1.5 px border can appear. Nothing is larger than
+  its own strip, so the failure is unreachable; the painted area is ~7 % of the window, so the angle
+  animates smoothly again instead of in the 60 steps the first version had to be cut to. The strips
+  are derived from the chamfer rather than sized by hand, and a test fails the build if any part of
+  the frame is ever sized to cover the window again (ADR-PROJ-003).
+
+- **The terminal's activity line blinked once per loop and came up short at its left end** — worse the
+  narrower the terminal. It had been ported to a composited transform on a child six times the strip's
+  width, by analogy with the frame; the analogy was never measured on this element, where the repaint
+  it avoids is 3 000 pixels a frame against the frame's 2.2 million. Reverted to moving its own
+  background, which is what it did before and what was reported stable.
+
 - **A directory is not a tab.** The turn state added a version ago was matched by `cwd` alone, so two
   tabs open on the same repository — one running the agent, one running a build — were
   indistinguishable: the build's tab was told the agent was idle and showed nothing while it worked.

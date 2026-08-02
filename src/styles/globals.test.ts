@@ -5,18 +5,28 @@ import { describe, it, expect } from "vitest";
 import css from "./globals.css?raw";
 
 /**
- * A rule's declarations, with its comments stripped.
+ * An at-rule's body, comments stripped — same reasoning as {@link declarations}.
  *
- * Not fussiness: the comment inside a rule is usually the sentence explaining what must NOT be there,
- * so it contains every word a negative assertion looks for. Two of the checks below matched their own
- * documentation before this existed — the same trap `environment.rs` and the kill-session scan both
- * hit, and it is worth solving once rather than by wording each comment around its test.
+ * The body is found by COUNTING braces, not by looking for one in column 0. That shortcut worked
+ * only while these at-rules sat at the top level; once they moved inside `@layer components` (they
+ * had to — Lightning CSS drops keyframes it cannot see used from the same layer) the first column-0
+ * brace became the layer's own, hundreds of lines later, and every at-rule body silently grew to
+ * include every rule after it. The test that noticed was a NEGATIVE one, which is the only kind that
+ * can be broken by a body that is too big.
  */
-/** An at-rule's body, comments stripped — same reasoning as {@link declarations}. */
 function atRule(prelude: string): string {
   const from = css.slice(css.indexOf(prelude));
-  // To the closing brace in column 0: the body has nested blocks of its own.
-  return from.slice(0, from.indexOf("\n}")).replace(/\/\*[\s\S]*?\*\//g, "");
+  const open = from.indexOf("{");
+  let depth = 0;
+  for (let i = open; i < from.length; i += 1) {
+    const ch = from.charAt(i);
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return from.slice(0, i + 1).replace(/\/\*[\s\S]*?\*\//g, "");
+    }
+  }
+  throw new Error(`unbalanced at-rule: ${prelude}`);
 }
 
 /**
@@ -29,6 +39,15 @@ function atRule(prelude: string): string {
  * layered one would not.
  */
 const unconditional = withoutMediaBlocks(css);
+
+/**
+ * The stylesheet with every comment removed.
+ *
+ * For the file-wide negative assertions. Scoping a check to one rule is not always possible — "this
+ * name appears NOWHERE any more" is a statement about the file — and every such check in here has at
+ * some point matched the very sentence that documents why the thing is gone.
+ */
+const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
 
 /**
  * `text` with every `@media { … }` removed, by counting braces rather than matching them.
@@ -60,6 +79,14 @@ function withoutMediaBlocks(text: string): string {
   }
 }
 
+/**
+ * A rule's declarations, with its comments stripped.
+ *
+ * Not fussiness: the comment inside a rule is usually the sentence explaining what must NOT be there,
+ * so it contains every word a negative assertion looks for. Two of the checks below matched their own
+ * documentation before this existed — the same trap `environment.rs` and the kill-session scan both
+ * hit, and it is worth solving once rather than by wording each comment around its test.
+ */
 function declarations(selector: string): string {
   const from = unconditional.slice(unconditional.indexOf(`${selector} {`));
   return from.slice(0, from.indexOf("}")).replace(/\/\*[\s\S]*?\*\//g, "");
@@ -78,34 +105,73 @@ function declarations(selector: string): string {
  * style to assert against; the choice is this or nothing.
  */
 describe("the animated window frame", () => {
-  it("spins a composited layer rather than repainting the window", () => {
-    // The old rule animated `--frame-angle` into a conic-gradient on `.window-frame` itself — a paint
-    // across the whole window, 60 times a second, to show a 1.5px band (app-109, measured at +4.4pp
-    // of a core). The replacement paints once and rotates with a transform.
-    expect(css).toContain("@keyframes frame-spin");
-    // The DECLARATION, not the string: the file still names `--frame-angle` in the comment that
-    // explains why it is gone, and that sentence is the thing stopping someone from rebuilding it.
-    expect(css).not.toContain("@property --frame-angle");
-    expect(css).not.toContain("@keyframes frame-rotate");
-    expect(css).not.toMatch(/animation:\s*frame-rotate/);
+  it("NEVER sizes any part of the frame to cover the window", () => {
+    // THE invariant, and the reason this test exists at all. Both previous versions of the frame
+    // produced a window-sized-or-larger image and threw 99.9% of it away through a clip:
+    //   - v1 painted a conic-gradient across `.window-frame` — a full-window repaint at 60fps to show
+    //     1.5px, measured at 45% of a core in the GPU process.
+    //   - v2 (app-109) composited a 145vmax square instead — a layer growing with the SQUARE of the
+    //     window, ~5650x5650 device px here — which WebKit stops re-rasterising correctly after a
+    //     window resize, so a corner loses its band and flickers. Not reproducible on Blink, which is
+    //     why it shipped.
+    // A third round of this is somebody else's engine, so the shape itself is what gets pinned: no
+    // BOX in the frame may be sized from the viewport. `background-size: 100vw 100vh` is deliberately
+    // untouched by this — that is the image the strips sample, not a box anyone rasterises whole.
+    const frame = css.slice(css.indexOf(".window-frame {"), css.indexOf(".hud-activity {"));
+    expect(frame).not.toMatch(/(?:^|[^-])(?:width|height):[^;]*\bv(?:max|min|w|h)\b/);
+    expect(frame).not.toContain("145vmax");
   });
 
-  it("keeps the gradient on its own element, not on the app container", () => {
-    // `clip-path` applies to an element AND its descendants, and `.window-frame` is what the whole
-    // application renders inside. Clipping it to the band would erase the app, not the covered
-    // gradient — this is why the glow is a sibling layer.
-    expect(css).toContain(".window-frame > .window-frame-glow::before");
-    expect(css).toMatch(/\.window-frame\s*\{[^}]*\}/);
-    expect(declarations(".window-frame")).not.toContain("conic-gradient");
+  it("runs one gradient through four strips, in phase", () => {
+    // The colour must run round the frame without a seam, and four strips could obviously produce
+    // four seams. They do not, for two reasons, and both are pinned here because both are invisible
+    // in the source until they break:
+    //   - ONE image: every strip declares the same gradient at the same size (the window) and pushes
+    //     it to the same absolute place, so a point resolves to one colour whichever strip covers it.
+    //   - ONE animation: `--frame-angle` is animated on the container and INHERITED, so the strips
+    //     cannot drift apart. Animating each strip would look identical on the first frame.
+    const strip = declarations(".window-frame > .window-frame-band > .window-frame-edge");
+    expect(strip).toContain("conic-gradient(");
+    expect(strip).toContain("from var(--frame-angle)");
+    expect(strip).toContain("background-size: 100vw 100vh");
+    for (const edge of ["top", "right", "bottom", "left"]) {
+      expect(declarations(`.window-frame > .window-frame-band > .edge-${edge}`)).toContain(
+        "background-position:",
+      );
+    }
+    expect(declarations(".window-frame > .window-frame-band")).toContain(
+      "animation: frame-rotate 12s linear infinite",
+    );
+    // Registered, and inheriting — an unregistered custom property has no type, so it does not
+    // interpolate: the frame would jump 0deg → 360deg once per cycle and stand still in between.
+    const prop = atRule("@property --frame-angle");
+    expect(prop).toContain('syntax: "<angle>"');
+    expect(prop).toContain("inherits: true");
+    // Comment-stripped: the note above the keyframes still names `frame-spin` while explaining what
+    // it cost, and that sentence is the thing stopping someone from rebuilding it.
+    expect(code).not.toContain("frame-spin");
+  });
+
+  it("derives the strips from the chamfer, so they cannot be outgrown", () => {
+    // Four strips are enough ONLY because no point of the eight-sided outline is further from a
+    // border than the deepest chamfer. That is a coupling, and written as two literals it would be a
+    // coupling held by memory: grow the chamfer past the strip and the band falls out of it at the
+    // corners — a defect that renders as *something* and passes every other gate (rule:ui-design).
+    const frame = declarations(".window-frame");
+    expect(frame).toContain("--hud-chamfer-lg: 20px");
+    expect(frame).toContain("--frame-strip: calc(var(--hud-chamfer-lg)");
+    // The polygon must READ the same variable rather than repeating the number beside it.
+    const clip = frame.slice(frame.indexOf("--hud-window-clip"));
+    expect(clip.slice(0, clip.indexOf(");"))).not.toMatch(/\b20px\b/);
   });
 
   it("honours reduced motion on the element that actually animates", () => {
-    // THE step that is silently wrong if skipped. Moving the animation to the glow layer while
-    // leaving this query on `.window-frame` produces no error and no failing style — it just ignores
-    // the user's preference, permanently and invisibly.
+    // THE step that is silently wrong if skipped, and it has now been walked into twice: move the
+    // animation to a different element, leave this query behind, and there is no error and no failing
+    // style — the frame simply keeps spinning for every user who asked it not to.
     const query = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
     const block = query.slice(0, query.indexOf("\n}\n") + 3);
-    expect(block).toContain(".window-frame-glow::before");
+    expect(block).toContain(".window-frame > .window-frame-band");
     expect(block).toContain("animation: none");
   });
 
@@ -117,7 +183,7 @@ describe("the animated window frame", () => {
     //
     // No ring is needed: the frame's padding makes the band and the opaque inner shell covers the
     // rest. This is the check that stops somebody "restoring" the ring to be explicit about it.
-    const rule = declarations(".window-frame > .window-frame-glow");
+    const rule = declarations(".window-frame > .window-frame-band");
     expect(rule).toContain("clip-path: var(--hud-window-clip)");
     expect(rule).not.toContain("evenodd");
     // The POSITIVE invariant too, upstream's improvement on this test: a seam can be reintroduced
@@ -135,112 +201,76 @@ describe("the animated window frame", () => {
     expect(css).not.toContain("mask-composite:");
   });
 
-  it("keeps the opaque shell above the glow", () => {
+  it("keeps the opaque shell above the band", () => {
     // Without the stacking order the band is drawn over the application rather than around it.
     expect(declarations(".window-frame > .window-frame-inner")).toContain("z-index: 1");
-  });
-
-  it("keeps the spun square square, and wide enough to cover the diagonal", () => {
-    // A rotated non-square box deforms the gradient instead of advancing its phase, and one narrower
-    // than the window's diagonal sweeps its own corner across the band. `vmax` keeps it square
-    // without a second length.
-    const rule = declarations(".window-frame > .window-frame-glow::before");
-    const width = /width:\s*(\d+)vmax/.exec(rule);
-    const height = /height:\s*(\d+)vmax/.exec(rule);
-    expect(width?.[1]).toBe(height?.[1]);
-    expect(Number(width?.[1])).toBeGreaterThanOrEqual(142);
   });
 });
 
 describe("the activity line", () => {
-  it("travels by transform, not by background-position", () => {
-    // The same defect as the window frame, one component over, reached the same way: the property
-    // reads as a position and behaves as a repaint. A 2px strip is cheaper than a whole window, but
-    // it is paid at 60fps for as long as anything is running, in every terminal that is running it.
-    const block = atRule("@keyframes activity-sweep");
-    expect(block).toContain("transform: translateX(");
-    expect(block).not.toContain("background-position");
+  it("moves its OWN background, with no travelling child", () => {
+    // The element paints the gradient and slides it. It was ported to a composited `transform` on an
+    // oversized `::before` for one release, by analogy with the window frame — where animating a
+    // position had been a full-window repaint costing 45% of a core. The analogy was never checked
+    // against THIS element: the frame is the whole window, this is a 2px strip, and at a 1500px
+    // terminal the repaint is 3000 pixels a frame against the frame's 2.2 million.
+    //
+    // Five defects were reported against that port and none against this: the sweep ran backwards;
+    // the period was halved so the line read as not reaching its ends; a `position` needed for the
+    // child knocked the line out of the top edge; the tiled background's seams opened and closed with
+    // the fractional part of the terminal's width; and the loop visibly restarted with the left end
+    // one or two pixels short — worse the NARROWER the strip, because the child was six times its
+    // width, so the rounding error stayed put while the visible part shrank.
+    //
+    // Re-port it if a measurement of this element ever justifies it. Not by analogy.
+    expect(atRule("@keyframes activity-sweep")).toContain("background-position:");
+    expect(code).not.toContain(".hud-activity-running::before");
   });
 
-  it("travels LEFT to RIGHT, the way it always did", () => {
-    // Reversed for exactly one version, and reported. `background-position: -200%` reads as "move
-    // left" and moved right: a percentage position resolves against `element − image`, the image was
-    // twice the element, so the bracket is negative and the sign flips. A translate says what it
-    // does — which is why porting one has to state a direction, and why getting it backwards is
-    // silent. Rightward means the offset INCREASES.
+  it("travels LEFT to RIGHT, which is why the number is NEGATIVE", () => {
+    // The trap that reversed it for one version. A percentage `background-position` resolves against
+    // `element width − image width`; the image is twice the element, so that bracket is negative and
+    // the sign flips — `-200%` moves the gradient RIGHT. It reads backwards, someone "corrected" it,
+    // and the reversal was reported from a running build.
+    //
+    // Pinned as the relationship rather than as the number: the shift that lands exactly one image
+    // width along is `100 · S / (1 − S)` for a background-size fraction S, which is −200% at S = 2 and
+    // a different number the moment the period changes. Seamless loop and correct direction are the
+    // same equation, so they are checked as one.
     const block = atRule("@keyframes activity-sweep");
-    const from = Number(/from\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]);
-    const to = Number(/to\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]);
-    expect(Number.isNaN(from)).toBe(false);
-    expect(to).toBeGreaterThan(from);
-  });
-
-  it("shifts by exactly one period, so the loop has no seam", () => {
-    // Landing on an identical frame is what makes the loop invisible. The shift is a percentage of
-    // the CHILD, the period is a fraction of the child — they only mean anything together, which is
-    // why they are asserted together rather than as two magic numbers.
-    const rule = declarations(".hud-activity-running::before");
-    const block = atRule("@keyframes activity-sweep");
-    const shift = Math.abs(
-      Number(/to\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]) -
-        Number(/from\s*\{[^}]*translateX\(([-\d.]+)%?\)/.exec(block)?.[1]),
+    const from = Number(/from\s*\{[^}]*background-position:\s*(-?[\d.]+)%?/.exec(block)?.[1]);
+    const to = Number(/to\s*\{[^}]*background-position:\s*(-?[\d.]+)%?/.exec(block)?.[1]);
+    const size = Number(
+      /background-size:\s*([\d.]+)%/.exec(declarations(".hud-activity-running"))?.[1],
     );
-    const tile = Number(/background-size:\s*([\d.]+)%/.exec(rule)?.[1]);
-    expect(shift).toBeCloseTo(tile, 3);
-    expect(rule).toContain("repeat-x");
+    expect(Number.isNaN(from)).toBe(false);
+    const s = size / 100;
+    expect(to - from).toBeCloseTo((100 * s) / (1 - s), 3);
+    // …and that formula only yields a rightward sweep while the image is WIDER than the element.
+    expect(s).toBeGreaterThan(1);
   });
 
-  it("keeps the period two window-widths long, so the line is lit at its edges", () => {
-    // The original put `background-size: 200%` on the ELEMENT: one period spanned two window widths,
-    // so the visible strip showed half a period — one smooth ramp, brightest in the middle, never
-    // dark at an edge. Halving that to a one-width period puts the gradient's faint ends AT both
-    // edges and the line reads as not reaching them. Reported that way after the first port.
-    const rule = declarations(".hud-activity-running::before");
-    const width = Number(/width:\s*([\d.]+)%/.exec(rule)?.[1]);
-    const size = Number(/background-size:\s*([\d.]+)%/.exec(rule)?.[1]);
-    expect((width / 100) * (size / 100)).toBeCloseTo(2, 2);
-  });
-
-  it("hangs a whole period off each side, so no edge can ever meet the strip's", () => {
-    // The flicker: with the child only two periods wide, one phase of the loop put its edge exactly
-    // on the parent's, and sub-pixel rounding there opened and closed a gap — "sometimes to the edge,
-    // sometimes a few pixels short". Slack is the fix, and it has to be at least a full period or the
-    // shift walks an edge back into view.
-    const rule = declarations(".hud-activity-running::before");
-    const width = Number(/width:\s*([\d.]+)%/.exec(rule)?.[1]);
-    const tile = (Number(/background-size:\s*([\d.]+)%/.exec(rule)?.[1]) / 100) * width;
-    const hang = Math.abs(Number(/margin-left:\s*(-?[\d.]+)%/.exec(rule)?.[1]));
-
-    expect(hang).toBeGreaterThanOrEqual(tile);
-    // …and enough left over on the right after a full shift: the child must still reach past 100%.
-    expect(width - hang - 100).toBeGreaterThanOrEqual(tile);
+  it("keeps the period two strip-widths long, so the line is lit at its edges", () => {
+    // One period spans two strip widths, so the visible strip shows half a period — one smooth ramp,
+    // brightest in the middle, never dark at an edge. Halving it puts the gradient's faint ends AT
+    // both edges and the line reads as not reaching them. Reported that way once, and nearly
+    // re-introduced twice while fixing something else; it is not a free parameter.
+    expect(declarations(".hud-activity-running")).toContain("background-size: 200% 100%");
   });
 
   it("honours reduced motion on the element that actually animates", () => {
-    // The trap the window frame walked into first: move the animation to a child, leave the query on
-    // the parent, and nothing errors while the preference is silently ignored.
+    // Move the animation, leave the query behind, and nothing errors while the preference is silently
+    // ignored. Both this and the window frame have walked into it.
     const query = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(query).toContain(".hud-activity-running::before");
+    expect(query).toContain(".hud-activity-running");
+    expect(query).toContain("animation: none");
   });
 
   it("leaves positioning to whoever places it", () => {
-    // Every `.hud-*` class in this file sits OUTSIDE `@layer`, so it beats every Tailwind utility.
-    // A `position` here therefore overrides the caller's — which is exactly what happened: the view
-    // places the line with `absolute inset-x-0 top-0`, a `position: relative` in the base class won,
-    // and the line dropped out of the top edge into normal flow. The travelling child does not need
-    // a positioned ancestor; it overflows in normal flow and `overflow: hidden` clips it.
-    const rule = declarations(".hud-activity");
-    expect(rule).toContain("overflow: hidden");
-    expect(rule).not.toContain("position:");
-    expect(declarations(".hud-activity-running::before")).not.toContain("position:");
-  });
-
-  it("does not promote a layer per terminal", () => {
-    // `will-change: transform` was here for a day, and it was cargo-cult: an animated transform is
-    // composited without it. The frame's spun square exists ONCE and may carry the hint; this exists
-    // once per terminal, so every pane running something would hold a permanently promoted
-    // full-width layer. Over-promotion costs memory and is a documented cause of the artefacts it
-    // looks like it prevents.
-    expect(declarations(".hud-activity-running::before")).not.toContain("will-change");
+    // The view places the line with `absolute inset-x-0 top-0`. A `position: relative` in the base
+    // class won over it and the line dropped out of the top edge into normal flow. Reported. The
+    // class is layered now, so a utility would win — but the design system still has no business
+    // deciding where the caller puts this.
+    expect(declarations(".hud-activity")).not.toContain("position:");
   });
 });
