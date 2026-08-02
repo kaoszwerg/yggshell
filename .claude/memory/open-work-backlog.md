@@ -475,6 +475,36 @@ change.
 
 ## Defects with a diagnosis, not yet closed
 
+- **tmux replaces a TAB in `-F` output with `_` for this app's process, and nobody knows why.**
+  Narrowed, worked around, still open (2026-08-02).
+
+  The tmux tool listed nothing while six sessions ran. tmux answered 93 bytes reading
+  `0_1_0_zsh\nlysis_1_0_zsh\n…` where the format had asked for tab-separated fields, and the parser
+  dropped every line. The installed binary holds exactly one such format string, containing a real
+  `0x09`.
+
+  **It is tmux-side, and that took a second pass to establish honestly.** The first reading was not
+  evidence: `bytes: 93` fits a tab and an underscore alike (both one byte), `{:?}` renders a real tab
+  as `\t` so the escape_debug probe could not distinguish the two cases it was run for, and a raw
+  control character reaching the JSON writer might have been substituted there. Settled by checking
+  bytes instead of renderings — `escape_debug` yields `\` `t` (0x5c 0x74) and serde_json escapes a raw
+  tab as `\t`, so a tab would have looked exactly like the newlines in the same string, which did
+  survive. It did not.
+
+  **What is still unexplained:** the same build lists its sessions correctly from a dev bundle whose
+  only differences are `productName` and `identifier`, and the substitution could not be reproduced
+  from a shell under any combination of PATH, TMPDIR, locale, `TMUX`, a null stdin, a pipe or a
+  missing controlling terminal.
+
+  **The fix does not depend on the answer:** the separator is `:` — printable, forbidden by tmux
+  inside a session name, with the command parsed as the remainder so a `:` in it is data. Verified in
+  production: `tabs: 0, colons: 18, underscores: 0`, six sessions found. A test refuses any control
+  character in the format so lining the columns up cannot reintroduce it.
+
+  **The lesson that generalises:** when a separator is invisible, log a COUNT of it, not a rendering
+  of the string. Every rendering in this chain — the byte length, `{:?}`, the JSON field — was
+  ambiguous about exactly the byte in question.
+
 - **Opening a NEW tab could land you in an old session — CLOSED in 0.37.0 (2026-08-01).** Raised by
   the maintainer, and all three parts shipped as one change because they are the same question.
 

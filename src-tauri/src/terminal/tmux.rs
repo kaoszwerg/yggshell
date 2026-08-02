@@ -353,12 +353,20 @@ pub fn sessions() -> Vec<crate::dto::TmuxSession> {
 
 /// The `-F` format, and its separator is a **printable** character on purpose.
 ///
-/// It was a tab, and something between this argv and the log turned that tab into `_` — measured on
-/// the maintainer's machine: tmux answered 93 bytes reading `0_1_0_zsh\nlysis_1_0_zsh\n…` while the
-/// binary demonstrably holds a real 0x09, and the parse then dropped every line. **What performs that
-/// substitution was not identified.** It could not be reproduced from a shell under any combination
-/// of PATH, TMPDIR, locale, `TMUX`, a null stdin, a pipe or a missing controlling terminal, and the
-/// same build listed its sessions correctly from a dev bundle.
+/// It was a tab, and tmux answered with `_` in its place — measured on the maintainer's machine: 93
+/// bytes reading `0_1_0_zsh\nlysis_1_0_zsh\n…` while this binary demonstrably holds a real 0x09, and
+/// the parse then dropped every line.
+///
+/// **The substitution is tmux-side, not ours** — established afterwards, because the first reading of
+/// it was not evidence: `escape_debug` turns a tab into the two bytes `\` `t` (verified byte-wise,
+/// not through `{:?}`, which renders both the same), and serde_json escapes a raw tab as `\t`. A tab
+/// would therefore have reached the log looking exactly like the newlines in the same string, which
+/// did survive. It did not. So tmux sent `_`.
+///
+/// **Why tmux does it for this process and not another is still unexplained.** It could not be
+/// reproduced from a shell under any combination of PATH, TMPDIR, locale, `TMUX`, a null stdin, a
+/// pipe or a missing controlling terminal, and the same build listed its sessions correctly from a
+/// dev bundle whose only differences are its name and identifier. Left open rather than guessed at.
 ///
 /// What the evidence does establish is the *class*: a control character was replaced while every
 /// printable one — including the `#{}` syntax either side of it — came through untouched. So the fix
