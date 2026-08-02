@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The window frame had a gap in it, at the top-left chamfer.** The ring the glow is clipped to was
+  a single `evenodd` polygon — the outer contour followed by an inset one, in one point list. **A
+  single polygon cannot have a hole:** the path traces the outer contour, jumps to the first inner
+  point, traces that, and closes back to where it started, and those two connecting segments are real
+  edges. They cut across the chamfer, the fill rule cancels itself out there, and the border goes
+  dark. Reported from a running build.
+
+  No ring was needed. `.window-frame` has `padding: 1.5px` and the inner shell is opaque and sits
+  above the glow, so it already covers everything but the band — which is how the pre-animation
+  version worked, and why: padding survives the production CSS minifier, where a mask-composite ring
+  did not. The glow now takes the outer chamfer and nothing else, pinned by a test.
+
+- **A restored tab now carries its tmux session's name.** The names reached the backend correctly and
+  were shown nowhere: inside tmux the shell's own title (OSC 0/2) is usually swallowed and never
+  arrives, so after the session id came out of the label every tab read the same word and nothing said
+  which session it held. A tab is now named after its session until a shell names it something better.
+
 ### Added
 
 - **A tmux tool, because the fix that made "new" mean new made sessions pile up.** Closing a tab

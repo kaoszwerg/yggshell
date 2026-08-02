@@ -5,6 +5,19 @@ import { describe, it, expect } from "vitest";
 import css from "./globals.css?raw";
 
 /**
+ * A rule's declarations, with its comments stripped.
+ *
+ * Not fussiness: the comment inside a rule is usually the sentence explaining what must NOT be there,
+ * so it contains every word a negative assertion looks for. Two of the checks below matched their own
+ * documentation before this existed — the same trap `environment.rs` and the kill-session scan both
+ * hit, and it is worth solving once rather than by wording each comment around its test.
+ */
+function declarations(selector: string): string {
+  const from = css.slice(css.indexOf(`${selector} {`));
+  return from.slice(0, from.indexOf("}")).replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+/**
  * The window frame's animation, checked as text.
  *
  * **A stylesheet is the one part of this app no test would otherwise touch**, and the frame has now
@@ -35,8 +48,7 @@ describe("the animated window frame", () => {
     // gradient — this is why the glow is a sibling layer.
     expect(css).toContain(".window-frame > .window-frame-glow::before");
     expect(css).toMatch(/\.window-frame\s*\{[^}]*\}/);
-    const frameRule = css.slice(css.indexOf(".window-frame {"));
-    expect(frameRule.slice(0, frameRule.indexOf("}"))).not.toContain("conic-gradient");
+    expect(declarations(".window-frame")).not.toContain("conic-gradient");
   });
 
   it("honours reduced motion on the element that actually animates", () => {
@@ -49,9 +61,30 @@ describe("the animated window frame", () => {
     expect(block).toContain("animation: none");
   });
 
+  it("clips the glow with ONE closed contour, never an evenodd ring", () => {
+    // A single polygon cannot have a hole. An `evenodd` list of outer-then-inner points is one path:
+    // it traces the outer contour, jumps to the first inner point, traces that, and closes — and the
+    // two connecting segments are real edges. They cut across a chamfer and the fill rule cancels
+    // itself out there, leaving a gap in the border. Reported from a running build.
+    //
+    // No ring is needed: the frame's padding makes the band and the opaque inner shell covers the
+    // rest. This is the check that stops somebody "restoring" the ring to be explicit about it.
+    const rule = declarations(".window-frame > .window-frame-glow");
+    expect(rule).not.toContain("evenodd");
+    expect(rule).toContain("clip-path: var(--hud-window-clip)");
+  });
+
+  it("makes the band out of padding, which is what survives the minifier", () => {
+    // The band's width comes from the frame's own padding — not from a second inset contour, and not
+    // from a mask: a `mask` + `mask-composite` ring was silently broken by the production CSS
+    // minifier once already and flooded the whole window.
+    expect(declarations(".window-frame")).toContain("padding: var(--frame-band)");
+    // The declaration, not the word: the comment above it names the mechanism it replaced.
+    expect(css).not.toContain("mask-composite:");
+  });
+
   it("keeps the opaque shell above the glow", () => {
     // Without the stacking order the band is drawn over the application rather than around it.
-    const inner = css.slice(css.indexOf(".window-frame > .window-frame-inner"));
-    expect(inner.slice(0, inner.indexOf("}"))).toContain("z-index: 1");
+    expect(declarations(".window-frame > .window-frame-inner")).toContain("z-index: 1");
   });
 });

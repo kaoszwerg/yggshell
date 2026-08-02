@@ -520,6 +520,32 @@ describe("TerminalView", () => {
       });
     });
 
+    it("names the tab after the session it came back to", async () => {
+      // Reported from a restored workspace: the names were carried into the BACKEND correctly and
+      // then shown nowhere. Inside tmux the shell's own title (OSC 0/2) is usually swallowed and
+      // never arrives, so every tab read the same word and nothing said which session it held.
+      useTerminalStore.setState({
+        panes: [pane({ key: "term-0", tmuxSession: "yggshell-3" })],
+        activeKey: "term-0",
+        bootstrapped: true,
+      });
+      const opened = deferOpen(59, "yggshell-3");
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      expect(useTerminalStore.getState().panes[0]?.title).toBe("yggshell-3");
+    });
+
+    it("falls back to a plain name when there is no session to name it after", async () => {
+      const opened = deferOpen(60);
+      render(<TerminalView />);
+      act(() => measure?.(30, 100));
+      await opened();
+
+      expect(useTerminalStore.getState().panes[0]?.title).toBe("Terminal");
+    });
+
     it("sends no session for a tab that has never been in tmux", async () => {
       const opened = deferOpen(55);
       render(<TerminalView />);

@@ -489,25 +489,21 @@ input[type="range"]:disabled::-moz-range-thumb {
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  clip-path: polygon(
-    evenodd,
-    20px 0,
-    calc(100% - 10px) 0,
-    100% 10px,
-    100% calc(100% - 20px),
-    calc(100% - 20px) 100%,
-    10px 100%,
-    0 calc(100% - 10px),
-    0 20px,
-    calc(20px + var(--frame-band)) var(--frame-band),
-    calc(100% - 10px - var(--frame-band)) var(--frame-band),
-    calc(100% - var(--frame-band)) calc(10px + var(--frame-band)),
-    calc(100% - var(--frame-band)) calc(100% - 20px - var(--frame-band)),
-    calc(100% - 20px - var(--frame-band)) calc(100% - var(--frame-band)),
-    calc(10px + var(--frame-band)) calc(100% - var(--frame-band)),
-    var(--frame-band) calc(100% - 10px - var(--frame-band)),
-    var(--frame-band) calc(20px + var(--frame-band))
-  );
+  /* The OUTER chamfer only — one closed contour, and that is the whole point.
+     
+     This used to be an `evenodd` ring: the outer contour followed by an inset one, in a single point
+     list. **A single polygon cannot have a hole.** The path runs the outer contour, then jumps
+     straight to the first inner point and traces that, then closes back to where it started — and
+     those two connecting segments are real edges. They cut diagonally across the top-left chamfer,
+     where the fill rule then cancels itself out and leaves a visible gap in the border. Reported from
+     a running build; the geometry is wrong wherever that seam happens to land, not just here.
+     
+     No ring is needed at all. `.window-frame` has `padding: var(--frame-band)` and
+     `.window-frame-inner` is opaque (`--saga-bg-deep`) and sits above this on `z-index: 1` — so the
+     shell already covers everything except the band. That is how the pre-animation version worked,
+     and the reason it was right is still in the comment above it: padding survives the production CSS
+     minifier, where a mask-composite ring did not. */
+  clip-path: var(--hud-window-clip);
 }
 .window-frame > .window-frame-glow::before {
   content: "";

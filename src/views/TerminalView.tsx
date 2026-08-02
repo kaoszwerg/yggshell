@@ -339,11 +339,16 @@ function Pane({
           sessionId.current = id;
           setSessionOpen(true);
           onSession(paneKey, id);
+          // The tmux session's name when there is one, and it is the most useful thing a tab can be
+          // called: it is what the tmux tool lists, what a restored tab came back to, and what tells
+          // two otherwise identical tabs apart. A shell that sets its own title (OSC 0/2) still wins
+          // later — but inside tmux that title is usually swallowed and never arrives, which is how
+          // every tab came to read the same word.
+          //
           // NOT `Terminal ${id + 1}`: that was the backend's session id, which counts every session
           // ever opened — so after one tab was closed the fifth tab was labelled 5 and reached with
-          // ⌘4. The position is drawn by the strip itself, where it cannot go stale, and the label is
-          // left for the shell to fill in with something that actually says what is running.
-          setTitle(paneKey, "Terminal");
+          // ⌘4. The position is drawn by the strip itself, where it cannot go stale.
+          setTitle(paneKey, opened.tmux_session ?? "Terminal");
           // Recorded so a restart can return this tab to the same tmux session — the one kind of
           // session that genuinely survives us.
           setPaneTmuxSession(paneKey, opened.tmux_session);
