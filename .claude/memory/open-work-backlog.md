@@ -642,6 +642,16 @@ change.
   followed by a blank one.
 - **xterm.js `write()` is asynchronous.** A test that writes and immediately reads the buffer reads an
   empty one and passes for the wrong reason. Await the callback.
+- **A flex child will not wrap without `min-w-0`, however you ask it to.** Its default is
+  `min-width: auto`, so the content sets the row's width and there is never an overflow to wrap —
+  `whitespace-pre-wrap`, `break-all` and `wrap-anywhere` all do nothing. The unified diff renderer had
+  exactly this: long lines ran past the panel and could only be read by dragging them. Same visible
+  symptom as the clip trap below, opposite mechanism, so grep for both.
+
+  Related, and the reason a diff is worth checking by eye: `whitespace-pre` inside `overflow-x-auto`
+  gives every LINE its own scrollbar. It looks like a scrollable diff and behaves like a page of
+  independent sliders.
+
 - **A `hud-clip*` element does not hide an overflow — it AMPUTATES it.** `clip-path` cuts at the
   polygon, with no ellipsis and no scrollbar, so nothing on screen says text is missing. The tooltip
   carried `whitespace-nowrap` next to a `max-w-[240px]` and showed

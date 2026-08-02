@@ -50,6 +50,38 @@ which model) *and* a status item (how full the context is). That is **one reader
 renderings**, never two readers (ADR-CORE-005). The status item may not grow a second, cheaper copy
 of the tool's parsing, or the two will disagree in front of the user.
 
+## A tool that is on screen must be current — a glance is the whole contract
+
+A tool *accompanies* the terminal, which means it is read **while** you work rather than opened to be
+consulted. That decides how fresh it has to be, and the answer is not "fresh when you ask for it":
+
+> *"Ich will auf einen Blick die aktuelle Situation erfassen können, nicht durch Rumklicken."*
+
+**A panel you have to click to trust is correct at the instant you click it and convincingly wrong
+every instant after** — which is worse than one that is obviously empty, because it is read as true.
+Three of them shipped that way (Activity behind a refresh button, Files with no interval, Docker's
+container list at `staleTime: Infinity`) and each was reported as pointless, in those words.
+
+Two mechanisms, and neither alone is enough:
+
+- **A command ending re-reads what the terminal produces.** OSC 133 already reports the boundary and
+  the store carries it per pane (`hooks/useRefreshOnCommandEnd`). Earlier than a timer can be, free
+  while nothing happens, and it fires on the **edge** out of `running` — a state check would re-read
+  on every title change. It watches every tab: a build finishing over there writes the file you are
+  looking at over here.
+- **A poll while the tool is on screen.** A dev server that opens a port ten seconds into a run
+  crosses no boundary, and neither does a watcher writing files. `refetchInterval` alone is right:
+  TanStack stops it when the query unmounts *and* when the window is hidden, so it costs nothing
+  closed or in the background. That is what makes even two process spawns per read affordable.
+
+**The exception is the signal, not the tool.** `rule:attention-signals` needs
+`refetchIntervalInBackground: true` precisely because its job is to reach somebody looking elsewhere.
+A tool's job is the opposite — it is read by somebody looking at it — so it must stop when they are
+not. Do not copy either setting to the other kind of surface.
+
+Cost is a real argument and it is not this one: it decides the *interval*, never whether a visible
+panel updates at all.
+
 ## The rail is not a fourth surface
 
 `Sidebar.tsx` holds three groups — main nav, tools, secondary nav — and they map onto the table
