@@ -325,7 +325,7 @@ function CommitBody({
 
       {/* The whole message, wrapped — prose, unlike the code below it, and a commit body that is cut
           off is the one part of a commit nobody can reconstruct from anywhere else. */}
-      <div className="font-mono leading-relaxed whitespace-pre-wrap">
+      <div className="font-mono leading-relaxed wrap-anywhere whitespace-pre-wrap">
         <span className="scheme-fg">{detail.summary}</span>
         {detail.body === "" ? null : <span className="scheme-dim">{`\n\n${detail.body}`}</span>}
       </div>

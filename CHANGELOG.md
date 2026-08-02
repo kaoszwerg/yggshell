@@ -8,6 +8,23 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A diff line that was wider than the panel could only be read with the mouse.** Every line was its
+  own `overflow-x-auto` box under `whitespace-pre`: to read one you dragged it sideways, and the line
+  above stayed where it was. Lines wrap now, in both the unified and the side-by-side renderer, and in
+  the commit view — which draws the same component. `wrap-anywhere` rather than `break-all`, so
+  ordinary code still breaks at spaces and only an unbroken path or a minified line is cut mid-token.
+
+  The unified renderer also needed `min-w-0`: a flex child defaults to `min-width: auto`, so without
+  it the text sets the row's width and no wrapping ever happens however it is asked for.
+
+- **A new file was shown side by side against nothing.** There is no comparison to make — every line
+  is an addition — so the left column was a column of gaps, halving the width available to read the
+  file that was actually there. A diff with only one side now renders in one column whatever the split
+  setting says, and the number gutter for the side that does not exist is dropped with it. The same
+  holds for a deleted file, in the other direction.
+
+### Fixed
+
 - **Three panels sat on screen showing something that was no longer true.** *"Ich will auf einen
   Blick die aktuelle Situation erfassen können, nicht durch Rumklicken."* Activity was read once and
   then only on its refresh button; Files had no interval at all, so a file the shell had just written

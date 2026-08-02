@@ -83,6 +83,13 @@ export function DiffView({
     return <p className="text-dim p-4 font-mono text-xs">{t("diff.binary")}</p>;
   }
 
+  // A file that is new has nothing on the left, and one that was deleted has nothing on the right —
+  // so side-by-side draws a column of gaps beside the content and halves the width available to read
+  // it. There is no comparison to make: show it as one column, whatever the setting says.
+  const added = diff.hunks.some((hunk) => hunk.lines.some((line) => line.kind === "added"));
+  const removed = diff.hunks.some((hunk) => hunk.lines.some((line) => line.kind === "removed"));
+  const oneSided = !added || !removed;
+
   if (diff.hunks.length === 0) {
     return (
       <p className="text-dim p-4 font-mono text-xs">
@@ -99,10 +106,18 @@ export function DiffView({
     <div className="scheme-surface font-mono leading-[1.5]" style={surfaceStyle(scheme, fontSize)}>
       {diff.hunks.map((hunk, index) => {
         const key = `${hunk.old_start}:${hunk.new_start}`;
-        return split ? (
+        return split && !oneSided ? (
           <SplitHunk key={key} hunk={hunk} coloured={coloured.at(index)} />
         ) : (
-          <Hunk key={key} hunk={hunk} coloured={coloured.at(index)} />
+          // The gutter for a side that does not exist is dropped with it: a column of blanks beside
+          // every line is width spent saying nothing.
+          <Hunk
+            key={key}
+            hunk={hunk}
+            coloured={coloured.at(index)}
+            showOld={removed}
+            showNew={added}
+          />
         );
       })}
     </div>
@@ -182,14 +197,31 @@ function Side({
   return (
     <span className={`flex min-w-0 flex-1 basis-0 items-start ${tint}`}>
       <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">{number ?? ""}</span>
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre">
+      {/* WRAPS. It used to be `whitespace-pre` inside `overflow-x-auto`, which gave every line its
+          own horizontal scrollbar: to read one long line you dragged it, and the line above stayed
+          where it was. A diff you cannot read without a mouse is not showing you the change.
+          `wrap-anywhere` rather than `break-all`: a break only where one is needed, so ordinary code
+          still breaks at spaces and only an unbroken path or a minified line is cut mid-token. */}
+      <code className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
         <Code line={line} tokens={tokens} />
       </code>
     </span>
   );
 }
 
-function Hunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | undefined }) {
+function Hunk({
+  hunk,
+  coloured,
+  showOld = true,
+  showNew = true,
+}: {
+  hunk: GitHunk;
+  coloured: Coloured | undefined;
+  /** Draw the old-line gutter. `false` for a file that is new — every number in it would be blank. */
+  showOld?: boolean;
+  /** Draw the new-line gutter. `false` for a file that was deleted. */
+  showNew?: boolean;
+}) {
   return (
     <section>
       <div className="scheme-meta border-y px-2 py-0.5">{hunk.header}</div>
@@ -203,12 +235,16 @@ function Hunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | undefine
             key={`${hunk.old_start}:${index}`}
             className={`flex items-start ${row}`}
           >
-            <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">
-              {line.old_line ?? ""}
-            </span>
-            <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">
-              {line.new_line ?? ""}
-            </span>
+            {showOld ? (
+              <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">
+                {line.old_line ?? ""}
+              </span>
+            ) : null}
+            {showNew ? (
+              <span className="scheme-num w-10 shrink-0 pr-1 text-right select-none">
+                {line.new_line ?? ""}
+              </span>
+            ) : null}
             <span
               className={`w-4 shrink-0 text-center select-none ${
                 line.kind === "added"
@@ -221,7 +257,9 @@ function Hunk({ hunk, coloured }: { hunk: GitHunk; coloured: Coloured | undefine
             >
               {mark}
             </span>
-            <code className="flex-1 whitespace-pre">
+            {/* Wraps, and `min-w-0` is what lets it: a flex child defaults to `min-width: auto`,
+                so without it the text sets the row's width and the wrap never happens. */}
+            <code className="min-w-0 flex-1 wrap-anywhere whitespace-pre-wrap">
               {tokens === undefined
                 ? line.text
                 : tokens.map((token, at) => (
