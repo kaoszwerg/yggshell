@@ -1,4 +1,13 @@
-import type { CSSProperties, KeyboardEvent, MouseEventHandler, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, MouseEventHandler, ReactNode } from "react";
+
+/**
+ * What counts as "a control of its own" inside a row.
+ *
+ * Anything a user can activate: the end/rename buttons on a tmux session, a task's checkbox, a `⋮`
+ * menu, a link, a field. Everything else — a label, an icon, a badge — is the row.
+ */
+const CONTROL =
+  'button, a, input, select, textarea, [role="button"], [role="menuitem"], [tabindex]';
 
 export interface RowProps {
   /** What activating this row does. */
@@ -50,10 +59,35 @@ export function Row({
   style,
   onContextMenu,
 }: RowProps) {
+  /**
+   * A click on a control INSIDE the row belongs to that control alone.
+   *
+   * **Why this is here and not at each call site.** Rows carry their own controls — end this
+   * session, tick this task, open this row's `⋮` — and they are nested inside the row's button, so
+   * every one of those clicks bubbles here as well. That made ending a tmux session *also* attach a
+   * tab to the session being killed, which then showed a bare shell with no tmux in it: two actions
+   * from one click, and the second one silently wrong. The same trap was live on the task list's
+   * checkbox, where ticking navigated to the note.
+   *
+   * A `stopPropagation` per control would work and would have to be remembered every time anyone
+   * adds one — forgotten once, the defect is back and looks like something else entirely. The row is
+   * the one place that can decide this, and it decides by ORIGIN: the click activates the row iff it
+   * did not come out of something activatable.
+   */
+  const onClick = (e: MouseEvent<HTMLButtonElement>) => {
+    const from = (e.target as Element).closest(CONTROL);
+    if (from !== null && from !== e.currentTarget) return;
+    onActivate();
+  };
+
   // Enter and Space come free with a real button; this only exists so a row can be activated from a
   // keyboard without the caller wiring it up.
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (e.key !== "Enter" && e.key !== " ") return;
+    // The same origin rule as the click: Enter on a nested control is that control's key, and it
+    // bubbles here exactly like the click does.
+    const from = (e.target as Element).closest(CONTROL);
+    if (from !== null && from !== e.currentTarget) return;
     e.preventDefault();
     onActivate();
   };
@@ -65,7 +99,7 @@ export function Row({
       style={style}
       onContextMenu={onContextMenu}
       aria-current={selected ? "true" : undefined}
-      onClick={onActivate}
+      onClick={onClick}
       onKeyDown={onKeyDown}
       className={`hover:bg-elevated focus-visible:outline-gold flex w-full items-baseline gap-1.5 px-1 py-0.5 text-left focus-visible:outline-1 ${
         selected ? "bg-cyan/10" : ""

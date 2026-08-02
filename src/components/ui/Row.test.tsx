@@ -43,6 +43,42 @@ describe("Row", () => {
     expect(onActivate).toHaveBeenCalledTimes(2);
   });
 
+  it("leaves a click on a control INSIDE it to that control", () => {
+    // A row carries its own controls — end this session, tick this task, stage this file — and they
+    // are nested inside the row's button. A click on one of them bubbles, so without this the row
+    // fires too: ending a tmux session ALSO opened a tab attached to the session that was being
+    // killed, which then showed a bare shell because there was nothing left to attach to.
+    // Reported as "es öffnet sich dann zusätzlich ein terminal tab ohne tmux".
+    const onEnd = vi.fn();
+    render(
+      <Row label="build" onActivate={onActivate}>
+        <span>build</span>
+        <button type="button" onClick={onEnd}>
+          End
+        </button>
+      </Row>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "End" }));
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(onActivate).not.toHaveBeenCalled();
+
+    // The row itself still activates — the guard is about where the click came from, nothing else.
+    fireEvent.click(screen.getByRole("button", { name: "build" }));
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it("still activates when the click lands on ordinary content inside it", () => {
+    // The label, an icon, a badge — everything that is not a control is the row.
+    render(
+      <Row label="a" onActivate={onActivate}>
+        <span data-testid="text">a</span>
+      </Row>,
+    );
+    fireEvent.click(screen.getByTestId("text"));
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
   it("marks what is being shown with aria-current, not aria-selected", () => {
     // `aria-selected` belongs to a listbox; this is a list of links to a detail view.
     const { rerender } = render(

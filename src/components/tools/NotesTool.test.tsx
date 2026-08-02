@@ -99,6 +99,11 @@ describe("NotesTool", () => {
     });
     // The offset is the parser's, not a guess — the backend rewrites three bytes at it.
     expect(vi.mocked(notesApi.toggle).mock.calls[0]?.[2]).toBe(0);
+    // And it does NOT also open the note. The checkbox sits inside the row, whose job is to open —
+    // so before `Row` learned to ignore a click that came out of one of its own controls, ticking
+    // threw the user into the full view. The same bubble opened a stray terminal tab from the tmux
+    // tool's end button; this is the second place it was live.
+    expect(useUiStore.getState().view).toBe("terminal");
   });
 
   it("searches across every project and opens the hit in the view", async () => {

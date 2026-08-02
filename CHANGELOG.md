@@ -28,6 +28,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Ending a tmux session also opened a stray tab** — one with no tmux in it, because it was
+  attaching to the session that had just been killed. The end control sits inside the row, and the
+  row's own job is to attach, so one click did both. Fixed where it can only be fixed once: a row now
+  ignores a click that came out of one of its own controls. The same bubble was live on the notes
+  list, where ticking a task threw you into the full view.
+
 - **A dropped file replaced the whole application.** The WebView did what a browser does with a file
   nobody handled: navigate to it. No back, and quitting to escape took every terminal with it.
 
@@ -50,8 +56,8 @@ All notable changes to this project are documented here. The format follows
 - **The line above the capture field says where the note will land**, by name. Without it the model
   was invisible — "no projects appear" is what a capture going somewhere you cannot see looks like.
 
-- **Everything is managed from the `⋮`.** An entry: type into the terminal, copy, open, edit, move to
-  another file or project, delete. A file: new one, rename, delete — and delete the project.
+- **Everything is managed from the `⋮`.** An entry: copy, open, edit, move to another file or
+  project, delete. A file: new one, rename, delete — and delete the project.
 
 - **The rest of the plan that the first build skipped.** Automatic sync (pull on start and on window
   focus, push after an edit) — it previously synced only when somebody opened Settings and pressed.

@@ -93,6 +93,28 @@ describe("TmuxTool", () => {
     await waitFor(() => expect(terminalApi.killSession).toHaveBeenCalledWith("build"));
   });
 
+  it("ends a session without ALSO opening a tab on it", async () => {
+    // Reported: "wenn ich im tmux widget eine session schließe … öffnet sich dann zusätzlich ein
+    // terminal tab ohne tmux". The end control sits inside the row, and the row's job is to attach —
+    // so the click did both, and the tab that opened was attaching to the session being killed.
+    // Hence a shell with no tmux in it.
+    renderTool();
+    fireEvent.click(await screen.findByRole("button", { name: "End build" }));
+    fireEvent.click(screen.getByRole("button", { name: "End it" }));
+
+    await waitFor(() => expect(terminalApi.killSession).toHaveBeenCalledWith("build"));
+    expect(useTerminalStore.getState().panes).toHaveLength(0);
+  });
+
+  it("starts a rename without opening a tab either", async () => {
+    // Same nesting, same bubble: the pencil is inside the row too.
+    renderTool();
+    fireEvent.click(await screen.findByRole("button", { name: "Rename build" }));
+
+    expect(screen.getByLabelText("Session name")).toBeTruthy();
+    expect(useTerminalStore.getState().panes).toHaveLength(0);
+  });
+
   it("ends nothing when the question is dismissed", async () => {
     renderTool();
     fireEvent.click(await screen.findByRole("button", { name: "End build" }));
