@@ -74,10 +74,35 @@ That is a bigger feature than either alternative and it is worth saying what it 
   with its own ADR stating exactly what leaves the device and where to.* So this needs
   **ADR-PROJ-004** before a line is written. It qualifies easily (the user names the remote; nothing
   goes anywhere until they do) but the ADR is not optional.
-- **Credentials: none of our business, deliberately.** Shell out to the user's own `git`, which uses
-  their SSH agent and their config. The app never sees a token, never stores one, and
-  `rule:security`'s "secrets in the keyring" question never arises because there is no secret. It also
-  means a repository they can already push to works with no setup at all.
+- **Credentials: none of our business, deliberately — and this is how a tokenless app pushes.** The
+  app shells out to the user's own `git`, which finds the credentials where they already are: the SSH
+  agent for `git@…`, the platform credential helper (osxkeychain, manager, libsecret) for `https://…`,
+  plus `~/.gitconfig` and `~/.ssh/config`. Nothing is copied, stored or transmitted. `rule:security`
+  says a client may learn *that* a credential exists and never its value; here it does not learn even
+  that. A repository the user can already push to from their terminal works with no setup at all.
+
+  **The mechanism exists already** — `git/fetch.rs`, built for the auto-fetch (ADR-PROJ-002) — and the
+  notes sync reuses it rather than inventing a second way to run git:
+
+  - `environment::which("git")` resolves the binary from the **captured login environment**, not from
+    the process's own `PATH`. That distinction is not theoretical: this app is launched from the dock,
+    not from a shell, and the capture had to be fixed once already because `~/.local/bin` is added in
+    `.zshrc` and was therefore invisible — three separate symptoms, one root.
+  - **Every prompt is disabled**: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS=`, `SSH_ASKPASS=`, and
+    `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`. There is no terminal attached to a background sync, so a
+    credential prompt would block until the timeout with nothing on screen to explain it — a silent
+    hang, which is the failure this project refuses on principle (`rule:crash-handling`).
+  - **A deadline on its own thread**, because `Command` has none and an unreachable host would
+    otherwise hold the sync indefinitely.
+
+  **The honest consequence, stated rather than discovered:** a key with a passphrase that is not in the
+  agent means the sync will *never* succeed — `BatchMode` makes it fail instead of asking. That is the
+  right trade for a background task and it is exactly why the status line carries **git's own error,
+  verbatim**: "Permission denied (publickey)" is actionable, "sync failed" is not.
+
+  **One addition over the fetch path**, because pushing raises the stakes: `SSH_AUTH_SOCK` is carried
+  over from the captured login environment when the app's own process lacks it. Otherwise "it works in
+  my terminal but not in the app" is a real and very confusing state on a desktop launch.
 - **Offline is the normal case, not the error case.** Notes are written locally and always readable;
   sync is best-effort and says when it last succeeded. A note must never be lost because a push failed.
 - **Conflicts are the part that can lose data**, so they are the part that gets designed rather than
