@@ -1,100 +1,94 @@
 import { describe, it, expect } from "vitest";
-import { parseInline, parseMarkdown } from "./markdown";
+import { parseMarkdown, type Block } from "./markdown";
 
-describe("parseInline", () => {
-  it("finds code, bold and links in one pass", () => {
-    const runs = parseInline("Use `ygg` for **speed**, see [docs](https://example.com/x).");
-    expect(runs.map((r) => r.kind)).toEqual([
-      "text",
-      "code",
-      "text",
-      "strong",
-      "text",
-      "link",
-      "text",
-    ]);
-  });
-
-  it("handles a link whose label is itself code", () => {
-    // Both of our documents write repository names that way, and a two-pass parser mangles them.
-    const runs = parseInline("[`kaoszwerg/yggshell`](https://github.com/kaoszwerg/yggshell)");
-    expect(runs).toEqual([
-      { kind: "link", text: "kaoszwerg/yggshell", href: "https://github.com/kaoszwerg/yggshell" },
-    ]);
-  });
-
-  it("keeps plain text as it is", () => {
-    expect(parseInline("nothing special here")).toEqual([
-      { kind: "text", text: "nothing special here" },
-    ]);
-  });
-
-  it("leaves an unclosed marker alone rather than eating the rest of the line", () => {
-    expect(parseInline("a ** dangling marker")).toEqual([
-      { kind: "text", text: "a ** dangling marker" },
-    ]);
-  });
-});
+function first<K extends Block["kind"]>(source: string, kind: K) {
+  const block = parseMarkdown(source).find((b) => b.kind === kind);
+  if (block === undefined) throw new Error(`no ${kind} in: ${source}`);
+  return block as Extract<Block, { kind: K }>;
+}
 
 describe("parseMarkdown", () => {
-  it("reads headings at their level", () => {
-    const blocks = parseMarkdown("# One\n## Two\n### Three");
-    expect(blocks.map((b) => (b.kind === "heading" ? b.level : b.kind))).toEqual([1, 2, 3]);
+  it("gives every block the bytes it came from", () => {
+    // The reason this parser replaced the hand-written one. Ticking a checkbox rewrites `- [ ]` to
+    // `- [x]` IN THE FILE, and clicking a block to edit it puts the caret at that block's source —
+    // both are questions about which bytes, and neither can be answered without this.
+    const source = "# Title\n\nA paragraph.\n";
+    const [heading, paragraph] = parseMarkdown(source);
+
+    expect(source.slice(heading?.at.start, heading?.at.end)).toBe("# Title");
+    expect(source.slice(paragraph?.at.start, paragraph?.at.end)).toBe("A paragraph.");
   });
 
-  it("joins a wrapped paragraph into one", () => {
-    const blocks = parseMarkdown("a line\nthat wraps\n\nand another");
-    expect(blocks).toHaveLength(2);
+  it("tells a task item from a bullet, and ticked from not", () => {
+    // The tool's whole interaction. A plain bullet must stay one: `done: null` is not `done: false`,
+    // and drawing an empty checkbox beside every list item would be the renderer inventing tasks
+    // nobody wrote.
+    const list = first("- [ ] open\n- [x] done\n- plain\n", "list");
+
+    expect(list.items.map((i) => i.done)).toEqual([false, true, null]);
   });
 
-  it("reads a table with its head and rows", () => {
-    const blocks = parseMarkdown(
-      "| Scheme | Licence |\n| --- | --- |\n| Nord | MIT |\n| Dracula | MIT |",
+  it("keeps a fenced code block whole, with its language", () => {
+    // Copying a code block is a feature; a fence parsed as three paragraphs cannot be copied as one.
+    const fence = first("```bash\nnpm run app:build\n```\n", "fence");
+
+    expect(fence.lang).toBe("bash");
+    expect(fence.code).toBe("npm run app:build");
+  });
+
+  it("reads a GFM table", () => {
+    const table = first("| a | b |\n| --- | --- |\n| 1 | 2 |\n", "table");
+
+    expect(table.head.flat().map((run) => ("text" in run ? run.text : ""))).toEqual(["a", "b"]);
+    expect(table.rows).toHaveLength(1);
+  });
+
+  it("keeps a link's target and an image's source apart from their text", () => {
+    // Everything else may collapse to text; these two may not, because the target IS the content.
+    const link = first("[label](https://example.com/x)\n", "paragraph");
+    expect(link.content).toEqual([{ kind: "link", text: "label", href: "https://example.com/x" }]);
+
+    const image = first("![a shot](assets/x.png)\n", "paragraph");
+    expect(image.content).toEqual([{ kind: "image", alt: "a shot", src: "assets/x.png" }]);
+  });
+
+  it("treats raw HTML as TEXT, never as markup", () => {
+    // The line that means there is no sanitiser to get wrong. A note arrives by paste from anywhere,
+    // so this stopped being a nicety the moment notes existed (ADR-PROJ-004).
+    const html = first("<script>alert(1)</script>\n", "html");
+
+    expect(html.text).toContain("<script>");
+    expect(html.kind).toBe("html");
+  });
+
+  it("keeps an inline tag as text too", () => {
+    const paragraph = first("hello <b>there</b>\n", "paragraph");
+
+    expect(paragraph.content.map((run) => ("text" in run ? run.text : "")).join("")).toContain(
+      "<b>",
     );
-    const table = blocks[0];
-    expect(table?.kind).toBe("table");
-    if (table?.kind !== "table") return;
-    expect(table.head).toHaveLength(2);
-    expect(table.rows).toHaveLength(2);
   });
 
-  it("does not turn a paragraph containing a pipe into a table", () => {
-    // A lopsided grid is worse than the prose it came from.
-    const blocks = parseMarkdown("press | to split the pane");
-    expect(blocks[0]?.kind).toBe("paragraph");
+  it("does not drop what it does not model", () => {
+    // The rule the hand-written parser was written around, and this one keeps: a renderer that
+    // silently drops what it does not understand turns a licence notice into a shorter licence
+    // notice, and nobody notices until the missing line is the one that mattered.
+    const source = "> quoted\n\n***\n\n1. one\n2. two\n";
+    const kinds = parseMarkdown(source).map((b) => b.kind);
+
+    expect(kinds).toEqual(["quote", "rule", "list"]);
+    expect(first(source, "list").ordered).toBe(true);
   });
 
-  it("reads a bullet list, including items that wrap", () => {
-    // Every bullet in the changelog spans several lines; treating the continuation as a new
-    // paragraph would break each entry in half.
-    const blocks = parseMarkdown("- first item\n  continued here\n- second item");
-    const list = blocks[0];
-    expect(list?.kind).toBe("list");
-    if (list?.kind !== "list") return;
-    expect(list.items).toHaveLength(2);
-    expect(list.items[0]?.map((r) => ("text" in r ? r.text : "")).join("")).toContain(
-      "continued here",
-    );
+  it("still reads what the two shipped documents use", () => {
+    // CHANGELOG.md and CREDITS.md render through this. The parser changed under them; what they
+    // contain must not have.
+    const source = "## Heading\n\nA **bold** word and `code`.\n\n- one\n- two\n";
+    expect(parseMarkdown(source).map((b) => b.kind)).toEqual(["heading", "paragraph", "list"]);
+    expect(first(source, "heading").level).toBe(2);
   });
 
-  it("keeps emphasis that spans a wrapped bullet", () => {
-    const blocks = parseMarkdown("- **bold across\n  two lines** and more");
-    const list = blocks[0];
-    if (list?.kind !== "list") throw new Error("expected a list");
-    expect(list.items[0]?.some((r) => r.kind === "strong")).toBe(true);
-  });
-
-  it("keeps a line it does not understand rather than dropping it", () => {
-    // A licence notice that quietly loses a line is the defect this exists to prevent.
-    const blocks = parseMarkdown("> a block quote nobody taught it about");
-    expect(blocks[0]?.kind).toBe("paragraph");
-  });
-
-  it("reads a horizontal rule", () => {
-    expect(parseMarkdown("---")[0]?.kind).toBe("rule");
-  });
-
-  it("survives an empty document", () => {
+  it("has nothing to say about an empty document", () => {
     expect(parseMarkdown("")).toEqual([]);
   });
 });
