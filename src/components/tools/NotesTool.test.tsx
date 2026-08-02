@@ -11,6 +11,10 @@ vi.mock("../../api/notes", () => ({
     topics: vi.fn(),
     read: vi.fn(),
     capture: vi.fn(() => Promise.resolve()),
+    write: vi.fn(() => Promise.resolve()),
+    remove: vi.fn(() => Promise.resolve()),
+    removeProject: vi.fn(() => Promise.resolve()),
+    projects: vi.fn(() => Promise.resolve(["github.com/a/b"])),
     toggle: vi.fn(() => Promise.resolve(true)),
     search: vi.fn(() => Promise.resolve([])),
   },
@@ -118,5 +122,49 @@ describe("NotesTool", () => {
 
     const sized = container.querySelector<HTMLElement>("[style*='font-size']");
     expect(sized?.style.fontSize).toBe("17px");
+  });
+});
+
+describe("managing what is in the list", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiStore.setState({ locale: "en", view: "terminal", note: null });
+    vi.mocked(notesApi.topics).mockResolvedValue(["inbox"]);
+    vi.mocked(notesApi.read).mockResolvedValue("- [ ] first\n- [ ] second\n");
+  });
+
+  it("offers the actions on a VISIBLE control, not only on right-click", async () => {
+    // The first build had them on right-click and the first question was "where is the menu?".
+    // A hidden affordance is a missing one — nobody right-clicks a list row they have not seen.
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for first" }));
+
+    expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Type into the terminal" })).toBeTruthy();
+  });
+
+  it("removes one entry and leaves its neighbours alone", async () => {
+    // Spliced out by its own byte range, which the parser reports — the same number a tick rewrites
+    // into. A second way of deciding what an item IS would be a second place for the two to disagree.
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for first" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(notesApi.write).toHaveBeenCalledWith("github.com/a/b", "inbox", "- [ ] second\n");
+    });
+  });
+
+  it("says how a project comes about instead of just 'nothing here'", async () => {
+    // Asked outright after connecting: "how do I create projects?". They are not created, they
+    // appear — and the empty state is the only place that can say so.
+    vi.mocked(notesApi.topics).mockResolvedValue([]);
+    renderTool();
+
+    expect(await screen.findByText(/a project appears for it/)).toBeTruthy();
   });
 });

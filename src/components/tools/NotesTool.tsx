@@ -12,6 +12,10 @@ import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { useNoteProject } from "../../hooks/useNoteProject";
 import { useT } from "../../hooks/useT";
 import { useUiStore } from "../../store/ui";
+import { useTerminalStore } from "../../store/terminal";
+import { KebabMenu } from "../ui/KebabMenu";
+import { copyText } from "../../lib/clipboard";
+import { terminalApi } from "../../api/terminal";
 
 /**
  * The notes, as a list you can take in at a glance and tick things off.
@@ -36,23 +40,34 @@ export function NotesTool() {
   const project = useNoteProject();
   const setView = useUiStore((s) => s.setView);
   const openNote = useUiStore((s) => s.openNote);
+  const sessionId = useTerminalStore(
+    (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
+  );
 
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [showDone, setShowDone] = useState(false);
+  // **Following the front tab is right, and it cannot be the ONLY way in.** A project whose checkout
+  // was moved, renamed or thrown away would otherwise have notes nobody can reach — including to
+  // delete them — and simply having the wrong tab in front makes the panel look empty when it is not,
+  // which is exactly what was reported. Decided in the plan and missing from the first build.
+  const [everything, setEverything] = useState(false);
+  const [newTopic, setNewTopic] = useState<string | null>(null);
 
-  const topics = useQuery({
-    queryKey: ["notes-topics", project],
-    queryFn: () => notesApi.topics(project),
+  const allProjects = useQuery({
+    queryKey: ["notes-projects"],
+    queryFn: notesApi.projects,
   });
+  const projects = everything ? (allProjects.data ?? []) : [project];
 
   const notes = useQuery({
-    queryKey: ["notes-content", project, topics.data ?? []],
-    enabled: topics.data !== undefined,
+    queryKey: ["notes-content", projects],
     queryFn: async () => {
-      const out: { topic: string; text: string }[] = [];
-      for (const topic of topics.data ?? []) {
-        out.push({ topic, text: await notesApi.read(project, topic) });
+      const out: { project: string; topic: string; text: string }[] = [];
+      for (const each of projects) {
+        for (const topic of await notesApi.topics(each)) {
+          out.push({ project: each, topic, text: await notesApi.read(each, topic) });
+        }
       }
       return out;
     },
@@ -65,7 +80,7 @@ export function NotesTool() {
   });
 
   const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["notes-topics"] });
+    void qc.invalidateQueries({ queryKey: ["notes-projects"] });
     void qc.invalidateQueries({ queryKey: ["notes-content"] });
   };
 
@@ -78,18 +93,134 @@ export function NotesTool() {
   });
 
   const toggle = useMutation({
-    mutationFn: ({ topic, offset }: { topic: string; offset: number }) =>
-      notesApi.toggle(project, topic, offset),
+    mutationFn: ({
+      project: inProject,
+      topic,
+      offset,
+    }: {
+      project: string;
+      topic: string;
+      offset: number;
+    }) => notesApi.toggle(inProject, topic, offset),
     onSuccess: refresh,
   });
 
-  const open = (topic: string) => {
-    openNote(project, topic);
+  /**
+   * Remove one item from its note.
+   *
+   * Done by splicing the markdown and writing it back rather than by a new backend command: the
+   * parser already reports the item's byte range, and a second way to edit a note is a second place
+   * for the two to disagree about what an item IS (ADR-CORE-005).
+   */
+  const removeItem = useMutation({
+    mutationFn: async (at: { project: string; topic: string; from: number; to: number }) => {
+      const text = await notesApi.read(at.project, at.topic);
+      const rest = text.slice(at.to).replace(/^\n/, "");
+      await notesApi.write(at.project, at.topic, text.slice(0, at.from) + rest);
+    },
+    onSuccess: refresh,
+  });
+
+  const removeNote = useMutation({
+    mutationFn: ({ project: p, topic }: { project: string; topic: string }) =>
+      notesApi.remove(p, topic),
+    onSuccess: refresh,
+  });
+
+  const removeProject = useMutation({
+    mutationFn: (p: string) => notesApi.removeProject(p),
+    onSuccess: refresh,
+  });
+
+  const addTopic = useMutation({
+    mutationFn: ({ project: p, topic }: { project: string; topic: string }) =>
+      notesApi.write(p, topic, `# ${topic}\n\n`),
+    onSuccess: (_r, { project: p, topic }) => {
+      setNewTopic(null);
+      refresh();
+      openNote(p, topic);
+      setView("notes");
+    },
+  });
+
+  const toTerminal = (text: string) => {
+    const id = sessionId;
+    if (id === null) return;
+    void terminalApi.write(id, text).catch((error: unknown) => {
+      console.warn("could not type the note into the terminal", error);
+    });
+  };
+
+  const open = (inProject: string, topic: string) => {
+    openNote(inProject, topic);
     setView("notes");
   };
 
+  /** What one entry offers. "Type into the terminal" first: it is the reason this tool exists. */
+  const itemActions = (inProject: string, topic: string, item: Task) => [
+    {
+      id: "terminal",
+      label: t("notes.toTerminal"),
+      disabled: sessionId === null,
+      onSelect: () => {
+        toTerminal(item.title);
+      },
+    },
+    {
+      id: "copy",
+      label: t("notes.copy"),
+      onSelect: () => {
+        copyText(item.title, "clipboard.note");
+      },
+    },
+    {
+      id: "open",
+      label: t("notes.openNote"),
+      onSelect: () => {
+        open(inProject, topic);
+      },
+    },
+    {
+      id: "delete",
+      label: t("notes.delete"),
+      onSelect: () => {
+        removeItem.mutate({ project: inProject, topic, from: item.offset, to: item.end });
+      },
+    },
+  ];
+
+  /** What a topic offers: a new one beside it, and getting rid of this one or the whole project. */
+  const topicActions = (inProject: string, topic: string) => [
+    {
+      id: "new",
+      label: t("notes.newTopic"),
+      onSelect: () => {
+        setNewTopic("");
+      },
+    },
+    {
+      id: "delete",
+      label: t("notes.deleteNote.title"),
+      onSelect: () => {
+        removeNote.mutate({ project: inProject, topic });
+      },
+    },
+    {
+      id: "deleteProject",
+      label: t("notes.deleteProject.title"),
+      onSelect: () => {
+        removeProject.mutate(inProject);
+      },
+    },
+  ];
+
   const sections = (notes.data ?? []).map((note) => ({
+    project: note.project,
     topic: note.topic,
+    // Across projects the topic alone is ambiguous — two projects both have an `inbox`.
+    heading: everything
+      ? `${note.project.split("/").at(-1) ?? note.project} · ${note.topic}`
+      : note.topic,
     items: taskItems(note.text),
   }));
   const doneCount = sections.reduce(
@@ -110,10 +241,20 @@ export function NotesTool() {
           placeholder={t("common.search")}
           className="min-w-0 flex-1"
         />
+        <Button
+          variant="ghost"
+          accent={everything ? "cyan" : "green"}
+          className="shrink-0 px-1.5 py-0.5 text-[0.56rem] tracking-[0.12em]"
+          onClick={() => {
+            setEverything((on) => !on);
+          }}
+        >
+          {everything ? t("notes.allProjects") : t("notes.thisProject")}
+        </Button>
         <IconButton
           label={t("notes.open")}
           onClick={() => {
-            open(topics.data?.[0] ?? "inbox");
+            open(sections[0]?.project ?? project, sections[0]?.topic ?? "inbox");
           }}
           variant="ghost"
           className="h-5 w-5 shrink-0"
@@ -129,6 +270,30 @@ export function NotesTool() {
           <RefreshCw size={12} aria-hidden className={notes.isFetching ? "animate-spin" : ""} />
         </IconButton>
       </header>
+
+      {newTopic === null ? null : (
+        <div className="border-cyan/10 flex shrink-0 items-center gap-1 border-b px-2 py-1">
+          <TextField
+            aria-label={t("notes.topicName")}
+            ref={(el) => {
+              // Focused after mount rather than with `autoFocus`, which jsx-a11y bans because it
+              // steals focus on page load. Here the field appears because the user asked for it.
+              el?.focus();
+            }}
+            value={newTopic}
+            onChange={(event) => {
+              setNewTopic(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setNewTopic(null);
+              if (event.key !== "Enter" || newTopic.trim() === "") return;
+              addTopic.mutate({ project, topic: newTopic.trim() });
+            }}
+            placeholder={t("notes.topicName")}
+            className="min-w-0 flex-1"
+          />
+        </div>
+      )}
 
       {query.trim() !== "" ? null : (
         <div className="border-cyan/10 flex shrink-0 items-start gap-1 border-b px-2 py-1">
@@ -184,14 +349,25 @@ export function NotesTool() {
               </Row>
             ))
           )
-        ) : sections.every((s) => s.items.length === 0) ? (
-          <Note>{t("notes.none")}</Note>
+        ) : sections.length === 0 ? (
+          // **Says how a project comes about.** "Nothing here yet" answered nothing, and the first
+          // question after connecting was "how do I create projects?" — they are not created, they
+          // appear: a note captured while a terminal is in a repository makes one, keyed off that
+          // repository's remote so it is the same folder on every machine.
+          <Note>{everything ? t("notes.noneAnywhere") : t("notes.howProjects")}</Note>
         ) : (
           sections.map((section) => (
-            <section key={section.topic} className="py-1">
-              <h3 className="text-dim px-2 py-0.5 font-mono text-[0.56rem] tracking-[0.12em]">
-                {section.topic.toUpperCase()}
-              </h3>
+            <section key={`${section.project}:${section.topic}`} className="py-1">
+              <div className="flex items-center gap-1 px-2 py-0.5">
+                <h3 className="text-dim min-w-0 flex-1 truncate font-mono text-[0.56rem] tracking-[0.12em]">
+                  {section.heading.toUpperCase()}
+                </h3>
+                <KebabMenu
+                  label={t("notes.actions", { name: section.topic })}
+                  items={topicActions(section.project, section.topic)}
+                  size={11}
+                />
+              </div>
               {section.items
                 .filter((item) => !item.done)
                 .map((item) => (
@@ -199,11 +375,16 @@ export function NotesTool() {
                     key={item.offset}
                     item={item}
                     onToggle={() => {
-                      toggle.mutate({ topic: section.topic, offset: item.offset });
+                      toggle.mutate({
+                        project: section.project,
+                        topic: section.topic,
+                        offset: item.offset,
+                      });
                     }}
                     onOpen={() => {
-                      open(section.topic);
+                      open(section.project, section.topic);
                     }}
+                    actions={itemActions(section.project, section.topic, item)}
                   />
                 ))}
             </section>
@@ -229,14 +410,19 @@ export function NotesTool() {
                     .filter((item) => item.done)
                     .map((item) => (
                       <TaskRow
-                        key={`${section.topic}:${String(item.offset)}`}
+                        key={`${section.project}:${section.topic}:${String(item.offset)}`}
                         item={item}
                         onToggle={() => {
-                          toggle.mutate({ topic: section.topic, offset: item.offset });
+                          toggle.mutate({
+                            project: section.project,
+                            topic: section.topic,
+                            offset: item.offset,
+                          });
                         }}
                         onOpen={() => {
-                          open(section.topic);
+                          open(section.project, section.topic);
                         }}
+                        actions={itemActions(section.project, section.topic, item)}
                       />
                     )),
                 )}
@@ -258,10 +444,13 @@ function TaskRow({
   item,
   onToggle,
   onOpen,
+  actions,
 }: {
   item: Task;
   onToggle: () => void;
   onOpen: () => void;
+  /** What the row's `⋮` offers. Built by the caller, which is the only thing that knows the note. */
+  actions: { id: string; label: string; onSelect: () => void; disabled?: boolean }[];
 }) {
   const t = useT();
   return (
@@ -286,6 +475,9 @@ function TaskRow({
       >
         {item.title}
       </span>
+      {/* VISIBLE, and it opens on a plain click. Right-click alone is not a discoverable gesture —
+          the first build had these actions and the first question was "where is the menu?". */}
+      <KebabMenu label={t("notes.actions", { name: item.title })} items={actions} />
     </Row>
   );
 }

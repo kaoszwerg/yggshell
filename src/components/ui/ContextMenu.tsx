@@ -30,7 +30,7 @@ interface ContextMenuSeparator {
 /** Not exported yet — nothing consumes these names, and the unused-export check is a gate rather
  * than a suggestion (rule:code-quality). They get their `export` alongside the first caller that
  * needs to name them. */
-type ContextMenuEntry = ContextMenuItem | ContextMenuSeparator;
+export type ContextMenuEntry = ContextMenuItem | ContextMenuSeparator;
 
 export interface ContextMenuProps {
   /** Accessible name of the menu — a view may carry more than one. */
@@ -46,11 +46,22 @@ export interface ContextMenuProps {
    * thing that is no longer there is worse than one that offers nothing.
    */
   onOpen?: () => void;
+  /**
+   * Also open on a plain left click.
+   *
+   * For a VISIBLE trigger — a `⋮` button — where right-click is not a discoverable gesture: the notes
+   * tool shipped with the actions reachable only by right-clicking a row, and the first question was
+   * "where is the menu?". A hidden affordance is a missing one.
+   *
+   * Off by default, because on a row, a pane or a tab, left-click already means something else.
+   */
+  openOnClick?: boolean;
 }
 
 /** Props the menu chains onto its trigger — an existing handler is preserved, not overwritten. */
 interface TriggerProps {
   onContextMenu?: (e: MouseEvent<Element>) => void;
+  onClick?: (e: MouseEvent<Element>) => void;
 }
 
 const isItem = (e: ContextMenuEntry): e is ContextMenuItem => !("separator" in e);
@@ -73,7 +84,13 @@ const EDGE = 8;
  * keys move over enabled rows only (a disabled row is announced but never a stop), Home/End jump,
  * Enter/Space activate, Escape closes and gives focus back to the trigger.
  */
-export function ContextMenu({ label, items, children, onOpen }: ContextMenuProps) {
+export function ContextMenu({
+  label,
+  items,
+  children,
+  onOpen,
+  openOnClick = false,
+}: ContextMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
@@ -148,19 +165,32 @@ export function ContextMenu({ label, items, children, onOpen }: ContextMenuProps
   }
 
   const childProps = (children.props ?? {}) as TriggerProps;
+  const show = (e: MouseEvent<Element>) => {
+    if (enabled.length === 0 && items.filter(isItem).length === 0) return;
+    setTriggerEl(e.currentTarget as HTMLElement);
+    setPos({ top: e.clientY, left: e.clientX });
+    setOpen(true);
+    // After the guard above, so a menu with nothing in it does not refresh anything either.
+    onOpen?.();
+  };
   const trigger = cloneElement(children as ReactElement<TriggerProps>, {
     onContextMenu: (e: MouseEvent<Element>) => {
       childProps.onContextMenu?.(e);
       // Suppressed even when there is nothing to show: the native menu must never appear over the
       // HUD, and "no actions here" is not a reason to hand the user the WebView's own menu.
       e.preventDefault();
-      if (enabled.length === 0 && items.filter(isItem).length === 0) return;
-      setTriggerEl(e.currentTarget as HTMLElement);
-      setPos({ top: e.clientY, left: e.clientX });
-      setOpen(true);
-      // After the guard above, so a menu with nothing in it does not refresh anything either.
-      onOpen?.();
+      show(e);
     },
+    ...(openOnClick
+      ? {
+          onClick: (e: MouseEvent<Element>) => {
+            childProps.onClick?.(e);
+            // Stopped, or a row that opens a note would also act on the click that opened its menu.
+            e.stopPropagation();
+            show(e);
+          },
+        }
+      : {}),
   });
 
   const focusAt = (index: number) => {

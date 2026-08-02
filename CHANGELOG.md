@@ -6,7 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The `⋮` menu the notes needed, on a visible control.** Per entry: type it into the terminal, copy
+  it, open it in the view, delete it. Per topic: a new topic beside it, or delete the note or the whole
+  project. It opens on a plain click — the actions existed on right-click first, and the first question
+  was "where is the menu?". A hidden affordance is a missing one.
+
+- **An "all projects" view in the tool.** Notes follow the front tab, which is right — and cannot be
+  the only way in: with the wrong tab in front the panel looks empty when it is not, and a project
+  whose checkout was moved or thrown away had notes nobody could reach, including to delete them.
+  Decided in the plan and missing from the first build.
+
 ### Fixed
+
+- **The settings never said whether it was connected**, and the Connect button stayed lit after it had
+  done its job — which reads as "it did not work". Both now reflect the actual state.
+
+- **"Nothing here yet" explained nothing.** Projects are not created, they appear: note something
+  while a terminal is in a repository and a project appears for it, keyed off that repository's
+  remote so it is the same folder on every machine. The empty state says so, because it was asked.
 
 - **Connecting to a repository failed if you had already written notes** — which is the normal first
   path, not an edge case: the tool works local-only until you type a URL, so by then the directory is

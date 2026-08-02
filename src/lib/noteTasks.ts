@@ -1,7 +1,14 @@
 import { parseMarkdown } from "./markdown";
 
 /** One task in a note, as the tool shows it: one line, never a body. */
-export type Task = { title: string; done: boolean; priority: 0 | 1 | 2; offset: number };
+export type Task = {
+  title: string;
+  done: boolean;
+  priority: 0 | 1 | 2;
+  /** Byte range of the whole item, body included — what a delete removes and a tick rewrites into. */
+  offset: number;
+  end: number;
+};
 
 /**
  * The task items in a note, flattened to one line each.
@@ -31,6 +38,7 @@ export function taskItems(text: string): Task[] {
         done: item.done,
         priority,
         offset: item.at.start,
+        end: item.at.end,
       });
     }
   }

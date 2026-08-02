@@ -64,6 +64,11 @@ export function NotesSettings() {
 
   const current = status.data;
   const orphanBytes = (orphans.data ?? []).reduce((sum, o) => sum + o.bytes, 0);
+  // What the user typed against what is actually connected. Connecting again with the same URL does
+  // nothing useful, and a button that stays lit after it has done its job reads as "it did not work"
+  // — which is how this was reported.
+  const typed = (remote ?? current?.remote ?? "").trim();
+  const connected = current?.connected === true && typed !== "" && typed === current.remote.trim();
 
   return (
     <div className="flex flex-col gap-2 text-xs">
@@ -103,9 +108,9 @@ export function NotesSettings() {
           onClick={() => {
             connect.mutate();
           }}
-          disabled={connect.isPending}
+          disabled={connect.isPending || connected || typed === ""}
         >
-          {t("settings.notes.connect")}
+          {connected ? t("settings.notes.connected") : t("settings.notes.connect")}
         </Button>
         <Button
           variant="ghost"
@@ -156,6 +161,15 @@ export function NotesSettings() {
           }}
         />
       )}
+
+      {/* The state, said outright. "Synced" alone never answered the question the user actually has,
+          which is whether this thing is hooked up at all — reported as "it does not show that it is
+          connected". */}
+      <p className="font-mono text-[10px]">
+        <span className={connected ? "text-green" : "text-dim"}>
+          {connected ? t("settings.notes.isConnected") : t("settings.notes.notConnected")}
+        </span>
+      </p>
 
       {/* The honest half of "automatic": a sync that silently stopped three days ago is the failure
           this line exists to make impossible. git's own message, verbatim — "Permission denied
