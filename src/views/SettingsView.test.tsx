@@ -22,6 +22,12 @@ vi.mock("../components/settings/ProfileControls", () => ({
   ProfileControls: () => <div data-testid="profile-controls" />,
 }));
 
+// And the notes panel, which talks to the backend through react-query. This suite is about which
+// controls live under which tab, not about the plumbing behind any one of them.
+vi.mock("../components/settings/NotesSettings", () => ({
+  NotesSettings: () => <div data-testid="notes-settings" />,
+}));
+
 // The About section shows the build identity, which goes through react-query. This view is not the
 // place to test that plumbing — BuildIdentity owns it.
 vi.mock("../hooks/useBuildInfo", () => ({

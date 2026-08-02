@@ -42,6 +42,10 @@
     "src-tauri/src/commands/git.rs": {
       "spawns": 1,
       "why": "Command work moved off Tauri's MAIN thread with `spawn_blocking`, because a synchronous command blocks window events and IPC for as long as its child process runs — measured: `agent_usage` shells out to `claude -p /usage` at ~1.5 s and made the Agent tool take that long to paint. **None of these tasks can die silently, and the shape is the same for every one of them:** the closure does the work and returns a value; the command `await`s the JoinHandle and maps a join error into an `AppError` that carries the command's name. That error travels back over IPC, where `Serialize for AppError` logs it at error level (mem:logging-contract) and the UI shows it in the panel that asked. A panicked closure therefore surfaces as a failed call with a message, never as a panel that stays empty — `container_stats` is the one deliberate exception: it degrades to an empty list after logging at error, because 'no containers' is the answer it already gives when Docker is absent, and an error banner there would be worse than the truth it can still show. Here: `git_fetch`, which is bounded by a remote host rather than by us."
+    },
+    "src-tauri/src/notes/git.rs": {
+      "spawns": 1,
+      "why": "Every git call the notes sync makes. `Command` has no timeout, so the child runs on a thread the caller waits on with a deadline (45s — longer than the auto-fetch's, because a first push may be a clone's worth of notes over a slow link). HOW IT DIES: it sends the process result down a channel and returns. If the deadline passes first the caller has already moved on and the receiver is gone; the send fails, the result is dropped, and the thread ends. Deliberate, and the same trade as git/fetch.rs: the child cannot be killed safely from here, so the thread finishes into nothing rather than being abandoned mid-write — and nothing is lost, because the caller has already recorded the timeout as the sync's last error, which the settings panel shows verbatim. A sync that fails is never fatal: the notes are written locally and stay readable either way (ADR-PROJ-004)."
     }
   }
 }

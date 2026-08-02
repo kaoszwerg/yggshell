@@ -59,6 +59,18 @@ pub struct SettingsDto {
     /// what the CSS font stack does anyway.
     #[serde(default)]
     pub terminal_font: String,
+    /// The git remote the notes are synchronised with. Empty means local-only, and with it empty
+    /// **nothing leaves the device** — naming a remote IS the opt-in that `rule:privacy` requires
+    /// (ADR-PROJ-004).
+    #[serde(default)]
+    pub notes_remote: String,
+    /// The branch the notes live on. Empty means whatever the remote's default is.
+    #[serde(default)]
+    pub notes_branch: String,
+    /// Whether to synchronise at all. Independent of the URL, so syncing can be paused without
+    /// losing the remote that was configured.
+    #[serde(default = "default_notes_sync")]
+    pub notes_sync: bool,
     /// Refresh the ahead/behind counts against the remote while the Git tool is open.
     ///
     /// The one outbound connection this app makes (ADR-PROJ-002), and switchable because of that: it
@@ -182,6 +194,51 @@ pub struct TmuxSession {
     pub attached: bool,
     /// What its active pane is running (`zsh`, `cargo`, `node`) — tmux's own `pane_current_command`.
     pub command: String,
+}
+
+/// What the notes sync is doing, and what it last said.
+///
+/// `last_error` is git's own message, verbatim: "Permission denied (publickey)" is actionable where
+/// "sync failed" is not, and a passphrased key that is not in the agent is the commonest way for this
+/// to never work (ADR-PROJ-004).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct NotesStatus {
+    /// Whether a clone exists on disk yet.
+    pub connected: bool,
+    /// The configured remote, or empty for local-only — in which case nothing leaves the device.
+    pub remote: String,
+    pub branch: String,
+    pub sync: bool,
+    /// Where the clone is. Shown, because a directory you cannot find is one you cannot back up.
+    pub path: String,
+    /// Whether `git` was found at all. Missing git is a state, not a crash: everything except sync
+    /// keeps working.
+    pub git_available: bool,
+    /// Unix seconds of the last successful sync, if there has been one this run.
+    pub last_sync: Option<u64>,
+    /// git's own first error line from the last attempt, if it failed.
+    pub last_error: Option<String>,
+}
+
+/// One search hit across the notes.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct NoteHit {
+    pub project: String,
+    pub topic: String,
+    pub line: String,
+    /// Byte offset of the line, so the view can open at it.
+    pub offset: u32,
+}
+
+/// An image in the repository that no note refers to any more.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct NoteOrphan {
+    /// `<project>/assets/<file>` — what `notes_clean` takes back.
+    pub key: String,
+    pub bytes: u32,
 }
 
 /// A file's contents for the inline viewer.
@@ -455,6 +512,10 @@ pub struct TerminalProfile {
 }
 
 /// On by default: a Git tool that reports `↓0` because it never asked is worse than one that asks.
+fn default_notes_sync() -> bool {
+    true
+}
+
 fn default_auto_fetch() -> bool {
     true
 }
@@ -558,6 +619,9 @@ impl Default for SettingsDto {
             commit_theme: String::new(),
             terminal_font: String::new(),
             git_auto_fetch: default_auto_fetch(),
+            notes_remote: String::new(),
+            notes_branch: String::new(),
+            notes_sync: default_notes_sync(),
             language: String::new(),
             copy_on_select: false,
             tmux_mode: TmuxMode::Off,
@@ -617,12 +681,16 @@ mod tests {
             tmux_session: String::new(),
             ui_scale: 1.25,
             minimize_to_tray: true,
+            notes_remote: "git@example.com:me/notes.git".into(),
+            notes_branch: String::new(),
+            notes_sync: true,
         };
         let json = serde_json::to_string(&s).expect("serialize");
         let back: SettingsDto = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.ui_scale, 1.25);
         assert_eq!(back.terminal_shell, "/bin/zsh");
         assert!(back.minimize_to_tray);
+        assert_eq!(back.notes_remote, "git@example.com:me/notes.git");
     }
 
     #[test]
@@ -753,6 +821,12 @@ pub struct GitCommit {
 pub struct GitSnapshot {
     /// Absolute path of the repository's working-tree root.
     pub root: String,
+    /// The `origin` remote's URL, or `null` for a purely local repository.
+    ///
+    /// Carried because it is what identifies a PROJECT: the notes tool keys a project's folder off
+    /// it, so the same repository is the same folder on every machine however differently it happens
+    /// to be checked out (ADR-PROJ-004). The path alone cannot do that.
+    pub remote: Option<String>,
     /// Current branch, or `null` when HEAD is detached or unborn.
     pub branch: Option<String>,
     /// Whether HEAD points at a commit rather than a branch.

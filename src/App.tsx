@@ -10,6 +10,7 @@ import { Toast } from "./components/ui/Toast";
 import { TerminalView } from "./views/TerminalView";
 import { LogsView } from "./views/LogsView";
 import { SettingsView } from "./views/SettingsView";
+import { NotesView } from "./views/NotesView";
 import { useScrollTop } from "./hooks/useScrollTop";
 import { useApplyUiScale } from "./hooks/useUiScale";
 import { useSyncLocale } from "./hooks/useT";
@@ -87,6 +88,7 @@ export default function App() {
             </div>
             {view === "logs" ? <LogsView /> : null}
             {view === "settings" ? <SettingsView /> : null}
+            {view === "notes" ? <NotesView /> : null}
           </main>
         </div>
         <StatusBar canScrollTop={canTop} onScrollTop={scrollToTop} />

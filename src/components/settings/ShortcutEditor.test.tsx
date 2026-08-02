@@ -56,13 +56,16 @@ describe("ShortcutEditor", () => {
   });
 
   it("records a new binding", () => {
+    // ⌘Y, not ⌘N: N belongs to the Notes tool now, and the editor correctly refuses a combination
+    // that is already taken. The test wanted "any free key" and named one that stopped being free —
+    // which is the editor's conflict check working, not a regression.
     render(<ShortcutEditor />);
     fireEvent.click(screen.getByRole("button", { name: /New terminal/ }));
     expect(screen.getByText("Press a key…")).toBeInTheDocument();
 
-    press("n", { metaKey: true });
+    press("y", { metaKey: true });
 
-    expect(bindings().newTab.key).toBe("n");
+    expect(bindings().newTab.key).toBe("y");
     expect(screen.queryByText("Press a key…")).toBeNull();
   });
 

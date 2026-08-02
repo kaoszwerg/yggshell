@@ -18,23 +18,10 @@ vi.mock("../api/commands", () => ({
 }));
 
 import { api } from "../api/commands";
+import { settings as sharedSettings } from "../test/settings";
 
 function settings(ui_scale: number): SettingsDto {
-  return {
-    ui_scale,
-    terminal_font_size: 13,
-    terminal_shell: "",
-    terminal_theme: "",
-    diff_theme: "",
-    commit_theme: "",
-    copy_on_select: false,
-    git_auto_fetch: true,
-    language: "",
-    terminal_font: "",
-    tmux_mode: "off",
-    tmux_session: "",
-    minimize_to_tray: false,
-  };
+  return sharedSettings({ ui_scale });
 }
 
 function makeWrapper(qc: QueryClient) {

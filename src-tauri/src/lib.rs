@@ -15,6 +15,7 @@ pub mod files;
 mod git;
 pub mod launch;
 pub mod logging;
+pub mod notes;
 pub mod procs;
 pub mod profile;
 pub mod services;
@@ -63,6 +64,23 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::notes::notes_status,
+            commands::notes::notes_connect,
+            commands::notes::notes_disconnect,
+            commands::notes::notes_sync,
+            commands::notes::notes_projects,
+            commands::notes::notes_topics,
+            commands::notes::notes_read,
+            commands::notes::notes_write,
+            commands::notes::notes_capture,
+            commands::notes::notes_toggle,
+            commands::notes::notes_delete,
+            commands::notes::notes_delete_project,
+            commands::notes::notes_search,
+            commands::notes::notes_image_add,
+            commands::notes::notes_image_read,
+            commands::notes::notes_orphans,
+            commands::notes::notes_clean,
             commands::app_version,
             commands::build_info,
             commands::get_recent_logs,

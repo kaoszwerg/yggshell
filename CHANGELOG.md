@@ -8,6 +8,23 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Notes.** A staging area between you and the agent: what the next prompt should say, what is still
+  to be discussed, what has to happen before a release — per project, checkable, and searchable across
+  all of them. The tool beside the terminal is the list and the quick capture; the view is where a note
+  is read and written. Enter files a capture, Shift+Enter keeps typing, and ticking something in the
+  list rewrites the file without a trip anywhere.
+
+  It syncs through a git repository **you** name, using **your** git — the app holds no credentials and
+  needs none. With no repository configured nothing leaves the device at all, which is what makes the
+  feature opt-in rather than opt-out (ADR-PROJ-004). A remote image in a pasted note is never fetched:
+  rendering it would call a stranger's server, which is exactly what a tracking pixel counts on.
+
+  The app may now write to exactly one repository, and that is enforced rather than intended: it runs
+  git inside every project you have a tab in, all of it read-only, and `check:all` fails the build if a
+  writing git subcommand appears outside the notes module.
+
+### Added
+
 - **Copying says so.** A short confirmation appears above the status bar naming what went to the
   clipboard — the selection, a path, a port, a pid. Copying is invisible: the selection looks identical
   before and after, so a copy that silently did nothing could not be told from one that worked. And a

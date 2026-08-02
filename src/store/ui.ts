@@ -6,9 +6,9 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from "../i18n";
 import { defaultBindings, sanitiseBindings, type ActionId, type Binding } from "../lib/shortcuts";
 
 /** Top-level views (sidebar navigation). Product views are added here as they land. */
-export type ViewId = "terminal" | "logs" | "settings";
+export type ViewId = "terminal" | "logs" | "settings" | "notes";
 
-const VIEWS: ViewId[] = ["terminal", "logs", "settings"];
+const VIEWS: ViewId[] = ["terminal", "logs", "settings", "notes"];
 
 /**
  * Tools that render in the column beside the navigation rail — never *in* the rail, which is
@@ -17,9 +17,9 @@ const VIEWS: ViewId[] = ["terminal", "logs", "settings"];
  * A tool is not a view: a view replaces what you are looking at, a tool sits next to it while the
  * terminal keeps running. That is the whole point of the column, so Logs and Settings stay views.
  */
-export type ToolId = "git" | "files" | "activity" | "docker" | "agent" | "tmux";
+export type ToolId = "git" | "files" | "activity" | "docker" | "agent" | "tmux" | "notes";
 
-const TOOLS: ToolId[] = ["git", "files", "activity", "docker", "agent", "tmux"];
+const TOOLS: ToolId[] = ["git", "files", "activity", "docker", "agent", "tmux", "notes"];
 
 /** Bounds of the tool column, in pixels. Below the minimum a file path is unreadable; above the
  *  maximum the terminal stops being the main thing on screen. */
@@ -129,6 +129,9 @@ export interface UiState {
   aboutOpen: boolean;
 
   setView: (v: ViewId) => void;
+  /** Which note the Notes view is showing. The tool sets it; the view reads it. */
+  note: { project: string; topic: string } | null;
+  openNote: (project: string, topic: string) => void;
   /** Show a tool. Choosing the one already shown collapses the column — the rail button is a toggle. */
   toggleTool: (t: ToolId) => void;
   setToolWidth: (px: number) => void;
@@ -173,6 +176,8 @@ export const useUiStore = create<UiState>()(
       aboutOpen: false,
 
       setView: (view) => set({ view }),
+      note: null,
+      openNote: (project, topic) => set({ note: { project, topic } }),
       toggleTool: (tool) => set((s) => ({ activeTool: s.activeTool === tool ? null : tool })),
       setToolWidth: (px) => set({ toolWidth: clampWidth(px) }),
       setGitSplit: (percent) => set({ gitSplit: clampSplit(percent) }),

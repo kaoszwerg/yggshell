@@ -37,6 +37,9 @@ pub struct SettingsPatch {
     pub tmux_mode: Option<TmuxMode>,
     pub tmux_session: Option<String>,
     pub minimize_to_tray: Option<bool>,
+    pub notes_remote: Option<String>,
+    pub notes_branch: Option<String>,
+    pub notes_sync: Option<bool>,
 }
 
 /// Thread-safe settings store: in-memory state + the JSON file it is persisted to.
@@ -152,6 +155,15 @@ impl SettingsStore {
             }
             if let Some(tray) = patch.minimize_to_tray {
                 guard.minimize_to_tray = tray;
+            }
+            if let Some(remote) = patch.notes_remote {
+                guard.notes_remote = remote;
+            }
+            if let Some(branch) = patch.notes_branch {
+                guard.notes_branch = branch;
+            }
+            if let Some(sync) = patch.notes_sync {
+                guard.notes_sync = sync;
             }
             guard.clone()
         };

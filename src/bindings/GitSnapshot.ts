@@ -14,6 +14,14 @@ export type GitSnapshot = {
  */
 root: string, 
 /**
+ * The `origin` remote's URL, or `null` for a purely local repository.
+ *
+ * Carried because it is what identifies a PROJECT: the notes tool keys a project's folder off
+ * it, so the same repository is the same folder on every machine however differently it happens
+ * to be checked out (ADR-PROJ-004). The path alone cannot do that.
+ */
+remote: string | null, 
+/**
  * Current branch, or `null` when HEAD is detached or unborn.
  */
 branch: string | null, 

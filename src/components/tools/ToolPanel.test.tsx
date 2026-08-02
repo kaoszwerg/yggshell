@@ -90,6 +90,7 @@ describe("ToolPanel", () => {
       // `main` is `main` in every checkout, and this app is built to have several open at once.
       vi.mocked(gitApi.snapshot).mockResolvedValue({
         root: "/Users/steve/git-projects/private/yggshell",
+        remote: null,
         branch: "main",
         detached: false,
         head: "abc1234",

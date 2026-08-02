@@ -13,6 +13,7 @@ vi.mock("../api/commands", () => ({
 }));
 
 import { api } from "../api/commands";
+import { settings as makeSettings } from "../test/settings";
 
 function makeWrapper(qc: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -20,21 +21,7 @@ function makeWrapper(qc: QueryClient) {
   };
 }
 
-const BASE: SettingsDto = {
-  ui_scale: 1,
-  terminal_font_size: 13,
-  terminal_shell: "",
-  terminal_theme: "",
-  diff_theme: "",
-  commit_theme: "",
-  copy_on_select: false,
-  git_auto_fetch: true,
-  language: "",
-  terminal_font: "",
-  tmux_mode: "off",
-  tmux_session: "",
-  minimize_to_tray: false,
-};
+const BASE: SettingsDto = makeSettings({ ui_scale: 1, terminal_font_size: 13 });
 
 describe("useSettings", () => {
   beforeEach(() => {
@@ -44,21 +31,7 @@ describe("useSettings", () => {
   });
 
   it("loads the persisted settings via the settings query", async () => {
-    const settings: SettingsDto = {
-      ui_scale: 1.1,
-      terminal_font_size: 13,
-      terminal_shell: "",
-      terminal_theme: "",
-      diff_theme: "",
-      commit_theme: "",
-      copy_on_select: false,
-      git_auto_fetch: true,
-      language: "",
-      terminal_font: "",
-      tmux_mode: "off",
-      tmux_session: "",
-      minimize_to_tray: false,
-    };
+    const settings: SettingsDto = makeSettings({ ui_scale: 1.1, terminal_font_size: 13 });
     vi.mocked(api.getSettings).mockResolvedValue(settings);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -131,21 +104,7 @@ describe("useUpdateSettings", () => {
   });
 
   it("calls api.updateSettings with the given options and writes the result into the settings cache", async () => {
-    const updated: SettingsDto = {
-      ui_scale: 1.25,
-      terminal_font_size: 13,
-      terminal_shell: "",
-      terminal_theme: "",
-      diff_theme: "",
-      commit_theme: "",
-      copy_on_select: false,
-      git_auto_fetch: true,
-      language: "",
-      terminal_font: "",
-      tmux_mode: "off",
-      tmux_session: "",
-      minimize_to_tray: false,
-    };
+    const updated: SettingsDto = makeSettings({ ui_scale: 1.25, terminal_font_size: 13 });
     vi.mocked(api.updateSettings).mockResolvedValue(updated);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 

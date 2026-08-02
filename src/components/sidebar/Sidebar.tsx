@@ -8,7 +8,7 @@ import {
   Settings,
   TerminalSquare,
 } from "lucide-react";
-import { Layers } from "lucide-react";
+import { Layers, NotebookPen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import type { HudAccent } from "../ui/hudButton";
@@ -39,6 +39,7 @@ const TOOLS: ToolItem[] = [
   { id: "activity", Icon: Activity, label: "nav.activity" },
   { id: "docker", Icon: Box, label: "nav.docker" },
   { id: "tmux", Icon: Layers, label: "nav.tmux" },
+  { id: "notes", Icon: NotebookPen, label: "nav.notes" },
 ];
 
 const BOTTOM_NAV: NavItem[] = [

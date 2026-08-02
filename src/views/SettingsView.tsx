@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
 import { CliInstaller } from "../components/settings/CliInstaller";
+import { NotesSettings } from "../components/settings/NotesSettings";
 import { Changelog } from "../components/settings/Changelog";
 import { Credits } from "../components/settings/Credits";
 import { MouseReference, ShortcutEditor } from "../components/settings/ShortcutEditor";
@@ -359,6 +360,13 @@ function ToolsSection() {
         description={t("settings.git.description")}
       >
         <GitRemoteChoice />
+      </HudPanel>
+      <HudPanel
+        accent="cyan"
+        label={t("settings.notes.title")}
+        description={t("settings.notes.remoteHint")}
+      >
+        <NotesSettings />
       </HudPanel>
     </>
   );

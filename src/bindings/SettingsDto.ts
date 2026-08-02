@@ -44,6 +44,21 @@ commit_theme: string,
  */
 terminal_font: string, 
 /**
+ * The git remote the notes are synchronised with. Empty means local-only, and with it empty
+ * **nothing leaves the device** — naming a remote IS the opt-in that `rule:privacy` requires
+ * (ADR-PROJ-004).
+ */
+notes_remote: string, 
+/**
+ * The branch the notes live on. Empty means whatever the remote's default is.
+ */
+notes_branch: string, 
+/**
+ * Whether to synchronise at all. Independent of the URL, so syncing can be paused without
+ * losing the remote that was configured.
+ */
+notes_sync: boolean, 
+/**
  * Refresh the ahead/behind counts against the remote while the Git tool is open.
  *
  * The one outbound connection this app makes (ADR-PROJ-002), and switchable because of that: it

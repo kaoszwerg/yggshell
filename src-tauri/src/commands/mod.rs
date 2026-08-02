@@ -2,6 +2,7 @@
 //! (ADR-APP-001, rule:rust-conventions). Every command logs its action and its result (rule:logging).
 
 pub mod git;
+pub mod notes;
 pub mod terminal;
 
 use crate::dto::{
@@ -131,6 +132,9 @@ pub fn update_settings(
     tmux_mode: Option<TmuxMode>,
     tmux_session: Option<String>,
     minimize_to_tray: Option<bool>,
+    notes_remote: Option<String>,
+    notes_branch: Option<String>,
+    notes_sync: Option<bool>,
 ) -> Result<SettingsDto> {
     tracing::info!(
         ?ui_scale,
@@ -163,6 +167,9 @@ pub fn update_settings(
         tmux_mode,
         tmux_session,
         minimize_to_tray,
+        notes_remote,
+        notes_branch,
+        notes_sync,
     })?;
     if next.minimize_to_tray != was_tray {
         crate::tray::set_enabled(&app, next.minimize_to_tray);

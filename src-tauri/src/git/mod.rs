@@ -66,6 +66,7 @@ pub fn snapshot(cwd: &Path) -> Result<Option<GitSnapshot>> {
 
     Ok(Some(GitSnapshot {
         root,
+        remote: origin_url(&repo),
         branch,
         detached,
         head: head_id.map(|id| id.to_hex_with_len(7).to_string()),
@@ -74,6 +75,17 @@ pub fn snapshot(cwd: &Path) -> Result<Option<GitSnapshot>> {
         changes,
         commits,
     }))
+}
+
+/// The `origin` remote's URL, read from the repository's own config.
+///
+/// `None` for a repository with no remote, which is a normal state and not a failure — the notes
+/// tool falls back to the folder name for those.
+fn origin_url(repo: &gix::Repository) -> Option<String> {
+    repo.find_remote("origin")
+        .ok()?
+        .url(gix::remote::Direction::Fetch)
+        .map(|url| url.to_bstring().to_string())
 }
 
 /// Everything the index and the working tree disagree about, staged and unstaged alike.

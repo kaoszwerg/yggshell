@@ -6,6 +6,7 @@ import { useT } from "../../hooks/useT";
 import type { MessageKey } from "../../i18n";
 import { ActivityTool } from "./ActivityTool";
 import { TmuxTool } from "./TmuxTool";
+import { NotesTool } from "./NotesTool";
 import { AgentTool } from "./AgentTool";
 import { DockerTool } from "./DockerTool";
 import { FilesTool } from "./FilesTool";
@@ -29,6 +30,8 @@ function toolLabelKey(tool: ToolId): MessageKey {
       return "nav.agent";
     case "tmux":
       return "nav.tmux";
+    case "notes":
+      return "nav.notes";
   }
 }
 
@@ -109,6 +112,7 @@ export function ToolPanel() {
           {activeTool === "docker" ? <DockerTool /> : null}
           {activeTool === "agent" ? <AgentTool /> : null}
           {activeTool === "tmux" ? <TmuxTool /> : null}
+          {activeTool === "notes" ? <NotesTool /> : null}
         </div>
       </aside>
 

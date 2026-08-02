@@ -42,6 +42,7 @@ export const ACTIONS = [
   "toggleActivityTool",
   "toggleDockerTool",
   "toggleAgentTool",
+  "toggleNotesTool",
 ] as const;
 
 export type ActionId = (typeof ACTIONS)[number];
@@ -115,6 +116,9 @@ export function defaultBindings(mac: boolean = isMacPlatform()): Record<ActionId
     toggleActivityTool: mod("j"),
     toggleDockerTool: mod("d"),
     toggleAgentTool: mod("i"),
+    // N for notes. Free in this app, and the view is reached FROM the tool rather than by a second
+    // near-identical combination nobody would remember which of.
+    toggleNotesTool: mod("n"),
   };
 }
 

@@ -13,6 +13,7 @@ vi.mock("../../api/git", () => ({
 import { gitApi } from "../../api/git";
 
 const SNAPSHOT: GitSnapshot = {
+  remote: null,
   root: "/repo",
   detached: false,
   branch: "main",

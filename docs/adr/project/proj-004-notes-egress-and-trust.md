@@ -98,13 +98,24 @@ satisfy `rule:privacy` at all: egress is opt-in, and naming a remote *is* the op
 ### Remote images are fetched by the backend, on request, never on render
 
 A repository image renders inline immediately — that is the normal case and the point of pasting a
-screenshot into a note. A **remote** image renders as a placeholder with its URL and one *load*
-control, per image. There is no setting that changes the default: a second egress switch nobody finds
-is a worse default than one press on the rare note that has one.
+screenshot into a note. A **remote** image renders as a placeholder with its URL. There is no setting
+that changes it: a second egress switch nobody finds is a worse default than one press on the rare
+note that has one.
 
-**The backend performs the fetch, HTTPS only, with a timeout.** The webview therefore never opens a
-connection of its own, which keeps the CSP posture intact and stops the request carrying a referrer or
-a user agent to anyone.
+**As shipped, the app fetches it not at all — the placeholder opens the image in the user's browser**
+through `open_external`, which already refuses anything that is not `http(s)`.
+
+That is narrower than this ADR first decided, and the change is recorded rather than made quietly. The
+original was "the backend fetches it, HTTPS only, with a timeout, on an explicit press", which is
+sound — but this application has **no HTTP client at all**, and adding one (`reqwest` and a TLS stack)
+would be the single largest dependency in the whole feature, bought for its rarest case
+(`rule:dependencies`: justify before adding, prefer the smaller thing). The browser is where a remote
+image already renders, with a real user agent that the user chose.
+
+The property that mattered is unchanged and in fact stronger: **the webview never opens a connection,
+and now neither does the backend.** A tracking pixel pasted into a note finds nobody to talk to unless
+the user deliberately opens it somewhere else. If a fetch is ever wanted here, it is the backend that
+does it — never the webview — for the CSP and referrer reasons the first version gave.
 
 ### Links keep the `http(s)` whitelist
 
