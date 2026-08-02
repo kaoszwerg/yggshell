@@ -173,14 +173,17 @@ export function NotesView() {
             else startWriting(null);
           }}
         >
-          {writing ? t("notes.read") : t("notes.edit")}
+          {/* Named after what pressing it DOES. "Read" while writing described the state you would
+              land in and hid the thing that actually happens on the way there: leaving the editor
+              is what commits the text. */}
+          {writing ? t("notes.save") : t("notes.edit")}
         </Button>
       </header>
 
       {writing ? (
         <TextArea
           ref={editor}
-          aria-label={t("notes.edit")}
+          aria-label={t("notes.editor")}
           value={draft ?? ""}
           onChange={(event) => {
             setDraft(event.target.value);

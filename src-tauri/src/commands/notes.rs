@@ -35,8 +35,16 @@ fn status_of(state: &AppState) -> NotesStatus {
     let settings = state.settings.get();
     let clone = notes::clone_dir(&state.data_dir);
     let (last_sync, last_error) = LAST.lock().map(|g| g.clone()).unwrap_or((None, None));
+    let connected = notes::git::is_clone(&clone);
+    // Only where there is a clone to ask: on a local-only setup "nothing is pushed" is not a state
+    // worth alarming anybody about — the badge says "local" and means it.
+    let (ahead, dirty) = if connected {
+        notes::git::local_state(&clone)
+    } else {
+        (0, false)
+    };
     NotesStatus {
-        connected: notes::git::is_clone(&clone),
+        connected,
         remote: settings.notes_remote.clone(),
         branch: settings.notes_branch.clone(),
         sync: settings.notes_sync,
@@ -44,6 +52,8 @@ fn status_of(state: &AppState) -> NotesStatus {
         git_available: notes::git::git_binary().is_some(),
         last_sync,
         last_error,
+        ahead,
+        dirty,
     }
 }
 

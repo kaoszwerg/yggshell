@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NotesView } from "./NotesView";
@@ -46,8 +46,22 @@ describe("NotesView", () => {
     renderView();
     await screen.findByText("A note");
 
-    expect(screen.queryByLabelText("Write")).toBeNull();
-    expect(screen.getByRole("button", { name: "Write" })).toBeTruthy();
+    expect(screen.queryByLabelText("Note text")).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+  });
+
+  it("names the button after what pressing it DOES", async () => {
+    // It was labelled with the state it would land in — "Write" while reading, "Read" while
+    // writing — which reads as a label for where you ARE, and the second one hid the fact that
+    // leaving the editor is what commits the text. "read sollte edit heißen und view ist eigentlich
+    // save". Leaving does save (`stopWriting`), so the word is also true.
+    renderView();
+    await screen.findByText("A note");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.getByLabelText("Note text")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
   });
 
   it("gives every block its source range, so a click can say WHERE to write", async () => {

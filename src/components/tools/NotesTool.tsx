@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Maximize2, Plus, RefreshCw, Search } from "lucide-react";
+import { Maximize2, Plus, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
@@ -16,6 +16,7 @@ import { useUiStore } from "../../store/ui";
 import { KebabMenu } from "../ui/KebabMenu";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { copyText } from "../../lib/clipboard";
+import type { NotesStatus } from "../../bindings/NotesStatus";
 
 /**
  * The notes, as a list you can take in at a glance and tick things off.
@@ -44,7 +45,7 @@ export function NotesTool() {
 
   // Opening the notes IS the moment to fetch them — and the only moment, because the shell root
   // deliberately does not: syncing at startup put a Touch ID prompt in front of the app.
-  useNotesSync({ now: true });
+  const sync = useNotesSync({ now: true });
 
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
@@ -105,6 +106,11 @@ export function NotesTool() {
       return out;
     },
   });
+
+  // Cheap and entirely local — `git status` and a `rev-list --count` against the ref origin already
+  // has here. No network, so no keychain prompt, and it is as fresh as the last sync: exactly the
+  // claim the badge makes.
+  const status = useQuery({ queryKey: ["notes-status"], queryFn: notesApi.status });
 
   const hits = useQuery({
     queryKey: ["notes-search", query],
@@ -427,9 +433,26 @@ export function NotesTool() {
           onChange={(event) => {
             setQuery(event.target.value);
           }}
+          // Escape leaves the search, the same key that leaves everything else here. A search
+          // REPLACES the list, so it is a state, and emptying a field by hand is not a way out.
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setQuery("");
+          }}
           placeholder={t("common.search")}
           className="min-w-0 flex-1"
         />
+        {query === "" ? null : (
+          <IconButton
+            label={t("notes.clearSearch")}
+            onClick={() => {
+              setQuery("");
+            }}
+            variant="ghost"
+            className="h-5 w-5 shrink-0"
+          >
+            <X size={12} aria-hidden />
+          </IconButton>
+        )}
         {/* The project, and every other one. A picker rather than a toggle: projects are chosen, not
             derived from whichever tab is in front. */}
         <KebabMenu
@@ -449,15 +472,28 @@ export function NotesTool() {
         >
           <Maximize2 size={12} aria-hidden />
         </IconButton>
+        {/* **It syncs, and it says so.** It used to invalidate three local queries and touch no
+            remote — which, beside a badge that claims to know whether the remote has your work, is
+            a button that looks like the way to make that true and is not. Asked outright: "was
+            macht der refresh button, lokal neu einlesen oder resyncen oder was?" */}
         <IconButton
-          label={t("common.refresh")}
-          onClick={refresh}
+          label={t("notes.syncNow")}
+          onClick={() => {
+            sync.syncNow();
+            refresh();
+          }}
           variant="ghost"
           className="h-5 w-5 shrink-0"
         >
           <RefreshCw size={12} aria-hidden className={notes.isFetching ? "animate-spin" : ""} />
         </IconButton>
       </header>
+
+      {/* **What git already knows, shown where the notes are.** "sonst weiß ich ja nie ob mein stand
+          auch remote liegt" — and a "last synced 14:02" cannot answer it: it says when something
+          worked, not whether THIS note went with it. Commits ahead of origin and uncommitted edits
+          are two different ways of being only here, and both are counted. */}
+      <SyncBadge status={status.data ?? null} />
 
       {newProject === null && renaming === null ? null : (
         <div className="border-cyan/10 flex shrink-0 items-center gap-1 border-b px-2 py-1">
@@ -607,7 +643,12 @@ export function NotesTool() {
                 }}
                 className="gap-2 px-2 font-mono"
               >
-                <span className="text-dim/70 shrink-0 text-[10px]">{hit.topic}</span>
+                {/* **Where the hit is**, not just which file. The search covers every project
+                    regardless of which one is selected, so "release" alone is two different notes
+                    in two repositories rendered as the same row. */}
+                <span className="text-dim/70 shrink-0 text-[10px]">
+                  {`${hit.project.split("/").at(-1) ?? hit.project} · ${hit.topic}`}
+                </span>
                 <span className="text-fg min-w-0 flex-1 truncate">{hit.line}</span>
               </Row>
             ))
@@ -621,7 +662,22 @@ export function NotesTool() {
         ) : (
           sections.map((section) => (
             <section key={`${section.project}:${section.topic}`} className="py-1">
-              <div className="flex items-center gap-1 px-2 py-0.5">
+              {/* **The file's own name IS the way into it**, and that is the whole navigation model
+                  of this tool. It used to be a caption over a list of checkbox items, so a note
+                  holding a prepared prompt, prose or a code block had nothing to click at all —
+                  "wie zum geier soll ich an die eigentlichen dateien kommen wenn sie keine
+                  checkboxen enthalten". A note is a note; a task is one kind of line inside one.
+
+                  A `Row` rather than a caption with a button beside it: it is a real button, in the
+                  tab order, and it may hold the `⋮` without either swallowing the other — a click
+                  out of the menu stays the menu's. */}
+              <Row
+                label={t("notes.openFile", { name: section.topic })}
+                onActivate={() => {
+                  open(section.project, section.topic);
+                }}
+                className="items-center gap-1 px-2 py-0.5"
+              >
                 <h3 className="text-dim min-w-0 flex-1 truncate font-mono text-[0.56rem] tracking-[0.12em]">
                   {section.heading.toUpperCase()}
                 </h3>
@@ -630,23 +686,7 @@ export function NotesTool() {
                   items={topicActions(section.project, section.topic)}
                   size={11}
                 />
-              </div>
-              {section.items.filter((item) => !item.done).length === 0 ? (
-                // A topic with no OPEN tasks still shows — prose, a code block, a finished list are
-                // all real notes, and a heading that disappears the moment its last box is ticked is
-                // a topic the user cannot get back to.
-                <Row
-                  label={section.heading}
-                  onActivate={() => {
-                    open(section.project, section.topic);
-                  }}
-                  className="gap-2 px-2 font-mono"
-                >
-                  <span className="text-dim/60 min-w-0 flex-1 truncate italic">
-                    {t("notes.openThis")}
-                  </span>
-                </Row>
-              ) : null}
+              </Row>
               {section.items
                 .filter((item) => !item.done)
                 .map((item) => (
@@ -750,7 +790,64 @@ export function NotesTool() {
           {String(capture.error ?? toggle.error)}
         </p>
       )}
+
+      {/* **A sync that keeps failing has to say so where the notes are.** It failed on every attempt
+          for days and reported it to the log file alone; what that looked like from here was notes
+          missing on the other machine and a note from the repository that never arrived, with
+          nothing anywhere suggesting a problem. Gold rather than red: the notes are still written
+          and still readable, it is the copy elsewhere that is not happening. */}
+      {sync.error === null ? null : (
+        <p className="text-gold px-2 py-1 font-mono text-[10px]">
+          {t("notes.syncFailed", { reason: sync.error })}
+        </p>
+      )}
     </div>
+  );
+}
+
+/**
+ * Whether what is here is anywhere else — in one line, above the notes.
+ *
+ * It is a **git-based** tool, so the honest answer is git's own: commits `origin` does not have, and
+ * edits that are not committed at all. A "last synced 14:02" answers a different question and reads
+ * like this one, which is worse than saying nothing.
+ *
+ * Green is a promise and is only made when nothing is outstanding. Gold means "still only on this
+ * machine" — not an error: the notes are written and readable either way, and being offline is the
+ * normal case (ADR-PROJ-004). Dim "local" is a repository that was never connected, where "not
+ * pushed" would be alarming nonsense.
+ */
+function SyncBadge({ status }: { status: NotesStatus | null }) {
+  const t = useT();
+  if (status === null) return null;
+  if (!status.connected) {
+    return <Badge className="text-dim/70">{t("notes.localOnly")}</Badge>;
+  }
+  const outstanding = status.ahead + (status.dirty ? 1 : 0);
+  if (status.last_error !== null) {
+    return (
+      <Badge className="text-gold">{t("notes.syncFailed", { reason: status.last_error })}</Badge>
+    );
+  }
+  if (outstanding === 0) {
+    return <Badge className="text-green">{t("notes.inSync")}</Badge>;
+  }
+  return (
+    <Badge className="text-gold">
+      {status.dirty && status.ahead === 0
+        ? t("notes.unsaved")
+        : t("notes.notPushed", { count: status.ahead })}
+    </Badge>
+  );
+}
+
+function Badge({ children, className }: { children: React.ReactNode; className: string }) {
+  return (
+    <p
+      className={`border-cyan/10 shrink-0 border-b px-2 py-0.5 font-mono text-[10px] ${className}`}
+    >
+      {children}
+    </p>
   );
 }
 

@@ -105,12 +105,7 @@ fn run(cwd: &Path, args: &[&str]) -> Result<String> {
             Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         }
         Ok(Ok(output)) => {
-            let reason = String::from_utf8_lossy(&output.stderr)
-                .lines()
-                .find(|l| !l.trim().is_empty())
-                .unwrap_or("git failed")
-                .trim()
-                .to_string();
+            let reason = reason(&String::from_utf8_lossy(&output.stderr));
             tracing::info!(?args, %reason, "notes git failed");
             Err(AppError::Other(reason))
         }
@@ -127,6 +122,32 @@ fn run(cwd: &Path, args: &[&str]) -> Result<String> {
                 TIMEOUT.as_secs()
             )))
         }
+    }
+}
+
+/// What git actually refused, out of everything it printed on the way there.
+///
+/// **Not the first line.** git narrates: `From github.com:…`, the ref it fetched, a progress bar —
+/// and the first non-empty line of that is what the maintainer was shown when a sync failed, over
+/// and over, saying nothing at all. The line that carries the refusal is marked (`fatal:`,
+/// `error:`); failing that, git's conclusion is its last line, never its first.
+fn reason(stderr: &str) -> String {
+    let lines: Vec<&str> = stderr
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    let marked = lines
+        .iter()
+        .rev()
+        .find(|l| l.starts_with("fatal:") || l.starts_with("error:"));
+    match marked.or_else(|| lines.last()) {
+        Some(line) => line
+            .trim_start_matches("fatal:")
+            .trim_start_matches("error:")
+            .trim()
+            .to_string(),
+        None => "git failed".into(),
     }
 }
 
@@ -273,7 +294,16 @@ pub fn pull(clone_dir: &Path) -> Result<()> {
         tracing::info!(%branch, "nothing to pull — the remote has no such branch yet");
         return Ok(());
     }
-    run(clone_dir, &["pull", "--rebase", "--autostash"])?;
+    // **Name the remote and the branch.** A bare `git pull` needs tracking information, and a clone
+    // that was ADOPTED rather than cloned has none — `connect` on a directory that already holds
+    // notes does init + remote add + commit, and nothing there sets an upstream. Every sync then
+    // failed with "There is no tracking information for the current branch", from the first day, so
+    // notes written on another machine never arrived. The push side had been fixed with
+    // `--set-upstream`; the pull runs first and never reached it.
+    run(
+        clone_dir,
+        &["pull", "--rebase", "--autostash", "origin", &branch],
+    )?;
     Ok(())
 }
 
@@ -309,7 +339,189 @@ pub fn push(clone_dir: &Path, message: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// How much of what is here has not reached the remote: `(commits ahead, uncommitted changes)`.
+///
+/// **The question the settings panel could not answer**: "woran kann ich erkennen ob das speichern
+/// und syncen geklappt hat … sonst weiß ich ja nie ob mein stand auch remote liegt". A timestamp says
+/// when something last worked, never whether *this* note is out there.
+///
+/// Two ways of not being there and both count: a commit nobody pushed, and an edit nobody committed.
+/// Counted against the **local** `origin/<branch>` ref, so this costs no network and cannot raise a
+/// keychain prompt — it is as fresh as the last sync, which is exactly the claim the badge makes.
+///
+/// Unreadable, unborn, not a clone at all: `(0, false)`. A badge must never invent an alarm, and the
+/// "not connected" case is shown from the status it already has.
+pub fn local_state(clone_dir: &Path) -> (u32, bool) {
+    let dirty = run(clone_dir, &["status", "--porcelain"])
+        .map(|out| !out.trim().is_empty())
+        .unwrap_or(false);
+    let branch = current_branch(clone_dir);
+    let ahead = run(
+        clone_dir,
+        &["rev-list", "--count", &format!("origin/{branch}..HEAD")],
+    )
+    .ok()
+    .and_then(|out| out.trim().parse::<u32>().ok())
+    .unwrap_or(0);
+    (ahead, dirty)
+}
+
 /// Whether the clone is there and looks like a git repository.
 pub fn is_clone(clone_dir: &Path) -> bool {
     clone_dir.join(".git").is_dir()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// git, run directly — the fixture builds the repositories the code under test then works on.
+    fn git(cwd: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .expect("git");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// A bare repository standing in for the remote, and a working clone pointing at it — with a
+    /// commit on both sides, exactly like a repository that was adopted here and written to
+    /// elsewhere. No network: the failure this reproduces is local.
+    fn repos() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let remote = tmp.path().join("remote.git");
+        let work = tmp.path().join("work");
+        std::fs::create_dir_all(&remote).expect("mkdir");
+        std::fs::create_dir_all(&work).expect("mkdir");
+        git(
+            tmp.path(),
+            &["init", "--bare", "--initial-branch=main", "remote.git"],
+        );
+
+        // Something on the remote: a note written on the other machine.
+        let seed = tmp.path().join("seed");
+        std::fs::create_dir_all(&seed).expect("mkdir");
+        git(&seed, &["init", "--initial-branch=main"]);
+        std::fs::write(seed.join("theirs.md"), "over there\n").expect("write");
+        git(&seed, &["add", "--all"]);
+        git(&seed, &["commit", "--message", "theirs"]);
+        git(
+            &seed,
+            &["remote", "add", "origin", &remote.display().to_string()],
+        );
+        git(&seed, &["push", "origin", "main"]);
+
+        (tmp, remote, work)
+    }
+
+    #[test]
+    fn pulls_a_clone_that_has_no_upstream_set() {
+        // **The maintainer's repository, exactly.** `connect` on a directory that already holds
+        // notes ADOPTS it — init, remote add, commit — and that leaves `main` with no tracking
+        // information. A bare `git pull --rebase` then refuses ("There is no tracking information
+        // for the current branch"), so every sync failed from the first day and the notes written
+        // on the other machine never arrived. The push side had already been fixed with
+        // `--set-upstream`; the pull runs FIRST, so it never got there.
+        let (_tmp, remote, work) = repos();
+        git(&work, &["init", "--initial-branch=main"]);
+        std::fs::write(work.join("mine.md"), "over here\n").expect("write");
+        git(&work, &["add", "--all"]);
+        git(&work, &["commit", "--message", "adopt local notes"]);
+        git(
+            &work,
+            &["remote", "add", "origin", &remote.display().to_string()],
+        );
+        // Nothing sets an upstream — the state `adopt` leaves behind, and the whole point of the
+        // test. Asked for directly, git says so: "no upstream configured for branch 'main'".
+        assert!(
+            Command::new("git")
+                .current_dir(&work)
+                .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+                .output()
+                .is_ok_and(|out| !out.status.success()),
+            "the fixture must have NO upstream, or it proves nothing"
+        );
+
+        pull(&work).expect("pull");
+
+        assert!(
+            work.join("theirs.md").exists(),
+            "the other machine's note arrived"
+        );
+        assert!(
+            work.join("mine.md").exists(),
+            "and nothing of ours was lost"
+        );
+    }
+
+    #[test]
+    fn counts_what_has_not_reached_the_remote_yet() {
+        // "woran kann ich erkennen ob das speichern und syncen geklappt hat … sonst weiß ich ja nie
+        // ob mein stand auch remote liegt". Two different ways of not being there, and both count:
+        // a commit that has not been pushed, and an edit that has not been committed.
+        let (_tmp, remote, work) = repos();
+        git(&work, &["clone", &remote.display().to_string(), "."]);
+        assert_eq!(
+            local_state(&work),
+            (0, false),
+            "a fresh clone is level with the remote"
+        );
+
+        std::fs::write(work.join("mine.md"), "written just now\n").expect("write");
+        assert!(
+            local_state(&work).1,
+            "an uncommitted edit is not saved anywhere else"
+        );
+
+        git(&work, &["add", "--all"]);
+        git(&work, &["commit", "--message", "mine"]);
+        assert_eq!(local_state(&work), (1, false), "committed, still only here");
+    }
+
+    #[test]
+    fn is_not_alarmed_by_a_repository_it_cannot_read() {
+        // The badge must never claim "everything is safe" on a guess. An empty directory is not a
+        // clone, and the honest answer is zero pending changes, not an error the user cannot act on.
+        let tmp = tempfile::tempdir().expect("tempdir");
+        assert_eq!(local_state(tmp.path()), (0, false));
+    }
+
+    #[test]
+    fn reports_what_git_refused_rather_than_its_first_line_of_chatter() {
+        // What the maintainer was shown for a failing sync was "From github.com:kaoszwerg/notes" —
+        // git's progress header, the first non-empty line of stderr, and completely silent about
+        // what went wrong. The line that says something is further down, and it is the one with
+        // `fatal:` or `error:` on it.
+        let stderr = "From github.com:kaoszwerg/notes\n\
+                      * branch            main       -> FETCH_HEAD\n\
+                      fatal: refusing to merge unrelated histories\n";
+        assert_eq!(reason(stderr), "refusing to merge unrelated histories");
+
+        // No marker anywhere: the LAST line, because git puts its conclusion at the end.
+        assert_eq!(
+            reason("doing a thing\nit did not work\n"),
+            "it did not work"
+        );
+
+        // Nothing at all still has to say something.
+        assert_eq!(reason("   \n\n"), "git failed");
+    }
+
+    #[test]
+    fn keeps_the_whole_message_when_it_is_all_one_line() {
+        assert_eq!(
+            reason("error: could not read Username for 'https://github.com'"),
+            "could not read Username for 'https://github.com'"
+        );
+    }
 }

@@ -217,8 +217,14 @@ pub struct NotesStatus {
     pub git_available: bool,
     /// Unix seconds of the last successful sync, if there has been one this run.
     pub last_sync: Option<u64>,
-    /// git's own first error line from the last attempt, if it failed.
+    /// git's own error from the last attempt, if it failed.
     pub last_error: Option<String>,
+    /// Commits made here that the remote does not have. **git already knows this** — asked for
+    /// against the local `origin/<branch>` ref, so reading it costs no network.
+    pub ahead: u32,
+    /// Edits on disk that are not even committed yet. Together with `ahead`, the honest answer to
+    /// "is what I just wrote anywhere but here?" — which a "last synced 14:02" cannot give.
+    pub dirty: bool,
 }
 
 /// One search hit across the notes.

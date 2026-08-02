@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { notesApi } from "../api/notes";
 
@@ -28,39 +28,66 @@ const THROTTLE_MS = 30_000;
  * **Not a timer either.** Syncing spawns git and talks to a network; doing that every few minutes for
  * somebody who is not looking at their notes is the battery cost this app refuses elsewhere.
  *
- * A failure is not surfaced here: `notes_sync` records it, and the settings panel shows git's own
- * message. Offline is the normal case, not the error case — the notes are written locally and stay
- * readable either way (ADR-PROJ-004).
+ * **A failure comes back to the caller, and it is shown.** It used to go to `console.warn` and
+ * nowhere else, on the reasoning that offline is normal rather than exceptional. That reasoning holds
+ * for one failed attempt and collapses for a permanent one: the sync failed on *every* attempt for
+ * days — an adopted clone has no upstream, so `git pull` refused — and the only visible effect was
+ * notes that were not on the other machine and a note from the repository that never appeared. The
+ * app looked healthy the entire time. Whoever is looking at their notes is exactly who needs to know
+ * (rule:logging: logged AND surfaced), so the last failure is returned and the tool prints it.
  */
-export function useNotesSync({ now = false }: { now?: boolean } = {}) {
+export function useNotesSync({ now = false }: { now?: boolean } = {}): {
+  error: string | null;
+  /** Sync because the user asked, ignoring the throttle — a button press is not focus-flapping. */
+  syncNow: () => void;
+} {
   const qc = useQueryClient();
   const last = useRef(0);
+  const [error, setError] = useState<string | null>(null);
+  const force = useRef<() => void>(() => undefined);
 
   useEffect(() => {
-    const run = () => {
+    const run = (forced = false) => {
       const now = Date.now();
-      if (now - last.current < THROTTLE_MS) return;
+      if (!forced && now - last.current < THROTTLE_MS) return;
       last.current = now;
       void notesApi
         .sync()
         .then(() => {
+          setError(null);
           void qc.invalidateQueries({ queryKey: ["notes-content"] });
           void qc.invalidateQueries({ queryKey: ["notes-projects"] });
           void qc.invalidateQueries({ queryKey: ["notes-status"] });
         })
-        .catch((error: unknown) => {
-          // Logged, never thrown: an unhandled rejection here would reach `window.onerror` and put
+        .catch((failure: unknown) => {
+          // Caught, never thrown: an unhandled rejection here would reach `window.onerror` and put
           // the whole interface behind the fatal screen over a note that did not sync (ADR-APP-032).
-          console.warn("notes sync failed", error);
+          // Caught is not swallowed, though — it goes to the console AND back to the caller.
+          console.warn("notes sync failed", failure);
+          setError(failure instanceof Error ? failure.message : String(failure));
         });
+    };
+
+    force.current = () => {
+      run(true);
+    };
+    const onFocus = () => {
+      run();
     };
 
     // `now` only where a notes surface just opened. The shell root passes nothing, so opening the app
     // never touches the network — see the note above about the Touch ID prompt.
     if (now) run();
-    window.addEventListener("focus", run);
+    window.addEventListener("focus", onFocus);
     return () => {
-      window.removeEventListener("focus", run);
+      window.removeEventListener("focus", onFocus);
     };
   }, [qc, now]);
+
+  return {
+    error,
+    syncNow: () => {
+      force.current();
+    },
+  };
 }

@@ -8,6 +8,23 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A sync badge above the notes, answering the only question that matters**: is what I just wrote
+  anywhere but on this machine? It shows git's own state — commits `origin` does not have, and edits
+  not yet committed — because "last synced 14:02" says when *something* worked, not whether *this*
+  note went with it. Green only when nothing is outstanding; gold while it is only here; dim for a
+  local-only setup, where "not pushed" would be alarming nonsense. Read from the local `origin` ref,
+  so it costs no network and cannot raise a keychain prompt.
+
+- **The round arrow syncs**, and is called that. It used to invalidate three local queries and touch
+  no remote — beside a badge that claims to know what the remote has, that is a button which looks
+  like the way to make it true and is not.
+
+- **Getting out of a search**: a clear control beside the field, and Escape. A search replaces the
+  list, so it is a state you have to be able to leave, and emptying a field by hand is not a way out.
+
+- **A search hit says which project it is in.** The search covers every project regardless of which
+  one is selected, so two notes called `release` in two repositories rendered as the same row.
+
 - **Copy a block, the way a howto page does it** — a control at the block's top right, always visible
   on a code block and on hover for the rest. That is what the notes are *for*: they hold prompts and
   instructions prepared to be sent later, and todos to be ticked. There is no "type into the
@@ -27,6 +44,30 @@ All notable changes to this project are documented here. The format follows
   a reader.
 
 ### Fixed
+
+- **The buttons in the note view are named after what they do**: `Edit` while reading, `Save` while
+  writing. They were named after the state they would land in — and "Read" hid the fact that leaving
+  the editor is what commits the text, which it does.
+
+- **The notes never synced — not once, since the day they were connected.** `connect` on a directory
+  that already holds notes *adopts* it (init, remote add, commit), and that leaves the branch with no
+  tracking information, so a bare `git pull --rebase` refuses. The push side had been fixed with
+  `--set-upstream`; the pull runs first and never got there. It now names the remote and the branch.
+  Consequence for anyone who connected before this: notes written on one machine were never uploaded,
+  and nothing written elsewhere ever arrived.
+
+- **And it said so only in the log file.** A failing sync went to `console.warn`, on the reasoning
+  that being offline is normal rather than exceptional — which holds for one attempt and collapses
+  for a permanent failure. The tool now prints the reason where the notes are.
+
+- **What git actually refused, instead of its first line of chatter.** The error shown was
+  `From github.com:…` — the progress header. The line that carries the refusal is the one marked
+  `fatal:` or `error:`, and failing that, git's last line rather than its first.
+
+- **A file is reached by its own name, whether or not it holds a task.** The list was built out of
+  checkbox items, so a note holding a prepared prompt, prose or a code block had nothing to click:
+  "wie zum geier soll ich an die eigentlichen dateien kommen wenn sie keine checkboxen enthalten".
+  The file's name is now the way in, with its `⋮` beside it, for every file.
 
 - **A release compiled against the dev configuration is now a build error**, not a bundle that looks
   right. `TAURI_CONFIG` is exported by `tauri dev --config` and read by `tauri build`, so a release

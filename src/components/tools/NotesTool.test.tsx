@@ -15,6 +15,20 @@ vi.mock("../../api/notes", () => ({
     remove: vi.fn(() => Promise.resolve()),
     removeProject: vi.fn(() => Promise.resolve()),
     projects: vi.fn(() => Promise.resolve(["github.com/a/b"])),
+    status: vi.fn(() =>
+      Promise.resolve({
+        connected: false,
+        remote: "",
+        branch: "main",
+        sync: false,
+        path: "/tmp/notes",
+        git_available: true,
+        last_sync: null,
+        last_error: null,
+        ahead: 0,
+        dirty: false,
+      }),
+    ),
     // Opening the tool syncs — that is the only place it happens, because doing it at startup put a
     // Touch ID prompt in front of the app.
     sync: vi.fn(() => Promise.resolve()),
@@ -117,6 +131,10 @@ describe("NotesTool", () => {
       target: { value: "notar" },
     });
 
+    // It searches EVERY project, whichever one is selected — so a hit has to say where it is from.
+    // Without the project, two hits called "notarise" in two repositories are the same row twice.
+    expect(await screen.findByText("y · release")).toBeTruthy();
+
     fireEvent.click(await screen.findByText("notarise"));
     expect(useUiStore.getState().view).toBe("notes");
     expect(useUiStore.getState().note).toEqual({
@@ -125,6 +143,28 @@ describe("NotesTool", () => {
       // No offset: opening a hit is "show me this note", not "put me in the editor at this byte".
       at: null,
     });
+  });
+
+  it("gets out of the search again, by a control and by Escape", async () => {
+    // A search REPLACES the list, so it is a state you have to be able to leave — and emptying a
+    // field by hand is not a way out anyone should have to find. "wie cleare ich die suche um
+    // zurück zur hauptansicht zu kommen?"
+    vi.mocked(notesApi.search).mockResolvedValue([
+      { project: "github.com/x/y", topic: "release", line: "notarise", offset: 0 },
+    ]);
+    renderTool();
+    const field = await screen.findByLabelText("Search all notes");
+
+    fireEvent.change(field, { target: { value: "notar" } });
+    expect(await screen.findByText("notarise")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear the search" }));
+    expect(await screen.findByText("ask about the frame")).toBeTruthy();
+
+    fireEvent.change(field, { target: { value: "notar" } });
+    expect(await screen.findByText("notarise")).toBeTruthy();
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(await screen.findByText("ask about the frame")).toBeTruthy();
   });
 
   it("draws its content at the terminal's own text size", async () => {
@@ -161,6 +201,107 @@ describe("managing what is in the list", () => {
     // what the plan had called the reason this tool exists.
     expect(screen.getByRole("menuitem", { name: "Copy" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /terminal/i })).toBeNull();
+  });
+
+  it("shows git's own answer to 'is my work anywhere but here'", async () => {
+    // "woran kann ich erkennen ob das speichern und syncen geklappt hat … sonst weiß ich ja nie ob
+    // mein stand auch remote liegt" — and "git hat doch stati, warum zeigst du die nicht an?". It
+    // does: commits ahead of origin, and edits not yet committed. A timestamp says when something
+    // last worked, never whether THIS note made it.
+    vi.mocked(notesApi.status).mockResolvedValue({
+      connected: true,
+      remote: "git@github.com:a/b.git",
+      branch: "main",
+      sync: true,
+      path: "/tmp/notes",
+      git_available: true,
+      last_sync: null,
+      last_error: null,
+      ahead: 2,
+      dirty: false,
+    });
+    renderTool();
+
+    expect(await screen.findByText("2 not pushed")).toBeTruthy();
+  });
+
+  it("says 'in sync' only when nothing is outstanding", async () => {
+    vi.mocked(notesApi.status).mockResolvedValue({
+      connected: true,
+      remote: "git@github.com:a/b.git",
+      branch: "main",
+      sync: true,
+      path: "/tmp/notes",
+      git_available: true,
+      last_sync: 1_785_000_000n,
+      last_error: null,
+      ahead: 0,
+      dirty: false,
+    });
+    renderTool();
+
+    expect(await screen.findByText("In sync")).toBeTruthy();
+  });
+
+  it("calls the round arrow a SYNC, because that is what it does", async () => {
+    // It invalidated three local queries and touched no remote — next to a badge claiming to know
+    // whether the remote has your work, a button labelled "Refresh" that does not talk to it is a
+    // trap. Pressing it syncs, then re-reads.
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+
+    await waitFor(() => {
+      // Once on mount, once for the press — the second one is the point.
+      expect(vi.mocked(notesApi.sync).mock.calls.length).toBeGreaterThan(1);
+    });
+  });
+
+  it("says it out loud when the sync is failing", async () => {
+    // It failed on every single attempt for days — "There is no tracking information for the current
+    // branch" — and said so only in the log file. What the maintainer saw was notes that were not on
+    // the other machine and a showcase note that never arrived, with the app looking perfectly
+    // healthy. A background job that keeps failing in silence is the defect (rule:logging: logged
+    // AND surfaced).
+    vi.mocked(notesApi.sync).mockRejectedValue(new Error("no tracking information"));
+    renderTool();
+
+    expect(await screen.findByText(/no tracking information/)).toBeTruthy();
+  });
+
+  it("opens a file from its OWN name, whether or not anything in it is a task", async () => {
+    // "wie zum geier soll ich an die eigentlichen dateien kommen wenn sie keine checkboxen enthalten
+    // und deshalb keinen eintrag enthalten??" — the list was built out of checkbox items, so a note
+    // holding prose, a code block or a prepared prompt had nothing to click. The file's name is the
+    // way in, and it is there for every file: a note is a note, a task is one kind of line inside it.
+    vi.mocked(notesApi.topics).mockResolvedValue(["inbox", "prompts"]);
+    vi.mocked(notesApi.read).mockImplementation((_p: string, topic: string) =>
+      Promise.resolve(topic === "inbox" ? "- [ ] first\n" : "Refactor the pty layer, keeping…\n"),
+    );
+    renderTool();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open prompts" }));
+
+    expect(useUiStore.getState().view).toBe("notes");
+    expect(useUiStore.getState().note).toEqual({
+      project: "github.com/a/b",
+      topic: "prompts",
+      at: null,
+    });
+  });
+
+  it("keeps the file's own menu working from that same name", async () => {
+    // The `⋮` sits inside the heading, and the heading opens the file. Both, from one row, because
+    // `Row` leaves a click that came out of a control to that control.
+    vi.mocked(notesApi.topics).mockResolvedValue(["prompts"]);
+    vi.mocked(notesApi.read).mockResolvedValue("just prose\n");
+    renderTool();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Actions for prompts" }));
+
+    expect(await screen.findByRole("menuitem", { name: "Rename this file" })).toBeTruthy();
+    expect(useUiStore.getState().view).toBe("terminal");
   });
 
   it("removes one entry and leaves its neighbours alone", async () => {
