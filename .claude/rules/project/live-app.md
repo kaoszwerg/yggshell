@@ -84,6 +84,24 @@ Installing is not: mounting and copying a fresh DMG over a running `/Application
 exactly the "replace it while it runs" case above. **Build the DMG, report where it is, and let the
 maintainer install it.**
 
+## Build a release with `npm run app:build` — never a bare `tauri build`
+
+`tauri dev --config src-tauri/tauri.dev.conf.json` exports its merged configuration as **`TAURI_CONFIG`**,
+and `tauri build` reads that same variable. An agent shell that has it set therefore compiles a release
+against the **dev** identity: the bundle says `com.kaoszwerg.yggshell`, installs, starts — and resolves
+`app_data_dir()` to `…/com.kaoszwerg.yggshell.dev/`. Every setting, note and log looks **gone**, the real
+ones sit untouched next to it, and nothing reports an error. It has now cost the maintainer two
+installations and two diagnosis sessions.
+
+```bash
+npm run app:build   # strips TAURI_CONFIG, builds, then verifies the identity inside the binary
+```
+
+`src-tauri/build.rs` refuses the poisoned combination outright (a release profile plus a `TAURI_CONFIG`
+naming the dev identifier is a build error), and `scripts/project/check-release-identity.mjs` re-checks
+the finished binary. The gate exists because the symptom points nowhere near the cause — but the command
+above is the one to type.
+
 ## Why this is a rule and not a comment in a script
 
 The failure is silent and total: the maintainer loses every open tab, every running command, and the

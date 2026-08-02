@@ -28,6 +28,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A release compiled against the dev configuration is now a build error**, not a bundle that looks
+  right. `TAURI_CONFIG` is exported by `tauri dev --config` and read by `tauri build`, so a release
+  built from that shell resolves `app_data_dir()` to the *dev* directory: every setting, note and log
+  apparently gone, the real ones sitting untouched next to it, and no error anywhere. The existing
+  gate ran after the build and only on the documented path — it caught nothing when the build was
+  started as a bare `npx tauri build`, and a poisoned build was handed over and installed. The check
+  now sits in `build.rs`, where nothing can go around it.
+
 - **Ending a tmux session also opened a stray tab** — one with no tmux in it, because it was
   attaching to the session that had just been killed. The end control sits inside the row, and the
   row's own job is to attach, so one click did both. Fixed where it can only be fixed once: a row now
