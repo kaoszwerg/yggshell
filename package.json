@@ -102,5 +102,19 @@
     "react-dom": "19.2.7",
     "shiki": "4.4.1",
     "zustand": "5.0.14"
-  }
+  },
+  "main": "commitlint.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaoszwerg/yggshell.git"
+  },
+  "keywords": [],
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/kaoszwerg/yggshell/issues"
+  },
+  "homepage": "https://github.com/kaoszwerg/yggshell#readme"
 }
