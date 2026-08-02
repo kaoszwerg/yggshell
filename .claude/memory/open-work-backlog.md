@@ -507,6 +507,22 @@ change.
 
 ## Defects with a diagnosis, not yet closed
 
+- **Resizing the window makes the top-left corner flicker black.** Reported 2026-08-02 against 0.40.4,
+  right after a resize; not investigated yet.
+
+  **First suspect, unverified:** the frame's glow is a `145vmax` square carrying a conic gradient and
+  a `will-change: transform`, spun by an animation. On a resize `vmax` changes, so that layer — the
+  largest in the app by far — is re-rasterised while the window is still moving. The top-left chamfer
+  is where the clip cuts, and the window is transparent behind it, so a frame that has not been
+  painted yet shows as black rather than as anything.
+
+  If that is it, the fix is about the RESIZE path, not the geometry: the square only needs to cover
+  the diagonal, and it is re-sized continuously during a drag for a band 1.5px wide.
+
+  **Do not start by changing the size.** The measurement that matters is whether the flicker follows
+  the layer at all — a static frame (reduced motion) that still flickers on resize would rule the
+  animation out entirely and cost one setting to check.
+
 - **Reported upstream 2026-08-02, answer pending:** that every `.hud-*` class is unlayered and so
   overrides any utility passed through `className` — which makes the `className` prop a promise the
   shell cannot keep for any property its base classes declare. Their call: move the definitions into
