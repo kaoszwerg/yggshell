@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The process list draws the tree it always was.** Indentation alone does not say who started whom —
+  two rows one step apart could be parent and child or cousins, and the eye cannot tell. Thin rules now
+  connect each process to the one that started it. They are computed from the list rather than drawn at
+  every level: a line is only carried past a row where that ancestor really does have more children
+  below, because one drawn unconditionally would run past the end of a branch and connect processes
+  that are unrelated — which is exactly the question the panel exists to answer.
+
 - **The tmux tool ends the detached sessions in one action.** Sessions only ever accumulate — closing a
   tab detaches on purpose — and clearing them one confirm at a time was the whole cost of that
   decision. The action deliberately spares any session open in a tab: that one is attached, and ending

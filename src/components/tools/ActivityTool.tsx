@@ -8,7 +8,7 @@ import { useT } from "../../hooks/useT";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import type { PortInfo } from "../../bindings/PortInfo";
 import { stateColour } from "../../lib/processState";
-import type { ProcessInfo } from "../../bindings/ProcessInfo";
+import { treeRows, type ProcessRow } from "../../lib/processTree";
 
 /** Indentation per level of the process tree, in pixels. */
 const INDENT = 10;
@@ -111,7 +111,10 @@ export function ActivityTool() {
               {processes.length === 0 ? (
                 <Note>{t("activity.noProcesses")}</Note>
               ) : (
-                processes.map((process) => <Process key={process.pid} process={process} />)
+                // The guides are a property of the LIST, not of a row — whether a line continues is a
+                // question about what comes after — so `treeRows` resolves them once and hands each
+                // row everything it needs, rather than each row looking at its neighbours.
+                treeRows(processes).map((row) => <Process key={row.process.pid} row={row} />)
               )}
             </Section>
           </>
@@ -166,8 +169,9 @@ function Port({ port }: { port: PortInfo }) {
   );
 }
 
-/** One process in the tree. */
-function Process({ process }: { process: ProcessInfo }) {
+/** One process in the tree, with the thin rules that say who started it. */
+function Process({ row }: { row: ProcessRow }) {
+  const { process } = row;
   return (
     <Row
       label={`${process.pid} — ${process.command}`}
@@ -176,9 +180,38 @@ function Process({ process }: { process: ProcessInfo }) {
           console.warn("could not copy the pid", error);
         });
       }}
-      className="gap-2 font-mono text-[11px]"
-      style={{ paddingLeft: `${process.depth * INDENT + 8}px`, paddingRight: "8px" }}
+      className="gap-2 pr-2 pl-2 font-mono text-[11px]"
     >
+      {/* Decorative: the tree it describes is already in the reading order and in each row's label,
+          so a screen reader gains nothing from the rules and loses a column of noise.
+
+          Mapped over, never indexed into: `row.open` has exactly one entry per ancestor level, so the
+          renderer needs no computed lookup — which is the same reason `toolLabelKey` is a switch. */}
+      {row.open.map((continues, level) => (
+        <span
+          key={level}
+          aria-hidden
+          className="relative shrink-0 self-stretch"
+          style={{ width: `${INDENT}px` }}
+        >
+          {level < row.open.length - 1 ? (
+            // An ancestor's line, passing through: drawn only where that ancestor still has
+            // children below this row. Drawn unconditionally it would run past the last child of
+            // every branch and connect things that are not related, which is worse than no line.
+            continues ? (
+              <span className="bg-dim/25 absolute inset-y-0 left-1/2 w-px" />
+            ) : null
+          ) : (
+            <>
+              {/* The elbow. Half height on the last child so the branch visibly ends there. */}
+              <span
+                className={`bg-dim/25 absolute top-0 left-1/2 w-px ${row.last ? "h-1/2" : "bottom-0"}`}
+              />
+              <span className="bg-dim/25 absolute top-1/2 right-0 left-1/2 h-px" />
+            </>
+          )}
+        </span>
+      ))}
       <span className={`w-3 shrink-0 text-center ${stateColour(process.state)}`} aria-hidden>
         {process.state.slice(0, 1)}
       </span>

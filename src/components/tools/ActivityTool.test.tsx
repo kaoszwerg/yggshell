@@ -162,3 +162,22 @@ describe("keeping itself current", () => {
     }
   });
 });
+
+describe("the tree guides", () => {
+  it("draws the elbow short on a last child and full height otherwise", async () => {
+    // The computed guide has to REACH THE DOM. A value that is computed correctly and never rendered
+    // looks identical from the outside — the same trap rule:content-size pins per tool. The logic
+    // itself is covered in lib/processTree.test.ts, where it belongs.
+    useUiStore.setState({ locale: "en" });
+    useTerminalStore.setState({ panes: [pane({ key: "p1", sessionId: 7 })], activeKey: "p1" });
+    vi.mocked(terminalApi.activity).mockResolvedValue(ACTIVITY);
+    const { container } = renderTool();
+    await screen.findByText("npm run dev");
+
+    // One guide cell per level of depth: the fixture is zsh -> npm -> node, so three cells in all.
+    expect(container.querySelectorAll("[style*='width: 10px']").length).toBe(3);
+    // A straight chain, so every row is its parent's last child and every elbow is half height. A
+    // full-height one here would mean a sibling the fixture does not have.
+    expect(container.querySelector(".h-1\\/2")).toBeTruthy();
+  });
+});
