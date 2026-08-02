@@ -23,6 +23,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The process tree's connecting rules were barely visible.** Drawn at the dim text colour at 25 %
+  they were technically present and practically not there, on a near-black background at one pixel
+  wide. They now share one constant at 60 % — one value for all three pieces, because the elbow and
+  the lines above it are a single drawn line and a corner a shade off reads as a rendering fault
+  rather than as a decision.
+
 - **No tool panel could scroll.** The tool column's content wrapper was a plain block with
   `overflow-hidden`, so a tool rooted with `flex-1` — which is all of them except Git — had no definite
   height: its root fell back to its content height, grew past the box and was clipped, and the

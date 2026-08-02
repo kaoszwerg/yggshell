@@ -14,6 +14,18 @@ import { treeRows, type ProcessRow } from "../../lib/processTree";
 const INDENT = 10;
 
 /**
+ * The colour of the tree's connecting rules — one constant, used by all three pieces.
+ *
+ * They are a single drawn line broken into an elbow and the ancestor lines above it, so they have to
+ * match exactly; as three literals they would drift the first time one of them was adjusted, and a
+ * corner that is a shade off reads as a rendering fault rather than as a decision.
+ *
+ * `/60` rather than the `/40` the title bar's separator uses: that one only has to separate, while
+ * these carry the answer to "who started this?". Reported at `/25` as barely visible.
+ */
+const GUIDE = "bg-dim/60";
+
+/**
  * How often the process list re-reads while it is on screen.
  *
  * Five seconds, because a read is a `ps` **and** an `lsof` — the second of which walks every open
@@ -199,15 +211,15 @@ function Process({ row }: { row: ProcessRow }) {
             // children below this row. Drawn unconditionally it would run past the last child of
             // every branch and connect things that are not related, which is worse than no line.
             continues ? (
-              <span className="bg-dim/25 absolute inset-y-0 left-1/2 w-px" />
+              <span className={`${GUIDE} absolute inset-y-0 left-1/2 w-px`} />
             ) : null
           ) : (
             <>
               {/* The elbow. Half height on the last child so the branch visibly ends there. */}
               <span
-                className={`bg-dim/25 absolute top-0 left-1/2 w-px ${row.last ? "h-1/2" : "bottom-0"}`}
+                className={`${GUIDE} absolute top-0 left-1/2 w-px ${row.last ? "h-1/2" : "bottom-0"}`}
               />
-              <span className="bg-dim/25 absolute top-1/2 right-0 left-1/2 h-px" />
+              <span className={`${GUIDE} absolute top-1/2 right-0 left-1/2 h-px`} />
             </>
           )}
         </span>
