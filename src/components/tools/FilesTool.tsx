@@ -11,6 +11,7 @@ import { useUiStore } from "../../store/ui";
 import { useT } from "../../hooks/useT";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { humanSize } from "../../lib/humanSize";
+import { copyText } from "../../lib/clipboard";
 import type { DirEntry } from "../../bindings/DirEntry";
 
 /** How deep a nested folder is indented, in pixels per level. */
@@ -268,9 +269,7 @@ function Entry({
             id: "copy",
             label: t("files.copyPath"),
             onSelect: () => {
-              navigator.clipboard.writeText(entry.path).catch((error: unknown) => {
-                console.warn("could not copy the path", error);
-              });
+              copyText(entry.path, "clipboard.path");
             },
           },
         ]}

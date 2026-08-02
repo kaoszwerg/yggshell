@@ -21,6 +21,7 @@ import { BUILTIN_THEME_ID, resolveTheme, themeById } from "../lib/terminalTheme"
 import type { Activity, ActivityState } from "../lib/osc133";
 import { useT } from "../hooks/useT";
 import { useTerminalStore } from "../store/terminal";
+import { copyText } from "../lib/clipboard";
 
 /**
  * A call to a session that may already be gone.
@@ -569,7 +570,8 @@ function Pane({
             disabled: !hasSelection,
             onSelect: () => {
               // The clipboard can refuse — permissions, an empty selection, a webview without focus.
-              navigator.clipboard.writeText(readPrimarySelection()).catch(survivable("copy"));
+              // `copyText` reports that on screen; `survivable` only ever reached the log.
+              copyText(readPrimarySelection(), "clipboard.selection");
             },
           },
           {

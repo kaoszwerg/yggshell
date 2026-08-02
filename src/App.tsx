@@ -6,6 +6,7 @@ import { ToolPanel } from "./components/tools/ToolPanel";
 import { AboutDialog } from "./components/AboutDialog";
 import { CrashNotice } from "./components/CrashNotice";
 import { CloseTabConfirm } from "./components/CloseTabConfirm";
+import { Toast } from "./components/ui/Toast";
 import { TerminalView } from "./views/TerminalView";
 import { LogsView } from "./views/LogsView";
 import { SettingsView } from "./views/SettingsView";
@@ -89,6 +90,11 @@ export default function App() {
           </main>
         </div>
         <StatusBar canScrollTop={canTop} onScrollTop={scrollToTop} />
+        {/* Rendered once, at the root, for the same reason `CloseTabConfirm` is: every copy control in
+            the application — the terminal's selection, a path, a port, a pid — must reach the same
+            confirmation. Inside the frame's inner shell, which is the positioned ancestor it anchors
+            to, and above the status bar rather than over the tabs. */}
+        <Toast />
       </div>
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
       {/* Asks before a close leaves a tmux session behind. At the root, because the three places a

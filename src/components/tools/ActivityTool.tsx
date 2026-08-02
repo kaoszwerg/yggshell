@@ -8,6 +8,7 @@ import { useT } from "../../hooks/useT";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import type { PortInfo } from "../../bindings/PortInfo";
 import { stateColour } from "../../lib/processState";
+import { copyText } from "../../lib/clipboard";
 import { treeRows, type ProcessRow } from "../../lib/processTree";
 
 /** Indentation per level of the process tree, in pixels. */
@@ -167,9 +168,7 @@ function Port({ port }: { port: PortInfo }) {
     <Row
       label={`${port.port} — ${port.command}`}
       onActivate={() => {
-        navigator.clipboard.writeText(String(port.port)).catch((error: unknown) => {
-          console.warn("could not copy the port", error);
-        });
+        copyText(String(port.port), "clipboard.port");
       }}
       className="gap-2 px-2 font-mono text-[11px]"
     >
@@ -188,9 +187,7 @@ function Process({ row }: { row: ProcessRow }) {
     <Row
       label={`${process.pid} — ${process.command}`}
       onActivate={() => {
-        navigator.clipboard.writeText(String(process.pid)).catch((error: unknown) => {
-          console.warn("could not copy the pid", error);
-        });
+        copyText(String(process.pid), "clipboard.pid");
       }}
       className="gap-2 pr-2 pl-2 font-mono text-[11px]"
     >

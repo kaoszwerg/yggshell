@@ -157,6 +157,14 @@ export const en = {
   "files.reveal": "Show in the file manager",
   "files.actions": "Actions for {name}",
   "files.copyPath": "Copy path",
+  // The confirmations. Each one names WHAT was copied rather than saying "copied": the whole reason
+  // for the message is that copying is invisible, and "copied" leaves the user asking "copied what?"
+  // when two controls sit next to each other.
+  "clipboard.selection": "Selection copied",
+  "clipboard.path": "Path copied",
+  "clipboard.port": "Port copied",
+  "clipboard.pid": "PID copied",
+  "clipboard.failed": "Could not copy",
   "nav.logs": "Logs",
   "nav.settings": "Settings",
   "nav.panelWidth": "{tool} panel width",

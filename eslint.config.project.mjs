@@ -39,6 +39,36 @@ export default [
     },
   },
   {
+    // Every copy goes through `lib/clipboard`, and this is what keeps it that way.
+    //
+    // Copying is invisible: the selection looks identical before and after, so a copy that silently
+    // did nothing cannot be told from one that worked. Six call sites each had their own
+    // `writeText(…).catch(console.warn)` — a failure reported to a console the user does not have
+    // open, which `rule:logging` calls a swallowed error however carefully it was caught. The helper
+    // shows a confirmation and shows the failure; a raw call would quietly do neither.
+    //
+    // Its own entry rather than an addition to the base config's `no-restricted-syntax`: flat config
+    // REPLACES a rule's options instead of merging them, so extending that entry here would silently
+    // switch off its bans on native <button>, <input> and the `title` tooltip (verified by trying it).
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    ignores: ["src/lib/clipboard.ts", "src/**/*.test.ts", "src/**/*.test.tsx"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          // The PROPERTY alone, with no `object`. `no-restricted-properties` only matches an `object`
+          // that is a plain identifier, and the call is `navigator.clipboard.writeText` — the object
+          // there is a member expression, so naming it matches nothing at all (verified against a
+          // deliberate offender before this comment was written). `writeText` exists on nothing else
+          // this app touches, so the property on its own is precise enough.
+          property: "writeText",
+          message:
+            "Use copyText() from lib/clipboard — it confirms the copy on screen and reports a failure the user can see.",
+        },
+      ],
+    },
+  },
+  {
     files: ["src/components/ui/Splitter.tsx"],
     rules: {
       // A focusable `separator` carrying `aria-valuenow` is the WAI-ARIA **Window Splitter** pattern —

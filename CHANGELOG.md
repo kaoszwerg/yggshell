@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Copying says so.** A short confirmation appears above the status bar naming what went to the
+  clipboard — the selection, a path, a port, a pid. Copying is invisible: the selection looks identical
+  before and after, so a copy that silently did nothing could not be told from one that worked. And a
+  copy that *failed* used to write a line to a console the user does not have open; it is now on
+  screen, in the danger accent, because the user is the only one who can act on it.
+
+  Every copy control in the app goes through one helper, and a lint rule in `check:all` refuses a raw
+  `writeText` anywhere else — so the next copy control cannot forget either half.
+
 - **The process list draws the tree it always was.** Indentation alone does not say who started whom —
   two rows one step apart could be parent and child or cousins, and the eye cannot tell. Thin rules now
   connect each process to the one that started it. They are computed from the list rather than drawn at

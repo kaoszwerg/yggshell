@@ -14,6 +14,7 @@ import { isLinux, isMac } from "../../lib/platform";
 import { setPrimarySelection } from "../../lib/primarySelection";
 import { encodeKey } from "../../lib/terminalKeys";
 import { resolveTheme } from "../../lib/terminalTheme";
+import { copyText } from "../../lib/clipboard";
 import type { TerminalTheme } from "../../bindings/TerminalTheme";
 
 /** Which way a search step runs. */
@@ -356,10 +357,10 @@ export function TerminalSurface({
       if (handlers.current.copyOnSelect !== true) return;
       const selection = term.getSelection();
       if (selection === "") return;
-      navigator.clipboard.writeText(selection).catch((error: unknown) => {
-        // The clipboard can refuse — permissions, a webview without focus. Never fatal, never silent.
-        console.warn("terminal: copy on select failed —", error);
-      });
+      // The clipboard can refuse — permissions, a webview without focus. `copyText` says so on
+      // screen rather than to a console the user does not have open, which is what this setting
+      // needs most: copy-on-select gives no other sign that it happened.
+      copyText(selection, "clipboard.selection");
     };
     host.addEventListener("mouseup", copySelection);
     // Shift+arrows select without the mouse ever being involved.
@@ -466,7 +467,7 @@ export function TerminalSurface({
           const selection = term.getSelection();
           // Nothing selected: let it through rather than becoming a key that silently does nothing.
           if (selection === "") return true;
-          void navigator.clipboard.writeText(selection);
+          copyText(selection, "clipboard.selection");
           return false;
         }
         case "v": {
