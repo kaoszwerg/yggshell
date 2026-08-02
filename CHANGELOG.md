@@ -8,6 +8,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **`tmux::sessions` was silent about every way it can fail, which is why an empty list could not be
+  diagnosed.** The tool reported "no tmux session is running" next to four that were, and nothing in
+  the log could say whether tmux was missing, refused, or answered something unparseable — an empty
+  list is a legitimate answer *and* the shape of every failure, which is exactly the case rule:logging
+  exists for. Every branch now says why it gave up, and the successful one records which binary
+  answered and how many bytes it read.
+
+  The cause of the empty list itself is **not yet found**: the same code returns four sessions from a
+  dev bundle and from a direct call, and zero from the running production process. The bundles differ
+  only in name and identifier — no entitlements, no signing difference — and the tmux socket, server
+  and binary are the same one the app successfully attaches terminals to. Marked open rather than
+  guessed at; the build carrying this logging is what will say.
+
+### Fixed
+
 - **The window frame had a gap in it, at the top-left chamfer.** The ring the glow is clipped to was
   a single `evenodd` polygon — the outer contour followed by an inset one, in one point list. **A
   single polygon cannot have a hole:** the path traces the outer contour, jumps to the first inner

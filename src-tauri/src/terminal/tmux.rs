@@ -292,25 +292,57 @@ pub fn session_names() -> BTreeSet<String> {
 /// One call, one format string: tmux resolves a session's active window and pane for
 /// `pane_current_command`, so "what is it running" costs nothing extra.
 pub fn sessions() -> Vec<crate::dto::TmuxSession> {
+    // **Every branch here says why it gave up.** It did not, and the cost was immediate: the tool
+    // reported "no tmux session is running" next to four that were, and nothing in the log could say
+    // whether tmux was missing, refused, or answered something unparseable. An empty list is a
+    // legitimate answer AND the shape of every failure, which is exactly the case rule:logging exists
+    // for — a component that is silent about an empty result cannot be debugged from the outside.
     let Some(tmux) = find_tmux() else {
+        tracing::debug!("no tmux on PATH — no sessions to list");
         return Vec::new();
     };
-    let Ok(output) = Command::new(tmux)
+    let output = match Command::new(&tmux)
         .args([
             "list-sessions",
             "-F",
             "#{session_name}\t#{session_windows}\t#{session_attached}\t#{pane_current_command}",
         ])
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
         .output()
-    else {
-        return Vec::new();
+    {
+        Ok(output) => output,
+        Err(e) => {
+            tracing::warn!(error = %e, tmux = %tmux.display(), "could not run tmux list-sessions");
+            return Vec::new();
+        }
     };
     if !output.status.success() {
+        // The ordinary case is "no server running", which tmux reports as a non-zero exit and a line
+        // on stderr. Logged at debug with what it said, so "no sessions" and "tmux refused" are
+        // distinguishable from the outside.
+        tracing::debug!(
+            status = ?output.status.code(),
+            stderr = %String::from_utf8_lossy(&output.stderr).trim(),
+            "tmux listed no sessions"
+        );
         return Vec::new();
     }
-    parse_sessions(&String::from_utf8_lossy(&output.stdout))
+    let sessions = parse_sessions(&String::from_utf8_lossy(&output.stdout));
+    tracing::debug!(
+        tmux = %tmux.display(),
+        found = sessions.len(),
+        bytes = output.stdout.len(),
+        "listed tmux sessions"
+    );
+    if sessions.is_empty() && !output.stdout.is_empty() {
+        // Answered, and nothing survived the parse — a format change, or a name with a tab in it.
+        tracing::warn!(
+            bytes = output.stdout.len(),
+            stdout = %String::from_utf8_lossy(&output.stdout).escape_debug().to_string(),
+            "tmux answered but no session could be read from it"
+        );
+    }
+    sessions
 }
 
 /// Pick the sessions out of the tab-separated listing.
