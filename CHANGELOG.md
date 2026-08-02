@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Four things you can do with a path in the file browser**, where there were two:
+  - **View here** — a text file read in the detail panel with syntax highlighting, read-only. Nothing
+    is launched: the file's type decides only which highlighter colours it. The backend refuses a
+    directory, refuses anything binary (a NUL in the head, the test `git` uses) and caps what it reads,
+    saying so when it truncates.
+  - **Open with the default app** — for the PDF, the image, the binary an inline viewer cannot answer.
+  - **Open in a new terminal** — the directory itself, or a file's parent, which is what dropping a
+    file on a terminal has always meant and what `ygg` and Finder already do.
+  - **Type cd into this terminal** — *typed, not run*. The webview does not get to decide that
+    something executes (ADR-PROJ-001 §5): the command lands at the prompt and the user presses Enter.
+    The path is single-quoted, since it is user data arriving at a shell.
+
+### Changed
+
+- **"Open with the default app" reverses a recorded decision, deliberately.** The file browser was
+  limited to reveal-and-copy because handing a path to the platform handler *starts an application
+  chosen by the file*. That was raised before building and overruled by the maintainer: YggShell is
+  meant to be a complete everyday environment for agentic development, and the narrow stance was
+  defensible for a terminal and is not for a development environment. The reasoning is recorded at both
+  the command and the platform function rather than deleted — it was overruled, not refuted. What
+  stands: the path is verified against the tab's own root, the action is explicit, and it is logged.
+
+- **The About text, the README and the project scope now say what YggShell is.** The README still
+  claimed "nothing of the product is built yet" while six sidebar tools were in daily use. All three
+  describe the tool and never a person.
+
 ### Fixed
 
 - **A diff line that was wider than the panel could only be read with the mouse.** Every line was its

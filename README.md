@@ -1,27 +1,60 @@
 # YggShell
 
-**Developer terminal for AI harnesses.**
+**The everyday terminal for agentic development.**
 
-A cross-platform (Windows / macOS / Linux) developer terminal: a genuine replacement for the system
-terminal — multiple independent tabs, each launchable with its own iTerm2-compatible colour theme,
-plus a theme editor and granular per-terminal configuration — whose defining purpose is to **enrich AI
-development harnesses** (Claude Code) with tools in the sidebar.
+A cross-platform (Windows / macOS / Linux) developer terminal, and a genuine replacement for the
+system one: independent tabs, iTerm2-compatible colour themes with an editor, per-terminal
+configuration, and tmux sessions that outlive the app — including a crash.
+
+**What it adds is the work that surrounds the terminal.** Running an agentic workflow means watching a
+repository, a directory, a set of processes and ports, some containers, and what the harness itself is
+doing — normally across half a dozen windows. Here each of those is a tool in the sidebar, beside the
+shell rather than instead of it, reading the same directory the shell is in and refreshing when a
+command ends.
 
 The terminal is the substrate; the sidebar is the product.
 
-## Status
+## What it does today
 
-**The application shell is complete; nothing of the product is built yet.** What runs today is the
-frameless HUD window, navigation rail, Home / Logs / Settings views, About dialog, tray icon with
-close-to-tray, live log streaming, JSON-persisted settings, and the full governance + quality pipeline.
+**Terminal.** Independent tabs, full VT/ANSI, mouse reporting, search, links, copy-on-select,
+iTerm2-compatible themes and an editor, per-tab colour scheme and profile, rebindable shortcuts, a
+crash-safe last-resort handler in both runtimes. Launch a tab anywhere with `ygg <dir>`, from Finder's
+"Open With", or from the "New Terminal Here" service.
 
-Agreed order of work:
+**tmux, properly.** A tab can attach to or create a session; a restored tab returns to *its own*
+session by name after a crash; a tab that was not in tmux comes back that way. A tool lists every
+running session with what it is running, attaches to one, renames it (carrying the tabs across) or
+ends it behind a confirmation. Closing a tab detaches — closing the app never kills a session.
 
-1. **The terminal component with multiple independent tabs** — the full feature set of a real terminal,
-   not a reduced emulation.
-2. **The first sidebar widget: a Git integration** — the current branch visualised the way VS Code does
-   it, the list of changed files, and below it the branch history with each branch's position and the
-   divergence between branches drawn out.
+**Sidebar tools**, each reading the front tab's directory:
+
+| Tool | What it answers |
+| --- | --- |
+| **Git** | Branch, changed files, history graph, diffs and commits in a terminal colour scheme |
+| **Files** | The tree, read here with syntax highlighting, opened in a terminal, or revealed |
+| **Activity** | What this tab is running, and which ports it holds |
+| **Docker** | Containers, their state, CPU and memory |
+| **Agent** | What the AI harness is doing, its context and usage — and what it is waiting for |
+| **tmux** | Every session on the machine, and what to do with it |
+
+**Attention that reaches you.** A harness asking for something marks *its* tab — gold when it is
+blocked on an answer, green when it merely finished — and the mark clears itself when the agent carries
+on. It works while the window is in the background, which is the only time it matters.
+
+**Status bar.** A row of small readings you arrange yourself: version, repository, running command,
+directory, tmux session, machine load, waiting tabs.
+
+## Where it is going
+
+It is built to be **used every day and extended continuously**. The direction is always the same: fewer
+windows for the same work. Anything that would otherwise mean leaving the terminal — to look something
+up, to check a state, to see what a process is doing — is a candidate for the sidebar, provided it can
+be answered at a glance and read without being managed.
+
+Two things it deliberately does not do: it does not edit, and it does not run commands of its own
+choosing. A tool that starts and stops things, sitting next to an agent that already does, is a
+combination this project keeps declining (ADR-PROJ-001 §5). The one exception, made deliberately, is
+handing a file to the platform's default application — recorded where it is implemented.
 
 ## Tech stack
 

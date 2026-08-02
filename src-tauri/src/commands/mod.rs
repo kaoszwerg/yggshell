@@ -886,3 +886,50 @@ pub fn clear_agent_attention(app: tauri::AppHandle) -> Result<()> {
         .map_err(|e| AppError::Other(format!("no app data directory: {e}")))?;
     crate::agent::hooks::clear(&crate::agent::hooks::events_path(&data))
 }
+
+/// A file's text, for the inline viewer.
+///
+/// **Reading, never running — and that distinction is the whole reason this exists.** Handing a path
+/// to the platform's default handler *starts an application chosen by the file*, which is what
+/// [`reveal_in_file_manager`] was written to avoid. Here the file's type decides only which syntax
+/// highlighter colours it; nothing is launched, and nothing is written back.
+///
+/// The path is checked against the tab's own root exactly as a listing is, so the browser cannot be
+/// talked into reading something outside the tree it shows (rule:security).
+///
+/// Refuses a directory and anything that looks binary, and caps what it reads — a viewer is not a
+/// reason to move a gigabyte across the IPC boundary.
+#[tauri::command]
+pub fn read_text_file(root: String, path: String) -> Result<crate::dto::TextFileDto> {
+    tracing::info!(%root, %path, "read_text_file");
+    let target = crate::files::verify(std::path::Path::new(&root), std::path::Path::new(&path))?;
+    let file = crate::files::read_text(&target)?;
+    tracing::info!(%path, bytes = file.text.len(), truncated = file.truncated, "read_text_file ok");
+    Ok(crate::dto::TextFileDto {
+        text: file.text,
+        truncated: file.truncated,
+    })
+}
+
+/// Open a file or folder with whatever the platform opens it with.
+///
+/// **This starts an application chosen by the file**, which is what [`reveal_in_file_manager`] was
+/// written to avoid. That restriction was raised with the maintainer and deliberately overruled
+/// (2026-08-02): YggShell is meant to be a complete everyday environment for agentic development, a
+/// PDF or an image has no inline viewer, and the narrower stance was defensible for a terminal and is
+/// not for a development environment.
+///
+/// What stands: the path is verified against the tab's own root, so nothing outside the tree on
+/// screen can be reached; the action is explicit; and it is logged with what was opened. Anything
+/// that is text has an inline viewer that launches nothing ([`read_text_file`]) — this is for the
+/// rest.
+///
+/// **`async` + `spawn_blocking`**: it starts a process (rule:rust-conventions).
+#[tauri::command]
+pub async fn open_path(root: String, path: String) -> Result<()> {
+    tracing::info!(%root, %path, "open_path");
+    let target = crate::files::verify(std::path::Path::new(&root), std::path::Path::new(&path))?;
+    tauri::async_runtime::spawn_blocking(move || crate::files::open_default(&target))
+        .await
+        .map_err(|e| AppError::Other(format!("opening the path failed: {e}")))?
+}

@@ -1,8 +1,28 @@
+import type { TextFileDto } from "../bindings/TextFileDto";
 // Typed wrapper around the file browser's read-only command surface.
 import { invoke } from "@tauri-apps/api/core";
 import type { DirListing } from "../bindings/DirListing";
 
 export const filesApi = {
+  /**
+   * A file's text, for the inline viewer.
+   *
+   * **Reading, never running.** The alternative — handing the path to the platform's default handler
+   * — starts an application chosen by the file. Here the type decides only which highlighter colours
+   * it. The backend refuses a directory, refuses anything binary, and caps what it reads; `path` is
+   * checked against `root` exactly as a listing is.
+   */
+  /**
+   * Hand a path to whatever the platform opens it with.
+   *
+   * **This starts an application chosen by the file.** Kept narrow on purpose: anything that is text
+   * has {@link readText}, which launches nothing. This is for a PDF, an image, a binary — the cases
+   * an inline viewer cannot answer. The backend verifies the path against `root` first.
+   */
+  open: (root: string, path: string) => invoke<void>("open_path", { root, path }),
+
+  readText: (root: string, path: string) => invoke<TextFileDto>("read_text_file", { root, path }),
+
   /**
    * List one directory of the tab's own tree.
    *

@@ -184,6 +184,16 @@ pub struct TmuxSession {
     pub command: String,
 }
 
+/// A file's contents for the inline viewer.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TextFileDto {
+    pub text: String,
+    /// True when the file was longer than the viewer's cap and only its head is here — said out loud
+    /// in the panel, because a file that silently stops is read as a file that ends there.
+    pub truncated: bool,
+}
+
 /// Whether the agent hooks are in place, and what they have reported.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

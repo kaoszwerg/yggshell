@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen, Link2 } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import { ContextMenu } from "../ui/ContextMenu";
+import { terminalApi } from "../../api/terminal";
 import { Row } from "../ui/Row";
 import { filesApi } from "../../api/files";
 import { useTerminalStore } from "../../store/terminal";
@@ -13,6 +14,33 @@ import { humanSize } from "../../lib/humanSize";
 import type { DirEntry } from "../../bindings/DirEntry";
 
 /** How deep a nested folder is indented, in pixels per level. */
+
+/**
+ * Where a terminal opened from `entry` should start.
+ *
+ * A directory is itself; a **file becomes its parent**, which is what dropping a file on a terminal
+ * has always meant and what `launch::resolve` does for `ygg` and Finder — one behaviour, three doors.
+ */
+function terminalTarget(entry: DirEntry): string {
+  // `DirEntry.path` is already absolute — the DTO says so in as many words ("Absolute, so opening it
+  // needs no reassembly on the other side"). Joining it to the root produced `/repo//repo/src`, which
+  // the tests caught and the fixture had been quietly asserting for me.
+  if (entry.directory) return entry.path;
+  const cut = entry.path.lastIndexOf("/");
+  return cut <= 0 ? entry.path : entry.path.slice(0, cut);
+}
+
+/**
+ * A path as a single shell word.
+ *
+ * Single quotes, because inside them a shell interprets nothing at all — no `$`, no backtick, no
+ * backslash. The one character that cannot appear is a single quote itself, which is closed, escaped
+ * and reopened. A path is user data and this text lands at a prompt: quoting it is not politeness.
+ */
+function shellQuote(path: string): string {
+  return "'" + path.replaceAll("'", "'\\''") + "'";
+}
+
 const INDENT = 12;
 
 /**
@@ -153,6 +181,13 @@ function Entry({
   showHidden: boolean;
 }) {
   const t = useT();
+  const activeKey = useTerminalStore((s) => s.activeKey);
+  const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
+  const setActive = useTerminalStore((s) => s.setActive);
+  const openPane = useTerminalStore((s) => s.openPane);
+  const sessionId = useTerminalStore(
+    (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
+  );
   const [open, setOpen] = useState(false);
   const activate = useCallback(() => {
     if (entry.directory) setOpen((was) => !was);
@@ -166,6 +201,53 @@ function Entry({
       <ContextMenu
         label={t("files.actions", { name: entry.name })}
         items={[
+          // A file is read HERE, in the panel, highlighted and read-only — no application is started
+          // and nothing is written back. A directory has nothing to read.
+          ...(entry.directory
+            ? []
+            : [
+                {
+                  id: "view",
+                  label: t("files.view"),
+                  onSelect: () => {
+                    if (activeKey !== null) {
+                      setPaneDetail(activeKey, { kind: "text" as const, root, path: entry.path });
+                    }
+                  },
+                },
+                {
+                  id: "open",
+                  label: t("files.open"),
+                  onSelect: () => {
+                    void filesApi.open(root, entry.path).catch((error: unknown) => {
+                      console.error("could not open", entry.path, error);
+                    });
+                  },
+                },
+                { separator: true as const },
+              ]),
+          {
+            id: "new-terminal",
+            label: t("files.newTerminal"),
+            onSelect: () => setActive(openPane(null, terminalTarget(entry))),
+          },
+          {
+            id: "this-terminal",
+            label: t("files.thisTerminal"),
+            // TYPED, never run. The webview does not get to decide that something executes
+            // (ADR-PROJ-001 §5): it writes the command to the prompt and the user presses Enter.
+            // Same channel as a paste — only the text was chosen by the app rather than the user.
+            disabled: sessionId === null,
+            onSelect: () => {
+              if (sessionId === null) return;
+              void terminalApi
+                .write(sessionId, `cd ${shellQuote(terminalTarget(entry))}`)
+                .catch((error: unknown) => {
+                  console.error("could not type into the terminal", error);
+                });
+            },
+          },
+          { separator: true as const },
           {
             id: "reveal",
             label: t("files.reveal"),

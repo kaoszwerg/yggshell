@@ -12,6 +12,7 @@
 
 use crate::dto::DirEntry;
 use crate::error::{AppError, Result};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// How many entries one directory may return.
@@ -61,6 +62,47 @@ fn within(root: &Path, path: &Path) -> Result<PathBuf> {
 /// a security check is one copy too many (ADR-CORE-005).
 pub fn verify(root: &Path, path: &Path) -> Result<PathBuf> {
     within(root, path)
+}
+
+/// Hand `target` to whatever the platform opens it with.
+///
+/// **This starts an application chosen by the FILE**, which is exactly what `reveal` was written to
+/// avoid — and the maintainer overruled that restriction deliberately (2026-08-02), after it was
+/// raised: YggShell is meant to be a complete everyday environment for agentic development, a PDF or
+/// an image has no inline viewer, and every terminal it competes with does this. The narrower stance
+/// was defensible for a terminal and is not for a development environment.
+///
+/// What remains, and is not negotiable: the path is checked against the tab's own root before it gets
+/// here, so nothing outside the tree on screen can be opened; the action is explicit, from a menu the
+/// user chose; and it is logged. A text file has an inline viewer that runs nothing at all
+/// (`read_text`) — this is for the rest.
+#[cfg(target_os = "macos")]
+pub fn open_default(target: &Path) -> Result<()> {
+    run(
+        std::process::Command::new("/usr/bin/open").arg(target.as_os_str()),
+        target,
+    )
+}
+
+#[cfg(target_os = "windows")]
+pub fn open_default(target: &Path) -> Result<()> {
+    // `explorer <path>` opens a file with its default handler, and it is what `reveal` already uses —
+    // so no new program name enters the allow-list that `environment::tests` keeps deliberately short.
+    // `cmd /C start "" <path>` would work too and was the first attempt; it needs a shell, needs an
+    // empty window TITLE argument that reads like a mistake, and would have cost an entry on that
+    // list for nothing.
+    run(
+        std::process::Command::new("explorer").arg(target.as_os_str()),
+        target,
+    )
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn open_default(target: &Path) -> Result<()> {
+    run(
+        std::process::Command::new("xdg-open").arg(target.as_os_str()),
+        target,
+    )
 }
 
 /// Show `target` in the system file manager, with the item selected.
@@ -262,5 +304,134 @@ mod tests {
                 .expect("the link is listed");
             assert!(link.symlink);
         }
+    }
+}
+
+/// How much of a file the inline viewer will read.
+///
+/// **A viewer is not a reason to load a gigabyte into a webview.** A minified bundle, a log or a
+/// generated lockfile will all exceed this, and the honest answer to those is the first part plus a
+/// note — not a frozen window while a 200 MB string crosses the IPC boundary and is then tokenised.
+const MAX_TEXT_BYTES: u64 = 2 * 1024 * 1024;
+
+/// How much of the head is inspected to decide whether a file is text at all.
+const SNIFF_BYTES: usize = 8 * 1024;
+
+/// A file's contents for the inline viewer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextFile {
+    pub text: String,
+    /// True when the file was longer than [`MAX_TEXT_BYTES`] and only its head is here.
+    pub truncated: bool,
+}
+
+/// Read a file as text, or refuse it.
+///
+/// **Reading, never running.** This is the whole reason the viewer exists rather than handing the
+/// path to the platform's default handler: opening a file that way *starts an application chosen by
+/// the file*, which is the threat `reveal` was written to avoid (`commands::reveal_in_file_manager`).
+/// Here the file's type decides only which syntax highlighter colours it.
+///
+/// Binary is refused rather than mangled. A NUL byte in the first few kilobytes is the same test
+/// `git` uses, and it is enough: the alternative — showing replacement characters for a PNG — looks
+/// like a corrupt file rather than the wrong question.
+pub fn read_text(target: &Path) -> Result<TextFile> {
+    let meta =
+        std::fs::metadata(target).map_err(|e| AppError::io(target.display().to_string(), e))?;
+    if meta.is_dir() {
+        return Err(AppError::Other(format!(
+            "{} is a directory, not a file",
+            target.display()
+        )));
+    }
+
+    let mut file =
+        std::fs::File::open(target).map_err(|e| AppError::io(target.display().to_string(), e))?;
+    let truncated = meta.len() > MAX_TEXT_BYTES;
+    let mut bytes = Vec::new();
+    std::io::Read::take(&mut file, MAX_TEXT_BYTES)
+        .read_to_end(&mut bytes)
+        .map_err(|e| AppError::io(target.display().to_string(), e))?;
+
+    if is_binary(&bytes) {
+        return Err(AppError::Other(format!(
+            "{} is not a text file",
+            target.display()
+        )));
+    }
+
+    // Lossy on purpose: a file that is text apart from one stray byte is still worth reading, and
+    // refusing it would be a worse answer than one replacement character.
+    Ok(TextFile {
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+        truncated,
+    })
+}
+
+/// Whether these bytes look like something other than text.
+///
+/// A NUL in the head, which is what `git` uses. Cheap, and wrong only for encodings this app has no
+/// business rendering anyway.
+fn is_binary(bytes: &[u8]) -> bool {
+    bytes.iter().take(SNIFF_BYTES).any(|byte| *byte == 0)
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    #[test]
+    fn a_text_file_is_read_whole() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("a.rs");
+        std::fs::write(&path, "fn main() {}\n").expect("write");
+
+        let file = read_text(&path).expect("read");
+        assert_eq!(file.text, "fn main() {}\n");
+        assert!(!file.truncated);
+    }
+
+    #[test]
+    fn a_binary_file_is_refused_rather_than_mangled() {
+        // Showing replacement characters for a PNG looks like a corrupt file rather than the wrong
+        // question. A NUL in the head is the test `git` uses.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("logo.png");
+        std::fs::write(&path, [0x89, b'P', b'N', b'G', 0x00, 0x1a]).expect("write");
+
+        assert!(read_text(&path).is_err());
+    }
+
+    #[test]
+    fn a_directory_is_refused_with_a_message_that_says_which_it_is() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let error = read_text(dir.path()).expect_err("a directory is not a file");
+        assert!(error.to_string().contains("directory"), "{error}");
+    }
+
+    #[test]
+    fn a_file_past_the_cap_is_truncated_and_says_so() {
+        // A file that silently stops is read as a file that ends there.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("big.log");
+        let big = "x".repeat((MAX_TEXT_BYTES as usize) + 1024);
+        std::fs::write(&path, &big).expect("write");
+
+        let file = read_text(&path).expect("read");
+        assert!(file.truncated);
+        assert_eq!(file.text.len() as u64, MAX_TEXT_BYTES);
+    }
+
+    #[test]
+    fn one_stray_byte_does_not_cost_the_whole_file() {
+        // Lossy on purpose: refusing a file that is text apart from one bad byte is a worse answer
+        // than one replacement character.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("mixed.txt");
+        std::fs::write(&path, [b'h', b'i', 0xff, b'!']).expect("write");
+
+        let file = read_text(&path).expect("read");
+        assert!(file.text.starts_with("hi"));
+        assert!(file.text.ends_with('!'));
     }
 }

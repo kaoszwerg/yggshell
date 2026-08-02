@@ -7,11 +7,12 @@ import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
-import { useUiStore, type GitDetail } from "../../store/ui";
+import { useUiStore, type PaneDetail } from "../../store/ui";
 import { useSettings, useTerminalThemes } from "../../hooks/useSettings";
 import { detailThemeId, resolveTheme, themeById } from "../../lib/terminalTheme";
 import { surfaceStyle } from "../../lib/schemeSurface";
-import type { SyntaxScheme } from "../../lib/highlight";
+import { languageFor, tokenize, type SyntaxScheme } from "../../lib/highlight";
+import { filesApi } from "../../api/files";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitFileStat } from "../../bindings/GitFileStat";
 
@@ -62,7 +63,7 @@ export function GitDetailPanel({ paneKey }: { paneKey: string }) {
   const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === paneKey)?.cwd ?? null);
   const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
   const show = useCallback(
-    (next: GitDetail | null) => setPaneDetail(paneKey, next),
+    (next: PaneDetail | null) => setPaneDetail(paneKey, next),
     [paneKey, setPaneDetail],
   );
   const panelRef = useRef<HTMLDivElement>(null);
@@ -105,13 +106,16 @@ function Content({
   show,
   paneKey,
 }: {
-  detail: GitDetail;
+  detail: PaneDetail;
   cwd: string;
-  show: (detail: GitDetail | null) => void;
+  show: (detail: PaneDetail | null) => void;
   paneKey: string;
 }) {
   if (detail.kind === "commit") {
     return <CommitContent rev={detail.rev} cwd={cwd} show={show} paneKey={paneKey} />;
+  }
+  if (detail.kind === "text") {
+    return <TextContent detail={detail} show={show} paneKey={paneKey} />;
   }
   return <DiffContent detail={detail} cwd={cwd} show={show} paneKey={paneKey} />;
 }
@@ -129,7 +133,7 @@ function Header({
   heading: React.ReactNode;
   subtitle?: React.ReactNode;
   onBack?: () => void;
-  show: (detail: GitDetail | null) => void;
+  show: (detail: PaneDetail | null) => void;
   /** Controls that belong to this particular view, placed before the close button. */
   extra?: React.ReactNode;
 }) {
@@ -160,15 +164,94 @@ function Header({
   );
 }
 
+/**
+ * A file from disk, read and highlighted — and nothing else.
+ *
+ * **Reading, never running.** Handing a path to the platform's default handler starts an application
+ * chosen by the file; this does not. The file's type decides only which highlighter colours it, and
+ * the backend refuses a directory, refuses anything binary, and caps what it reads.
+ *
+ * It reuses the diff's scheme and text size on purpose: the same setting that says how a diff is
+ * drawn says how a file is, or the two would disagree side by side in the same panel.
+ */
+function TextContent({
+  detail,
+  show,
+  paneKey,
+}: {
+  detail: Extract<PaneDetail, { kind: "text" }>;
+  show: (detail: PaneDetail | null) => void;
+  paneKey: string;
+}) {
+  const t = useT();
+  const scheme = useDetailScheme(paneKey, "diff");
+  const fontSize = useDetailFontSize();
+
+  const query = useQuery({
+    queryKey: ["text-file", detail.root, detail.path],
+    queryFn: () => filesApi.readText(detail.root, detail.path),
+  });
+
+  const coloured = useQuery({
+    // Keyed on the text itself, so re-opening a file already read costs nothing and a changed file
+    // is re-tokenised rather than shown in the previous file's colours.
+    queryKey: ["highlight-file", detail.path, query.data?.text, scheme?.id ?? "hud"],
+    queryFn: () => tokenize(query.data?.text ?? "", languageFor(detail.path), scheme),
+    enabled: query.data !== undefined,
+  });
+
+  return (
+    <>
+      <Header
+        heading={detail.path.split("/").pop() ?? detail.path}
+        subtitle={detail.path}
+        show={show}
+      />
+      <div className="min-h-0 flex-1 overflow-auto" style={surfaceStyle(scheme, fontSize)}>
+        {query.isPending ? (
+          <p className="text-dim p-4 font-mono text-xs">{t("files.reading")}</p>
+        ) : query.isError ? (
+          // Named, not swallowed: "it is binary" and "it is gone" are different problems and only
+          // the message says which (rule:logging).
+          <p className="text-dim p-4 font-mono text-xs">{String(query.error)}</p>
+        ) : (
+          <>
+            <pre className="px-2 py-1 font-mono leading-[1.5] wrap-anywhere whitespace-pre-wrap">
+              {coloured.data === undefined
+                ? query.data.text
+                : coloured.data.map((line, at) => (
+                    <span key={at}>
+                      {line.map((token, index) => (
+                        <span key={index} style={token.color ? { color: token.color } : undefined}>
+                          {token.content}
+                        </span>
+                      ))}
+                      {"\n"}
+                    </span>
+                  ))}
+            </pre>
+            {query.data.truncated ? (
+              // Said out loud: a file that silently stops is read as a file that ends there.
+              <p className="scheme-meta px-2 py-1 font-mono text-[10px]">
+                {t("files.fileTruncated")}
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 function DiffContent({
   detail,
   cwd,
   show,
   paneKey,
 }: {
-  detail: Extract<GitDetail, { kind: "file" | "commit-file" }>;
+  detail: Extract<PaneDetail, { kind: "file" | "commit-file" }>;
   cwd: string;
-  show: (detail: GitDetail | null) => void;
+  show: (detail: PaneDetail | null) => void;
   paneKey: string;
 }) {
   const t = useT();
@@ -239,7 +322,7 @@ function CommitContent({
 }: {
   rev: string;
   cwd: string;
-  show: (detail: GitDetail | null) => void;
+  show: (detail: PaneDetail | null) => void;
   paneKey: string;
 }) {
   const t = useT();
@@ -305,7 +388,7 @@ function CommitBody({
 }: {
   rev: string;
   detail: GitCommitDetail;
-  show: (detail: GitDetail | null) => void;
+  show: (detail: PaneDetail | null) => void;
   fontSize: number;
 }) {
   return (

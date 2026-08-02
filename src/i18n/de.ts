@@ -135,6 +135,12 @@ export const de: Translations = {
   "files.truncated": "Zu viele Einträge, um alle zu zeigen.",
   "files.showHidden": "Versteckte Einträge zeigen",
   "files.hideHidden": "Versteckte Einträge ausblenden",
+  "files.view": "Hier ansehen",
+  "files.open": "Mit Standardprogramm öffnen",
+  "files.newTerminal": "In neuem Terminal öffnen",
+  "files.thisTerminal": "cd in dieses Terminal tippen",
+  "files.fileTruncated":
+    "Nur der Anfang dieser Datei wird gezeigt — sie ist größer, als der Betrachter liest.",
   "files.reveal": "Im Dateimanager zeigen",
   "files.actions": "Aktionen für {name}",
   "files.copyPath": "Pfad kopieren",

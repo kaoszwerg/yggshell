@@ -1,7 +1,7 @@
 ---
 id: mem:project-scope
 title: YggShell scope summary
-tldr: "A developer terminal on the saga-rust-template shell: full terminal tabs + iTerm2 themes, and sidebar tools that enrich AI harnesses (Claude Code)."
+tldr: "The everyday terminal for agentic development: real terminal tabs, tmux that survives, sidebar tools replacing the windows around the shell. Built to grow."
 scope: project
 load: core
 type: project
@@ -9,13 +9,42 @@ type: project
 
 # YggShell — scope summary
 
-**One-line:** `YggShell` is a cross-platform **developer terminal**: a genuine replacement for the
-system terminal — multiple independent tabs, each launchable with its own iTerm2-compatible colour
-theme, plus a theme editor and granular per-terminal configuration — whose **defining purpose** is to
-enrich **AI development harnesses** (in the maintainer's case, Claude Code) with tools in the sidebar.
+**One-line:** `YggShell` is **the everyday terminal for agentic development** — a genuine replacement
+for the system terminal (independent tabs, iTerm2-compatible themes and an editor, per-terminal
+configuration, tmux sessions that outlive the app) whose **defining purpose** is to put the work that
+*surrounds* the terminal beside it: the repository, the files, the processes and ports, the containers,
+the sessions, and what an AI harness such as Claude Code is doing right now.
 
 The terminal is the substrate; the sidebar is the product. A feature earns its place by making working
 in an AI harness better, not by being a terminal feature someone could name.
+
+## The goal, and what it settles (stated 2026-08-02)
+
+**It is built to be used every day and extended continuously.** Not a demo, not a shell to be
+completed and left: the direction is always *fewer windows for the same work*, and anything that would
+otherwise mean leaving the terminal — to look something up, to check a state, to see what a process is
+doing — is a candidate.
+
+That answers a question this project kept re-asking, and answering too narrowly. **"Is this too much
+for a terminal?" is the wrong test**; the product is a development environment, and the right test is
+whether it removes a window. Two decisions were reversed on exactly that reasoning, both after the
+narrow answer had been argued and both by the maintainer:
+
+- **Files may be opened.** The tool was deliberately limited to reveal-and-copy; a PDF or an image now
+  opens with the platform's default application, and a text file is read inline with highlighting
+  instead. The security argument against the first (the *file* chooses the program) is recorded where
+  it is implemented rather than deleted — it was overruled, not refuted.
+- **A panel that is on screen must be current.** "Read on demand, never on a timer" was a defensible
+  cost argument and the wrong trade: a panel you must click to trust is right at the instant you click
+  it and wrong every instant after (see [[surfaces]]).
+
+**What still holds, and is not up for the same reversal:** the interface does not edit, and it does not
+choose what runs (ADR-PROJ-001 §5). A tool that starts and stops things, next to an agent that already
+does, is the combination this project keeps declining. Where a feature needs to put a command in a
+terminal, it *types* it and the user presses Enter.
+
+**Describing it to a user names the tool, never a person.** The About text, the README and the taglines
+say what YggShell is and what it is for — not whose work it simplifies.
 
 ## Its place in the governance cascade (ADR-CORE-033)
 

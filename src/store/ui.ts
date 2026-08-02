@@ -47,10 +47,28 @@ const GIT_SPLIT_DEFAULT = 45;
  * This is a tabbed, multiplexed terminal: two tabs are usually two repositories, and one panel for the
  * whole window meant opening a diff in one tab and finding it laid over another.
  */
-export type GitDetail =
+export type PaneDetail =
   | { kind: "file"; path: string; staged: boolean }
   | { kind: "commit"; rev: string }
-  | { kind: "commit-file"; rev: string; path: string };
+  | { kind: "commit-file"; rev: string; path: string }
+  /**
+   * A file read from disk, shown with syntax highlighting and nothing else.
+   *
+   * **Reading, never running**, which is why it is here rather than a "open with the default app"
+   * action: handing a path to the platform handler starts an application chosen by the file, and
+   * that is the threat `reveal_in_file_manager` exists to avoid. Here the file's type decides only
+   * which highlighter colours it.
+   *
+   * `root` travels with it because the backend checks the path against it, exactly as a listing is
+   * checked — the browser cannot be talked into reading outside the tree it shows.
+   */
+  | { kind: "text"; root: string; path: string };
+
+/**
+ * @deprecated The union covers more than Git now — it is what a TAB shows in its detail area. Kept
+ * as an alias for one release so a downstream import does not break silently.
+ */
+export type GitDetail = PaneDetail;
 
 export interface UiState {
   view: ViewId;

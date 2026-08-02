@@ -140,6 +140,12 @@ export const en = {
   "files.truncated": "Too many entries to show them all.",
   "files.showHidden": "Show hidden entries",
   "files.hideHidden": "Hide hidden entries",
+  "files.view": "View here",
+  "files.open": "Open with the default app",
+  "files.newTerminal": "Open in a new terminal",
+  "files.thisTerminal": "Type cd into this terminal",
+  "files.fileTruncated":
+    "Only the first part of this file is shown — it is larger than the viewer reads.",
   "files.reveal": "Show in the file manager",
   "files.actions": "Actions for {name}",
   "files.copyPath": "Copy path",

@@ -9,7 +9,7 @@ import { Splitter } from "../ui/Splitter";
 import { useTerminalStore } from "../../store/terminal";
 import { useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { useT } from "../../hooks/useT";
-import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type GitDetail } from "../../store/ui";
+import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type PaneDetail } from "../../store/ui";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
 import type { GitSnapshot } from "../../bindings/GitSnapshot";
@@ -198,7 +198,7 @@ function ChangeRow({ change }: { change: GitChange }) {
       detail?.kind === "file" && detail.path === change.path && detail.staged === change.staged
     );
   });
-  const show = (detail: GitDetail) => {
+  const show = (detail: PaneDetail) => {
     if (activeKey !== null) setPaneDetail(activeKey, detail);
   };
 
@@ -265,9 +265,12 @@ function CommitRow({ row, width, last }: { row: GraphRow; width: number; last: b
   const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
   const shown = useTerminalStore((s) => {
     const detail = s.panes.find((p) => p.key === s.activeKey)?.detail;
-    return detail?.kind !== "file" && detail?.rev === row.commit.sha;
+    // Narrowed by kind rather than by "not a file": the union now also holds a plain text view, which
+    // has no revision at all.
+    if (detail?.kind !== "commit" && detail?.kind !== "commit-file") return false;
+    return detail.rev === row.commit.sha;
   });
-  const show = (detail: GitDetail) => {
+  const show = (detail: PaneDetail) => {
     if (activeKey !== null) setPaneDetail(activeKey, detail);
   };
 
