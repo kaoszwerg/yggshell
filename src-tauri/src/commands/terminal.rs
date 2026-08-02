@@ -119,9 +119,10 @@ pub fn terminal_resize(
 #[tauri::command]
 pub fn terminal_status(
     registry: State<'_, TerminalRegistry>,
+    state: State<'_, AppState>,
     id: SessionId,
 ) -> Result<crate::dto::TerminalStatus> {
-    registry.status(id)
+    registry.status(id, &crate::agent::hooks::events_path(&state.data_dir))
 }
 
 /// End a session because the user closed its tab.

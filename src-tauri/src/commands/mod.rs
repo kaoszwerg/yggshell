@@ -756,6 +756,39 @@ pub fn refresh_hook_script(app: &tauri::AppHandle) {
     }
 }
 
+/// Add any hook event this build needs to a Claude home that already has our hook.
+///
+/// **Called at startup, and it is the settings half of [`refresh_hook_script`].** The script repairs
+/// itself; its registration did not. When `UserPromptSubmit` was added — the only signal that says an
+/// agent is working *for you* rather than merely running — every existing installation would have
+/// kept two of the three events and the activity line would have gone on reporting that a harness
+/// exists. Nobody presses "install" again for a feature they were never told changed.
+///
+/// **Only where our hook is already installed.** Not installing one is a decision the user made, and
+/// startup is not the place to reverse it. Failures are logged and swallowed: this must never be a
+/// reason the app does not start.
+pub fn refresh_agent_hooks(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let Ok(home) = app.path().home_dir() else {
+        return;
+    };
+    let script = hook_script(&home);
+    if !script.exists() {
+        return;
+    }
+    for claude_home in [home.join(".claude"), home.join(".claude-privat")] {
+        if !claude_home.join("settings.json").exists() {
+            continue;
+        }
+        match crate::agent::hooks::install(&claude_home, &script) {
+            Ok(_) => tracing::debug!(home = %claude_home.display(), "agent hooks are current"),
+            Err(e) => {
+                tracing::warn!(error = %e, home = %claude_home.display(), "could not refresh the agent hooks")
+            }
+        }
+    }
+}
+
 /// Whether the agent hooks are in place, and what they have reported since last looked at.
 ///
 /// Read-only and cheap: a file read and a settings parse. The events themselves are appended by a

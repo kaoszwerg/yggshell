@@ -234,6 +234,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // nobody presses "install" again for a problem they have not been told about. Repaired here, the
     // way the Finder registration is (`services::refresh_launch_services`).
     commands::refresh_hook_script(app.handle());
+    // …and its registration: a new hook event otherwise reaches only whoever presses install again.
+    commands::refresh_agent_hooks(app.handle());
     tracing::info!("startup complete");
     Ok(())
 }

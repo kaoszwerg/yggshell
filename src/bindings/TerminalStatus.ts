@@ -10,6 +10,16 @@
  */
 export type TerminalStatus = { 
 /**
+ * Whether the AI harness in this directory is mid-turn, or `None` when there is no agent here.
+ *
+ * **This overrides `busy` when it is set**, and that is the whole reason it exists. A harness is
+ * a command that runs for hours, so `busy` — "the pane is running something other than the
+ * shell" — answers *yes* from the moment it starts until it exits. Correct, and useless: it says
+ * a program is open, not that it is doing something for you. Turn boundaries are the only signal
+ * that tells those apart (`hooks::working_now`).
+ */
+agent_turn: boolean | null, 
+/**
  * Where the session's shell is, when tmux can be asked.
  */
 cwd: string | null, 

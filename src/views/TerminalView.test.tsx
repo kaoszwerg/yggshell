@@ -49,7 +49,9 @@ vi.mock("../api/terminal", () => ({
     open: vi.fn(),
     resize: vi.fn(() => Promise.resolve()),
     write: vi.fn(() => Promise.resolve()),
-    status: vi.fn(() => Promise.resolve({ cwd: null, command: null, session: null, busy: false })),
+    status: vi.fn(() =>
+      Promise.resolve({ cwd: null, command: null, session: null, busy: false, agent_turn: null }),
+    ),
     close: vi.fn(() => Promise.resolve()),
     onExit: vi.fn(() => Promise.resolve(() => {})),
   },
@@ -642,6 +644,7 @@ describe("TerminalView", () => {
         command: "cargo",
         session: null,
         busy: true,
+        agent_turn: null,
       });
       const opened = deferOpen(62);
       const { container } = render(<TerminalView />);
@@ -728,6 +731,7 @@ describe("TerminalView", () => {
         command: null,
         session: "34",
         busy: false,
+        agent_turn: null,
       });
       const opened = deferOpen(70);
       render(<TerminalView />);
@@ -748,6 +752,7 @@ describe("TerminalView", () => {
         command: null,
         session: null,
         busy: false,
+        agent_turn: null,
       });
       const opened = deferOpen(71);
       render(<TerminalView />);
@@ -759,5 +764,73 @@ describe("TerminalView", () => {
 
       expect(useTerminalStore.getState().panes.at(-1)?.tmuxSession).toBeNull();
     });
+  });
+});
+
+describe("the activity line in a tab that runs an agent", () => {
+  it("follows the agent's TURN, not the fact that a harness is open", async () => {
+    // The defect: a harness IS a command that runs for hours, so `busy` says yes from the moment it
+    // starts until it exits. The line reported "something is running" for an entire working day and
+    // stopped only while a subshell happened to be in front — which is why it looked unrelated to
+    // anything at all (reported).
+    vi.mocked(terminalApi.status).mockResolvedValue({
+      cwd: "/repo",
+      command: "claude",
+      session: "yggshell",
+      busy: true,
+      agent_turn: false,
+    });
+    const opened = deferOpen(70);
+    const { container } = render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    await waitFor(() =>
+      expect((container.querySelector("[data-activity]") as HTMLElement).dataset.activity).toBe(
+        "idle",
+      ),
+    );
+  });
+
+  it("runs while the turn is open", async () => {
+    vi.mocked(terminalApi.status).mockResolvedValue({
+      cwd: "/repo",
+      command: "claude",
+      session: "yggshell",
+      busy: true,
+      agent_turn: true,
+    });
+    const opened = deferOpen(71);
+    const { container } = render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    await waitFor(() =>
+      expect((container.querySelector("[data-activity]") as HTMLElement).dataset.activity).toBe(
+        "running",
+      ),
+    );
+  });
+
+  it("leaves a tab with no agent to the terminal's own signal", async () => {
+    // `null` is NOT "an agent that is idle": confusing the two would make every plain shell look
+    // permanently quiet, and a build running in one would show nothing.
+    vi.mocked(terminalApi.status).mockResolvedValue({
+      cwd: "/repo",
+      command: "cargo",
+      session: "yggshell",
+      busy: true,
+      agent_turn: null,
+    });
+    const opened = deferOpen(72);
+    const { container } = render(<TerminalView />);
+    act(() => measure?.(30, 100));
+    await opened();
+
+    await waitFor(() =>
+      expect((container.querySelector("[data-activity]") as HTMLElement).dataset.activity).toBe(
+        "running",
+      ),
+    );
   });
 });

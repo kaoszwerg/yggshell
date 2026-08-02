@@ -31,7 +31,16 @@ use std::path::{Path, PathBuf};
 /// `Notification` is the agent asking for something — a permission, an answer. `Stop` is it having
 /// finished, which is the other moment you want to be told about. The rest (`PreToolUse` and
 /// friends) fire constantly and would say nothing a person can act on.
-const EVENTS: [&str; 2] = ["Notification", "Stop"];
+const EVENTS: [&str; 3] = ["UserPromptSubmit", "Notification", "Stop"];
+
+/// The event that opens a turn: the user has just sent something and the agent is working on it.
+///
+/// **Why this exists at all.** An AI harness IS a command that runs for hours, so a terminal's own
+/// "is something running" — `pane_current_command` inside tmux, OSC 133 outside it — answers *yes*
+/// from the moment it starts until it exits. Correct, and useless: it says "a program is open", not
+/// "it is doing something for me". This is the only signal that distinguishes the two, and it costs
+/// one line per turn in a file that already holds two.
+pub const TURN_START: &str = "UserPromptSubmit";
 
 /// Where the hook script appends its lines. Must match the script itself.
 pub fn events_path(app_data: &Path) -> PathBuf {
@@ -211,6 +220,45 @@ pub fn read_events(path: &Path, keep: usize) -> Vec<AgentEvent> {
     events
 }
 
+/// Whether the agent in `dir` is **mid-turn** — `None` when no agent has reported from there.
+///
+/// The newest event per directory is the state, exactly as in [`waiting_now`]: `UserPromptSubmit`
+/// opens a turn, and anything after it closes one — `Stop` because the turn ended, `Notification`
+/// because the agent is blocked on an answer and is no longer working *for* you. A turn that is
+/// still open is the one thing a terminal's own activity signal cannot see.
+pub fn turn_state(events: Vec<AgentEvent>, dir: &str) -> Option<bool> {
+    // `None` means "no agent has ever reported from this directory", which is a different answer from
+    // "an agent is here and idle" — and the difference decides whether the terminal's own activity
+    // signal is overridden at all. Getting it wrong makes every plain shell look permanently idle.
+    let latest = newest_per_directory(events)
+        .into_iter()
+        .find(|event| event.cwd == dir)?;
+    Some(latest.event == TURN_START)
+}
+
+/// The directories whose agent is working right now.
+pub fn working_now(events: Vec<AgentEvent>) -> Vec<String> {
+    newest_per_directory(events)
+        .into_iter()
+        .filter(|event| event.event == TURN_START)
+        .map(|event| event.cwd)
+        .collect()
+}
+
+/// The last event for each directory, in the order they were first seen.
+fn newest_per_directory(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
+    // Insertion order = file order = chronological (the script appends), so a later event for the
+    // same directory simply replaces the earlier one.
+    let mut latest: Vec<AgentEvent> = Vec::new();
+    for event in events {
+        match latest.iter_mut().find(|kept| kept.cwd == event.cwd) {
+            Some(kept) => *kept = event,
+            None => latest.push(event),
+        }
+    }
+    latest
+}
+
 /// What is asking for attention **right now** — the last word per directory, never the history.
 ///
 /// **A queue of everything that ever happened is not an attention signal.** The file is append-only
@@ -225,15 +273,7 @@ pub fn read_events(path: &Path, keep: usize) -> Vec<AgentEvent> {
 ///   state, and no "mark as seen" is needed. Clearing by hand stays possible; it is no longer the
 ///   only way out.
 pub fn waiting_now(events: Vec<AgentEvent>) -> Vec<AgentEvent> {
-    // Insertion order = file order = chronological (the script appends), so a later event for the
-    // same directory simply replaces the earlier one.
-    let mut latest: Vec<AgentEvent> = Vec::new();
-    for event in events {
-        match latest.iter_mut().find(|kept| kept.cwd == event.cwd) {
-            Some(kept) => *kept = event,
-            None => latest.push(event),
-        }
-    }
+    let mut latest = newest_per_directory(events);
     latest.retain(|event| event.event == "Notification");
     latest
 }
@@ -501,6 +541,55 @@ mod tests {
         let event = parse_event(line).unwrap();
         assert_eq!(event.recorded_at, Some(1_785_615_639));
         assert_eq!(event.transcript.as_deref(), Some("/t.jsonl"));
+    }
+
+    #[test]
+    fn a_turn_is_open_from_the_prompt_until_something_closes_it() {
+        // The signal a terminal cannot produce. A harness IS a command that runs for hours, so
+        // `pane_current_command` and OSC 133 both answer "something is running" from the moment it
+        // starts until it exits — correct, and useless. Only the turn boundaries say whether it is
+        // doing something FOR YOU.
+        let submit = event(TURN_START, "/repo");
+        assert_eq!(turn_state(vec![submit.clone()], "/repo"), Some(true));
+
+        // `Stop` ends it; so does a `Notification`, because an agent blocked on an answer has stopped
+        // working for you — that state belongs to the bell, not to the activity line.
+        assert_eq!(
+            turn_state(vec![submit.clone(), event("Stop", "/repo")], "/repo"),
+            Some(false)
+        );
+        assert_eq!(
+            turn_state(vec![submit, event("Notification", "/repo")], "/repo"),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn a_directory_with_no_agent_is_not_reported_as_idle() {
+        // `None` and `Some(false)` are different answers and the difference decides whether the
+        // terminal's own activity signal is overridden at all. Confusing them makes every plain shell
+        // look permanently idle — a build running in one would show nothing.
+        assert_eq!(turn_state(vec![], "/repo"), None);
+        assert_eq!(turn_state(vec![event("Stop", "/other")], "/repo"), None);
+    }
+
+    #[test]
+    fn only_the_newest_event_per_directory_decides() {
+        // The file is append-only and nobody prunes it, so an old `UserPromptSubmit` must not keep a
+        // turn open for ever — the same rule the attention signal already lives by.
+        let events = vec![
+            event(TURN_START, "/repo"),
+            event("Stop", "/repo"),
+            event(TURN_START, "/repo"),
+        ];
+        assert_eq!(turn_state(events, "/repo"), Some(true));
+    }
+
+    #[test]
+    fn the_hook_installs_the_turn_start_event() {
+        // Without it there is no "the agent began working" at all, and the activity line falls back
+        // to reporting that a harness exists.
+        assert!(EVENTS.contains(&TURN_START));
     }
 
     #[test]

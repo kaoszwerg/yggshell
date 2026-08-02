@@ -8,6 +8,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The activity line now says whether the agent is working, not whether a harness is open.** Reported
+  as running with no discernible relation to anything — and it was not inverted, it was measuring the
+  wrong thing. An AI harness **is** a command that runs for hours, so both of the terminal's own
+  signals answer *yes* for its entire lifetime: inside tmux `#{pane_current_command}` reports it
+  (measured: `2.1.220`, constant), and outside tmux OSC 133 emits `C` when it starts and `D` only when
+  it exits. Correct, and useless — it says a program is open, not that it is doing something for you.
+  It stopped only while a subshell happened to be in front, which is what made it look random.
+
+  A third hook event, `UserPromptSubmit`, marks where a turn begins; `Stop` and `Notification` close
+  one. Where an agent has reported from a tab's directory, its turn state replaces the pane's command
+  state. Where none has, nothing changes — and `null` is deliberately not the same answer as "an agent
+  that is idle", or every plain shell would look permanently quiet and a build running in one would
+  show nothing.
+
+  **Existing installations repair themselves.** The hook script has self-healed since 0.39.2; its
+  *registration* had not, so a new event would have reached only whoever pressed "install" again for a
+  change they were never told about. Both are refreshed at startup now.
+
+### Fixed
+
 - **The window frame stopped animating, and only its bottom-right corner was drawn.** The build shipped
   `animation: … frame-spin` with **no `@keyframes frame-spin` at all**: Lightning CSS eliminates
   keyframes it believes are unused, and it did not match a usage inside `@layer components` against a

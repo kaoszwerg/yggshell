@@ -481,7 +481,14 @@ impl TerminalRegistry {
     /// joined has no hook in it and never will, so tmux — which tracks `pane_current_path` itself — is
     /// asked instead. `None` for an ordinary shell session means exactly "the frontend already knows
     /// better than I do".
-    pub fn status(&self, id: SessionId) -> Result<crate::dto::TerminalStatus> {
+    /// `events` is the agent hook's log. Passed in rather than resolved here: this module knows about
+    /// pseudo-terminals and tmux, and where an app keeps its data is not its business (the same reason
+    /// paths come from `app.path()` everywhere else).
+    pub fn status(
+        &self,
+        id: SessionId,
+        events: &std::path::Path,
+    ) -> Result<crate::dto::TerminalStatus> {
         // The name is copied out and the lock released before tmux is asked: that call spawns a
         // process, and holding the registry lock across it would stall every keystroke in every other
         // terminal for as long as it takes.
@@ -495,6 +502,7 @@ impl TerminalRegistry {
                         command: None,
                         session: None,
                         busy: false,
+                        agent_turn: None,
                     })
                 }
                 Some(session) => (
@@ -521,6 +529,7 @@ impl TerminalRegistry {
                 command: None,
                 session: None,
                 busy: false,
+                agent_turn: None,
             });
         };
 
@@ -536,8 +545,14 @@ impl TerminalRegistry {
             .as_deref()
             .is_some_and(|c| c != shell_name && !c.is_empty());
 
+        let cwd = tmux::pane_cwd(&name);
         Ok(crate::dto::TerminalStatus {
-            cwd: tmux::pane_cwd(&name),
+            // The agent's own turn state, where there is one, because a harness is a command that
+            // runs for hours and `busy` therefore says "yes" for all of them.
+            agent_turn: cwd.as_deref().and_then(|dir| {
+                crate::agent::hooks::turn_state(crate::agent::hooks::read_events(events, 50), dir)
+            }),
+            cwd,
             command,
             session: Some(name),
             busy,

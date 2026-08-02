@@ -485,10 +485,16 @@ function Pane({
           // Inside tmux this poll is the only source of activity: OSC 133 is swallowed there, so
           // there is no exit status to be had — only whether something is running.
           if (status.command !== null) {
-            // In tmux this is also the only place the command's NAME can come from — OSC 133 never
-            // carries one — which is why the status bar can say "cargo" here and only "running"
-            // outside a session.
-            setActivity(status.busy ? "running" : "idle", status.busy ? status.command : null);
+            // The agent's turn wins where there is one. A harness IS a command that runs for hours,
+            // so `busy` — "the pane runs something other than the shell" — says yes from the moment
+            // it starts until it exits: correct, and useless. It reported "something is running" for
+            // an entire working day and stopped only while a subshell happened to be in front, which
+            // is why the line looked unrelated to anything (reported).
+            //
+            // `null` means no agent has ever reported from this directory, which is NOT the same as
+            // an idle one: confusing the two would make every plain shell look permanently quiet.
+            const running = status.agent_turn ?? status.busy;
+            setActivity(running ? "running" : "idle", running ? status.command : null);
           }
         })
         .catch(survivable("read the session status"));
