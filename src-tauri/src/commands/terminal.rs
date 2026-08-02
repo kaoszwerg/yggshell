@@ -233,14 +233,41 @@ pub async fn agent_usage(cwd: String) -> Result<Option<crate::dto::UsageSummary>
 /// **`async` + `spawn_blocking`** — it starts `tmux list-sessions`, and a synchronous command runs on
 /// the main thread (rule:rust-conventions, `scripts/project/check-blocking-commands.mjs`).
 #[tauri::command]
-pub async fn tmux_sessions() -> Result<Vec<String>> {
-    let names = tauri::async_runtime::spawn_blocking(|| {
-        crate::terminal::tmux::session_names()
-            .into_iter()
-            .collect::<Vec<_>>()
-    })
-    .await
-    .map_err(|e| AppError::Other(format!("listing tmux sessions failed: {e}")))?;
-    tracing::debug!(count = names.len(), "tmux_sessions");
-    Ok(names)
+pub async fn tmux_sessions() -> Result<Vec<crate::dto::TmuxSession>> {
+    let sessions = tauri::async_runtime::spawn_blocking(crate::terminal::tmux::sessions)
+        .await
+        .map_err(|e| AppError::Other(format!("listing tmux sessions failed: {e}")))?;
+    tracing::debug!(count = sessions.len(), "tmux_sessions");
+    Ok(sessions)
+}
+
+/// End a tmux session and everything running in it.
+///
+/// **The one destructive operation in this app**, and the reason it exists: closing a tab detaches
+/// rather than kills — deliberately, so a build survives the window looking at it — and since a new
+/// tab no longer reuses an old session, they accumulate with nothing to clear them. The confirmation
+/// is the caller's job and is not optional (`ConfirmDialog`).
+///
+/// **`async` + `spawn_blocking`**: it starts `tmux kill-session` (rule:rust-conventions).
+#[tauri::command]
+pub async fn tmux_kill_session(name: String) -> Result<()> {
+    tracing::info!(%name, "tmux_kill_session");
+    tauri::async_runtime::spawn_blocking(move || crate::terminal::tmux::kill(&name))
+        .await
+        .map_err(|e| AppError::Other(format!("ending the tmux session failed: {e}")))?
+}
+
+/// Rename a tmux session.
+///
+/// The frontend must carry any tab that named the old session across in the same gesture: a tab left
+/// pointing at a name nobody has would create an empty session under it on the next start, which is
+/// exactly the defect the restore exists to prevent (ADR-PROJ-001 §5).
+///
+/// **`async` + `spawn_blocking`**: it starts `tmux rename-session` (rule:rust-conventions).
+#[tauri::command]
+pub async fn tmux_rename_session(from: String, to: String) -> Result<()> {
+    tracing::info!(%from, %to, "tmux_rename_session");
+    tauri::async_runtime::spawn_blocking(move || crate::terminal::tmux::rename(&from, &to))
+        .await
+        .map_err(|e| AppError::Other(format!("renaming the tmux session failed: {e}")))?
 }

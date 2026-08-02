@@ -10,6 +10,7 @@
 //! a multiplexer was unavailable would be a far worse trade than one that opens without it.
 
 use crate::dto::TmuxMode;
+use crate::error::{AppError, Result};
 use crate::terminal::pty::SessionKind;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -286,6 +287,115 @@ pub fn session_names() -> BTreeSet<String> {
     parse_session_names(&String::from_utf8_lossy(&output.stdout))
 }
 
+/// Every running session with what is in it — the list behind the picker and the tmux tool.
+///
+/// One call, one format string: tmux resolves a session's active window and pane for
+/// `pane_current_command`, so "what is it running" costs nothing extra.
+pub fn sessions() -> Vec<crate::dto::TmuxSession> {
+    let Some(tmux) = find_tmux() else {
+        return Vec::new();
+    };
+    let Ok(output) = Command::new(tmux)
+        .args([
+            "list-sessions",
+            "-F",
+            "#{session_name}\t#{session_windows}\t#{session_attached}\t#{pane_current_command}",
+        ])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_sessions(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pick the sessions out of the tab-separated listing.
+///
+/// A line that does not parse is **skipped, not defaulted**: a session reported with zero windows and
+/// no command would look like an empty one worth ending, which is the opposite of what an unreadable
+/// line means.
+fn parse_sessions(stdout: &str) -> Vec<crate::dto::TmuxSession> {
+    stdout
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let name = parts.next()?.trim().to_string();
+            if name.is_empty() {
+                return None;
+            }
+            Some(crate::dto::TmuxSession {
+                name,
+                windows: parts.next()?.trim().parse().ok()?,
+                attached: parts.next()?.trim() != "0",
+                command: parts.next().unwrap_or("").trim().to_string(),
+            })
+        })
+        .collect()
+}
+
+/// End a session and everything running in it.
+///
+/// **Destructive, and the only place in this app that is.** Closing a tab detaches; this kills. It
+/// exists because the two together were incomplete: since a new tab no longer reuses an old session,
+/// sessions accumulate with nothing to clear them (`first_free`).
+pub fn kill(name: &str) -> Result<()> {
+    let tmux = require(name)?;
+    run(&tmux, &["kill-session", "-t", name], "ending")
+}
+
+/// Rename a session.
+///
+/// The caller is responsible for carrying any tab that named the old one across — a rename that left
+/// a tab pointing at a name nobody has would make that tab create an empty session under it on the
+/// next start, which is the very defect the restore exists to prevent (ADR-PROJ-001 §5).
+pub fn rename(from: &str, to: &str) -> Result<()> {
+    let tmux = require(from)?;
+    if !is_valid_session_name(to) {
+        return Err(AppError::Other(format!(
+            "not a usable tmux session name: {to}"
+        )));
+    }
+    if has_session(&tmux, to) {
+        return Err(AppError::Other(format!(
+            "a session named {to} already exists"
+        )));
+    }
+    run(&tmux, &["rename-session", "-t", from, to], "renaming")
+}
+
+/// The tmux binary, refusing a name that does not address one session.
+fn require(name: &str) -> Result<String> {
+    if !is_valid_session_name(name) {
+        return Err(AppError::Other(format!(
+            "not a usable tmux session name: {name}"
+        )));
+    }
+    find_tmux()
+        .map(|p| p.to_string_lossy().into_owned())
+        .ok_or_else(|| AppError::Other("tmux is not on PATH".into()))
+}
+
+/// Run a tmux subcommand, turning a non-zero exit into an error that carries what tmux said.
+fn run(tmux: &str, args: &[&str], what: &str) -> Result<()> {
+    let output = Command::new(tmux)
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| AppError::Other(format!("{what} a tmux session failed: {e}")))?;
+    if output.status.success() {
+        tracing::info!(?args, "tmux");
+        return Ok(());
+    }
+    Err(AppError::Other(format!(
+        "{what} the tmux session failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    )))
+}
+
 /// Pick the names out of `tmux list-sessions -F '#{session_name}'`.
 fn parse_session_names(stdout: &str) -> BTreeSet<String> {
     stdout
@@ -554,6 +664,46 @@ mod tests {
             first_free("work", &["work-2".to_string()], &running(&["work"])),
             "work-3"
         );
+    }
+
+    #[test]
+    fn a_session_listing_carries_what_is_in_it() {
+        // Names alone are useless after a crash: `yggshell`, `yggshell-2`, `yggshell-3` say nothing
+        // about which one holds the build. What it is running and how long it has been there are what
+        // make "end it or attach to it" a decision rather than a guess.
+        let out = "yggshell\t2\t1\tzsh\nbuild\t1\t0\tcargo\n";
+        let sessions = parse_sessions(out);
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].name, "yggshell");
+        assert_eq!(sessions[0].windows, 2);
+        assert!(sessions[0].attached);
+        assert_eq!(sessions[0].command, "zsh");
+        assert!(!sessions[1].attached);
+        assert_eq!(sessions[1].command, "cargo");
+    }
+
+    #[test]
+    fn an_unreadable_line_is_skipped_rather_than_defaulted() {
+        // A session reported with zero windows and no command reads as an empty one worth ending —
+        // the opposite of what "this line did not parse" means. Dropping it is the honest failure.
+        let sessions = parse_sessions("good\t1\t0\tzsh\nbroken\tnope\t0\tzsh\n\n");
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "good");
+
+        // A command tmux left empty is not a parse failure — it is a session with nothing named.
+        let bare = parse_sessions("x\t1\t0\t");
+        assert_eq!(bare.len(), 1);
+        assert_eq!(bare[0].command, "");
+    }
+
+    #[test]
+    fn a_name_that_addresses_something_else_is_never_killed_or_renamed() {
+        // `kill-session -t work:1` would destroy a WINDOW inside another session. The check runs
+        // before tmux is even located, so a malformed name can never reach the command line.
+        assert!(kill("work:1").is_err());
+        assert!(kill("").is_err());
+        assert!(rename("work.0", "safe").is_err());
     }
 
     #[test]
@@ -1007,6 +1157,16 @@ mod tests {
         // line away — `kill-session` reads like ordinary cleanup — and the damage is silent and
         // total: the user's work is gone with no error anywhere. So the whole backend is scanned.
         //
+        // NARROWED, not weakened: `tmux::kill` exists now, because a user must be able to end a
+        // session they can see in the tool — sessions accumulate and nothing else clears them. That
+        // is a DIFFERENT act from the ones this guard is about. What must never happen is a session
+        // dying because a tab closed, the app quit, or something crashed; what may happen is the user
+        // asking, in front of a confirmation, for this one to end.
+        //
+        // So exactly one file may contain the words, and it is this one — where `kill` sits next to
+        // `detach_client` and the comment explaining the difference. Every other file in the backend
+        // is still refused, which is where the accidental cleanup would have been written.
+        //
         // Comments are skipped for the same reason as in `environment.rs`: the sentence explaining
         // why not to do this contains the words.
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -1031,7 +1191,10 @@ mod tests {
                         .lines()
                         .filter(|line| !line.trim_start().starts_with("//"))
                         .any(|line| banned.iter().any(|b| line.contains(b)));
-                    if hit {
+                    // The one deliberate exception, by filename rather than by content: a call
+                    // anywhere else is the accident this guard exists for.
+                    let deliberate = path.file_name().is_some_and(|n| n == "tmux.rs");
+                    if hit && !deliberate {
                         offenders.push(path.display().to_string());
                     }
                 }
@@ -1042,8 +1205,60 @@ mod tests {
         assert!(
             offenders.is_empty(),
             "a tmux session must be DETACHED from, never destroyed — closing a tab, the app, or \
-             crashing must all leave it resumable. These would destroy one: {offenders:?}"
+             crashing must all leave it resumable. Ending one is the USER's act, taken in front of a \
+             confirmation, and it lives in terminal/tmux.rs beside `detach_client`. These would \
+             destroy a session from somewhere else: {offenders:?}"
         );
+    }
+
+    #[test]
+    fn ending_a_session_stays_a_deliberate_act_the_user_takes() {
+        // The other half of the guard above, and the reason it could be narrowed at all: `kill` is
+        // reachable ONLY through a command the user triggers. If a future change calls it from the
+        // close path, the exit path or a crash handler, the words appear in that file and the scan
+        // above fails — this test pins the intent so the exception cannot quietly widen.
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let callers: Vec<String> = walk_files(&src)
+            .into_iter()
+            .filter(|(_, text)| {
+                text.lines()
+                    .filter(|line| !line.trim_start().starts_with("//"))
+                    // Split like the scan above, or this very line matches itself.
+                    .any(|line| line.contains(concat!("tmux::", "kill(")))
+            })
+            .map(|(path, _)| path)
+            .collect();
+
+        assert_eq!(
+            callers,
+            vec!["commands/terminal.rs".to_string()],
+            "`tmux::kill` may be called only from the command the user triggers — not from closing \
+             a tab, quitting, or a crash path"
+        );
+    }
+
+    /// Every `.rs` file under `src`, as (path relative to src, contents).
+    fn walk_files(dir: &std::path::Path) -> Vec<(String, String)> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut out = Vec::new();
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return out;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                out.extend(walk_files(&path));
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let rel = path
+                    .strip_prefix(&root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string();
+                out.push((rel, std::fs::read_to_string(&path).unwrap_or_default()));
+            }
+        }
+        out.sort();
+        out
     }
 
     #[test]

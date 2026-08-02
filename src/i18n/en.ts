@@ -40,6 +40,27 @@ export const en = {
 
   "nav.primary": "Primary",
   "nav.terminal": "Terminal",
+  "nav.tmux": "tmux",
+  "tmux.loading": "Reading sessions…",
+  "tmux.none": "No tmux session is running.",
+  "tmux.idle": "idle",
+  "tmux.windows": "{count} windows",
+  "tmux.rename.cancel": "Cancel",
+  "tmux.rename.save": "Save",
+  "tmux.rename.label": "Session name",
+  "tmux.rename.action": "Rename {session}",
+  "tmux.end.action": "End {session}",
+  "tmux.end.title": "End session",
+  "tmux.end.question": "End the tmux session {session}?",
+  "tmux.end.detail":
+    "Everything running in it stops — {windows} windows, currently {command}. Closing a tab only detaches; this does not.",
+  "tmux.end.confirm": "End it",
+  "tabs.close.title": "Close terminal",
+  "tabs.close.question": "Close this terminal and end its tmux session?",
+  "tabs.close.detail":
+    "Session {session} keeps running unless you end it. Anything in it — a build, an agent — stops if you do.",
+  "tabs.close.keep": "Close, keep session",
+  "tabs.close.end": "Close and end it",
   "nav.git": "Git",
   "attention.title": "Attention",
   "attention.explain":

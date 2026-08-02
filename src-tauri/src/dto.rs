@@ -162,6 +162,28 @@ pub struct GitFileStat {
     pub binary: bool,
 }
 
+/// One tmux session the server is running.
+///
+/// **What the picker and the tool both read**, and deliberately more than a name: after a crash the
+/// names are `yggshell`, `yggshell-2`, `yggshell-3`, which tell you nothing about which one holds the
+/// build. What it is running and how many windows it has are what make "end it or attach to it" an
+/// informed choice rather than a guess.
+///
+/// Creation time is deliberately NOT here. It was, and nothing rendered it — a field carried across
+/// the boundary for no reader is weight, and `i64` crosses as a `bigint` that the whole frontend
+/// would then have to handle for a number nobody shows (rule:code-quality).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct TmuxSession {
+    pub name: String,
+    /// How many windows it holds.
+    pub windows: u32,
+    /// Whether a client — this app or any other terminal — is looking at it right now.
+    pub attached: bool,
+    /// What its active pane is running (`zsh`, `cargo`, `node`) — tmux's own `pane_current_command`.
+    pub command: String,
+}
+
 /// Whether the agent hooks are in place, and what they have reported.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

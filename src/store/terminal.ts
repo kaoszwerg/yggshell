@@ -156,6 +156,35 @@ export interface TerminalState {
   detachToShell: (key: string) => void;
   /** Show something in this tab's detail panel; `null` closes it. */
   setPaneDetail: (key: string, detail: GitDetail | null) => void;
+  /**
+   * Carry every tab that named `from` across to `to`.
+   *
+   * **Called in the same gesture as the rename, and it is not optional.** A tab remembers its session
+   * by name; left pointing at one nobody has, it would create an empty session under the dead name on
+   * the next start while the renamed one sat orphaned — precisely the defect the restore exists to
+   * prevent (ADR-PROJ-001 §5).
+   */
+  renamePaneSession: (from: string, to: string) => void;
+  /**
+   * The tab whose close is waiting on an answer, or `null`.
+   *
+   * **Only a close the USER asked for ever lands here.** A session that ended on its own goes
+   * straight through `closePane` — asking "end its tmux session?" about a session that is already
+   * gone would be nonsense. And quitting the app never touches this at all: it does not close tabs,
+   * it detaches every client and ends (`RunEvent::Exit`), so a quit is never N questions.
+   */
+  closing: string | null;
+  /**
+   * Close a tab the user asked to close.
+   *
+   * Closes it outright when there is nothing to decide. A tab holding a tmux session has something to
+   * decide: closing DETACHES, so the session keeps running — which is right for a build and wrong for
+   * the tenth leftover nobody will ever return to. Since a new tab no longer reuses an old session,
+   * that decision is the only thing standing between the user and an unbounded pile of them.
+   */
+  requestClosePane: (key: string) => void;
+  /** Answer the question with "leave it alone" — the tab stays open. */
+  cancelClose: () => void;
   /** Record which tmux session a tab ended up attached to, so a restart can return to it. */
   setPaneTmuxSession: (key: string, session: string | null) => void;
   /** Record (or clear) the backend session this tab is talking to. */
@@ -254,6 +283,8 @@ export const useTerminalStore = create<TerminalState>()(
         set((s) => ({
           panes: s.panes.filter((p) => p.key !== key),
           activeKey: s.activeKey === key ? neighbourOf(s.panes, key) : s.activeKey,
+          // Whatever question was open about this tab is answered by it being gone.
+          closing: s.closing === key ? null : s.closing,
         })),
 
       setActive: (activeKey) =>
@@ -313,6 +344,24 @@ export const useTerminalStore = create<TerminalState>()(
               activitySince: started,
             };
           }),
+        })),
+
+      closing: null,
+
+      requestClosePane: (key) => {
+        const pane = get().panes.find((p) => p.key === key);
+        if (pane?.tmuxSession == null) {
+          get().closePane(key);
+          return;
+        }
+        set({ closing: key });
+      },
+
+      cancelClose: () => set({ closing: null }),
+
+      renamePaneSession: (from, to) =>
+        set((s) => ({
+          panes: s.panes.map((p) => (p.tmuxSession === from ? { ...p, tmuxSession: to } : p)),
         })),
 
       setPaneTmuxSession: (key, tmuxSession) =>

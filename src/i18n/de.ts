@@ -37,6 +37,27 @@ export const de: Translations = {
 
   "nav.primary": "Hauptnavigation",
   "nav.terminal": "Terminal",
+  "nav.tmux": "tmux",
+  "tmux.loading": "Sessions werden gelesen…",
+  "tmux.none": "Keine tmux-Session läuft.",
+  "tmux.idle": "untätig",
+  "tmux.windows": "{count} Fenster",
+  "tmux.rename.cancel": "Abbrechen",
+  "tmux.rename.save": "Speichern",
+  "tmux.rename.label": "Session-Name",
+  "tmux.rename.action": "{session} umbenennen",
+  "tmux.end.action": "{session} beenden",
+  "tmux.end.title": "Session beenden",
+  "tmux.end.question": "Die tmux-Session {session} beenden?",
+  "tmux.end.detail":
+    "Alles darin wird gestoppt — {windows} Fenster, aktuell {command}. Einen Tab zu schließen löst nur; dies nicht.",
+  "tmux.end.confirm": "Beenden",
+  "tabs.close.title": "Terminal schließen",
+  "tabs.close.question": "Dieses Terminal schließen und seine tmux-Session beenden?",
+  "tabs.close.detail":
+    "Session {session} läuft weiter, wenn du sie nicht beendest. Was darin läuft — ein Build, ein Agent — wird gestoppt, wenn du es tust.",
+  "tabs.close.keep": "Schließen, Session behalten",
+  "tabs.close.end": "Schließen und beenden",
   "nav.git": "Git",
   "attention.title": "Aufmerksamkeit",
   "attention.explain":

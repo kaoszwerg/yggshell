@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A tmux tool, because the fix that made "new" mean new made sessions pile up.** Closing a tab
+  *detaches* — deliberately, so a build survives the window looking at it — and since 0.37.0 a new tab
+  no longer reuses an old session. Nothing cleared them and nothing even showed them. The tool lists
+  every running session with **what it is running** and how many windows it has, because after a crash
+  the names are `yggshell`, `yggshell-2`, `yggshell-3` and none of them says which one holds the build.
+
+  Click one to attach — or to jump to the tab already showing it, since two clients on one session are
+  one view, not two. Rename one, and **every tab that named it is carried across in the same gesture**:
+  a tab left pointing at a dead name would create an empty session under it on the next start while
+  the renamed one sat orphaned, which is exactly the defect the restore exists to prevent. End one
+  behind a confirmation that says what stops.
+
+  It polls only while it is on screen — the opposite trade from the attention signal, which polls in
+  the background precisely because its job is to reach someone looking elsewhere.
+
+- **Closing a tab that holds a tmux session now asks.** Three outcomes, and the dialog has all three:
+  close and keep the session (what closing has always meant, and still the focused default), close and
+  end it, or — Escape and the backdrop — never mind, leave the tab alone.
+
+  **Quitting the app is untouched and always will be.** It does not close tabs; it detaches every
+  client and ends, so ⌘Q with four tabs open is not four questions. Only the three places a *user*
+  closes a tab reach the question, and a session that ended on its own never does — asking "end its
+  session?" about one that is already gone is nonsense.
+
+- **`ConfirmDialog`**, a HUD primitive, because `window.confirm` is stock chrome and lint-gated out
+  (ADR-APP-026). It opens with **cancel** focused: the key most likely to be in flight when a dialog
+  appears is the Enter that just triggered the action, and focusing the destructive button would turn
+  "are you sure?" into a formality that answers itself.
+
+### Changed
+
+- **The guard against destroying a tmux session was narrowed, not weakened.** A test scans the whole
+  backend for `kill-session` and has always failed the build on it — closing a tab, quitting or
+  crashing must all leave a session resumable. Ending one the user can see, in front of a
+  confirmation, is a different act. Exactly one file may now contain those words, and a second test
+  pins that `tmux::kill` is reachable only from the command the user triggers: called from the close
+  path, the exit path or a crash handler, the words appear in that file and the first test fails again.
+
 ### Fixed
 
 - **An attention mark no longer outlives the thing it reported.** Reported head-on: *"aber es steht

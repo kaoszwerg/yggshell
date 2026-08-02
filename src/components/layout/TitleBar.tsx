@@ -29,14 +29,14 @@ export function TitleBar() {
   const setActive = useTerminalStore((s) => s.setActive);
   const openPane = useTerminalStore((s) => s.openPane);
   const profiles = useTerminalProfiles();
-  const closePane = useTerminalStore((s) => s.closePane);
+  const requestClosePane = useTerminalStore((s) => s.requestClosePane);
   const sessions = useTmuxSessions();
   // A session another tab is already showing is left out rather than disabled: attaching to it would
   // give a second view of the same window, not a second terminal, and the backend refuses it anyway
   // (`tmux::launch`). An entry that cannot do what it says is worse than no entry.
-  const attachable = (sessions.data ?? []).filter(
-    (name) => !panes.some((p) => p.tmuxSession === name),
-  );
+  const attachable = (sessions.data ?? [])
+    .map((session) => session.name)
+    .filter((name) => !panes.some((p) => p.tmuxSession === name));
   const setView = useUiStore((s) => s.setView);
   const t = useT();
 
@@ -135,7 +135,7 @@ export function TitleBar() {
                 }))}
                 activeId={activeKey ?? ""}
                 onSelect={show}
-                onClose={closePane}
+                onClose={requestClosePane}
                 onMiddleClick={pasteIntoTab}
                 onAdd={() => show(openPane())}
                 addLabel={t("titlebar.newTerminal")}

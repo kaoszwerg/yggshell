@@ -77,7 +77,7 @@ export function useShortcuts(): void {
           setView("terminal");
           return;
         case "closeTab":
-          if (activeKey !== null) store.closePane(activeKey);
+          if (activeKey !== null) store.requestClosePane(activeKey);
           return;
         // Wrapping, because a tab strip is a ring: pressing "next" on the last tab and getting
         // nothing is a key that silently does nothing.

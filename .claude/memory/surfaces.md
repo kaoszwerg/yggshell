@@ -22,7 +22,7 @@ naming quibble: the answer decides where the code goes, what it may cost, and ho
 | Lives in       | `src/views/`                      | `src/components/tools/`                       | `src/components/layout/statusItems.tsx`             |
 | Adding one     | file + rail entry + `App.tsx` case | id + entry in `TOOLS` + its content           | id + renderer + two messages per language           |
 | Placement      | fixed, in the rail                | fixed, in the rail                            | **the user drags it**; spacers may repeat           |
-| Today          | Terminal, Logs, Settings          | Git                                           | version, repository, command, cwd, tmux, load       |
+| Today          | Terminal, Logs, Settings          | Git, Files, Agent, Activity, Docker, tmux     | version, repository, command, cwd, tmux, load, bells |
 
 ## The distinction is a decision, not a label
 
@@ -36,6 +36,12 @@ Getting it wrong is not cosmetic. A tool put in the footer cannot be read; a gla
 column costs the terminal half its width to show one number. Ask: **does the answer need scrolling,
 selection or a layout of its own?** Then it is a tool. **Does it answer a question in a few
 characters?** Then it is a status item.
+
+**tmux is the current example of a subject that earns two**, and of how they differ: the status item
+answers *which session is this tab in* (per tab, from `attached::session_on_tty`); the tool answers
+*which sessions exist on this machine* and lets you act on them (`tmux_sessions`). Different
+questions, so different readers — what may never happen is the item growing a cheaper copy of the
+tool's list.
 
 ## Where both are right, they are two surfaces over ONE source
 

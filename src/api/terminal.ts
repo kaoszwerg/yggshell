@@ -1,5 +1,6 @@
 // Typed wrappers around the terminal command surface (ADR-PROJ-001). Like `api` in commands.ts, this
 // is the only place these payload shapes exist (rule:frontend-architecture).
+import type { TmuxSession } from "../bindings/TmuxSession";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
@@ -70,7 +71,19 @@ export const terminalApi = {
    *
    * An empty list is the ordinary answer — no tmux, no server, nothing started — not a failure.
    */
-  sessions: () => invoke<string[]>("tmux_sessions"),
+  sessions: () => invoke<TmuxSession[]>("tmux_sessions"),
+
+  /** End a session and everything running in it. Destructive — the caller confirms first. */
+  killSession: (name: string) => invoke<void>("tmux_kill_session", { name }),
+
+  /**
+   * Rename a session.
+   *
+   * The caller must carry any tab that named the old one across in the same gesture
+   * (`renamePaneSession`), or that tab creates an empty session under the dead name on the next
+   * start — the defect the restore exists to prevent.
+   */
+  renameSession: (from: string, to: string) => invoke<void>("tmux_rename_session", { from, to }),
 
   /** Send input — keystrokes, a paste, a control sequence. */
   write: (id: SessionId, data: string) => invoke<void>("terminal_write", { id, data }),

@@ -7,6 +7,7 @@ import type { BuildInfo } from "../../bindings/BuildInfo";
 import { clearPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
 import { clearPasteTargets, registerPasteTarget } from "../../lib/terminalHandles";
 import { useTerminalStore } from "../../store/terminal";
+import type { TmuxSession } from "../../bindings/TmuxSession";
 import { pane } from "../../test/panes";
 import { useUiStore } from "../../store/ui";
 
@@ -30,8 +31,13 @@ const BUILD = {
 };
 
 /** Sessions the fake tmux is running. A test names what it needs before rendering. */
-let running: string[] = [];
+let running: TmuxSession[] = [];
 const refetchSessions = vi.fn(() => Promise.resolve({ data: running }));
+
+/** One running session, with the fields a test does not care about filled in once. */
+function session(name: string): TmuxSession {
+  return { name, windows: 1, attached: false, command: "zsh" };
+}
 
 vi.mock("../../hooks/useSettings", () => ({
   useTerminalProfiles: () => ({
@@ -280,7 +286,7 @@ describe("TitleBar", () => {
       // The counterpart to a new tab being genuinely new. Since the backend now hands a new tab a
       // session nobody is using, reaching one that outlived its tab has to be something the user can
       // ASK for — and this is also the only way back into tmux after a detach.
-      running = ["yggshell", "deploy"];
+      running = [session("yggshell"), session("deploy")];
       useTerminalStore.setState({
         panes: [pane({ key: "a", title: "Terminal 1", cwd: null })],
         activeKey: "a",
@@ -299,7 +305,7 @@ describe("TitleBar", () => {
     it("leaves out a session a tab is already showing", async () => {
       // Two clients on one session share ONE view of it — same window, same scrollback. The backend
       // refuses it, so an entry offering it would be a row that cannot do what it says.
-      running = ["yggshell", "deploy"];
+      running = [session("yggshell"), session("deploy")];
       useTerminalStore.setState({
         panes: [pane({ key: "a", title: "Terminal 1", cwd: null, tmuxSession: "deploy" })],
         activeKey: "a",
@@ -315,7 +321,7 @@ describe("TitleBar", () => {
     it("asks tmux again each time the menu opens", async () => {
       // `items` is built during render, so a list left to the last render is a list of sessions that
       // were running whenever something else happened to change.
-      running = ["yggshell"];
+      running = [session("yggshell")];
       useTerminalStore.setState({
         panes: [pane({ key: "a", title: "Terminal 1", cwd: null })],
         activeKey: "a",

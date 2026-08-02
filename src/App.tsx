@@ -5,6 +5,7 @@ import { Sidebar } from "./components/sidebar/Sidebar";
 import { ToolPanel } from "./components/tools/ToolPanel";
 import { AboutDialog } from "./components/AboutDialog";
 import { CrashNotice } from "./components/CrashNotice";
+import { CloseTabConfirm } from "./components/CloseTabConfirm";
 import { TerminalView } from "./views/TerminalView";
 import { LogsView } from "./views/LogsView";
 import { SettingsView } from "./views/SettingsView";
@@ -73,6 +74,9 @@ export default function App() {
         <StatusBar canScrollTop={canTop} onScrollTop={scrollToTop} />
       </div>
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
+      {/* Asks before a close leaves a tmux session behind. At the root, because the three places a
+          user can close a tab — the ×, ⌘W, the context menu — must all reach the same question. */}
+      <CloseTabConfirm />
     </div>
   );
 }

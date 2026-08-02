@@ -293,7 +293,7 @@ function Pane({
   const setCwd = useTerminalStore((s) => s.setCwd);
   const setPaneTmuxSession = useTerminalStore((s) => s.setPaneTmuxSession);
   const ringBell = useTerminalStore((s) => s.ringBell);
-  const closePane = useTerminalStore((s) => s.closePane);
+  const requestClosePane = useTerminalStore((s) => s.requestClosePane);
 
   // The session is opened from the FIRST measurement, never before it: the shell must be told the
   // real geometry at spawn time, or its first prompt is drawn for a window that does not exist.
@@ -590,7 +590,7 @@ function Pane({
             id: "close",
             label: t("terminal.closeTab"),
             accent: "danger",
-            onSelect: () => closePane(paneKey),
+            onSelect: () => requestClosePane(paneKey),
           },
         ]}
       >

@@ -106,6 +106,8 @@ pub fn run() {
             commands::terminal::agent_session,
             commands::terminal::agent_usage,
             commands::terminal::tmux_sessions,
+            commands::terminal::tmux_kill_session,
+            commands::terminal::tmux_rename_session,
             commands::git::git_snapshot,
             commands::git::git_fetch,
             commands::git::git_file_diff,
