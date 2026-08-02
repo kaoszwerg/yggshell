@@ -582,6 +582,27 @@ change.
 
 ## Traps this session paid for — do not re-learn them
 
+- **Do not edit structured files with scripted string replacement. Use the Edit tool.** Seven files
+  were damaged this way in one session (2026-08-02), and every one of them the same way: an anchor
+  that was ambiguous or matched only part of a construct, `replace(..., 1)` taking the FIRST match,
+  and the write reporting success either way.
+
+  What it actually cost: grouped CSS selectors split across two lines lost their first line
+  (`.hud-btn:hover::before` — black icons on black on every tab, and the orphan then silently merged
+  into the next rule); React hooks inserted into the neighbouring component; a `describe` block landing
+  inside a test function; a doc comment separated from its function; two test fixtures corrupted by a
+  regex that produced `,,`.
+
+  **The Edit tool refuses an ambiguous or absent match instead of writing anyway.** That single
+  property is the difference. A script is only justified for a genuinely repetitive mechanical change,
+  and then the result must be **verified structurally** — parse it, or compare the before/after set of
+  whatever it transformed — not merely observed to have written something. The upstream did exactly
+  that on the same migration ("selector set verified identical by hash") and had no damage; this fork
+  skipped it and shipped two truncated rules to a user.
+
+  The tell that it went wrong is always the same and always late: something valid, that compiles and
+  lints, and is missing a piece nobody looks at.
+
 - **Animating `background-position` is a PAINT, exactly like an animated custom property in a
   gradient.** Both read as "moving a picture" and both re-rasterise the element every frame. The window
   frame was cured of one (`--frame-angle`, +4.4pp of a core) and `.hud-activity-running` still had the
