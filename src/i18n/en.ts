@@ -202,6 +202,7 @@ export const en = {
   "notes.sync.localOnly": "Local only — nothing leaves this device",
   "notes.sync.noGit": "git was not found — notes stay local until it is",
   "settings.notes.title": "Notes",
+  "settings.notes.description": "Tasks and notes per project, kept in a git repository you name.",
   "settings.notes.remote": "Repository",
   "settings.notes.remoteHint":
     "Everything in your notes is pushed verbatim. This repository should be private — the app cannot check that, because it holds no token.",
@@ -212,6 +213,12 @@ export const en = {
   "settings.notes.path": "Stored in",
   "settings.notes.orphans": "Unreferenced images: {count} · {size}",
   "settings.notes.clean": "Delete them",
+  "settings.notes.clear": "Clear local notes",
+  "settings.notes.clear.title": "Clear local notes",
+  "settings.notes.clear.question": "Delete the local notes directory?",
+  "settings.notes.clear.detail":
+    "Everything under {path} goes, including notes that were never pushed. What is already in the repository stays there and comes back on the next connect.",
+  "settings.notes.clear.confirm": "Delete it",
   "clipboard.path": "Path copied",
   "clipboard.port": "Port copied",
   "clipboard.pid": "PID copied",

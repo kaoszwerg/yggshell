@@ -53,6 +53,50 @@ pub fn notes_status(state: State<'_, AppState>) -> NotesStatus {
     status_of(&state)
 }
 
+/// Save what is configured, without connecting to anything.
+///
+/// **The settings panel writes here on every edit**, so what the fields show is what is stored —
+/// they were local state saved only on a *successful* connect, which meant a failed attempt left
+/// them looking empty while the user had just typed into them. A field that only remembers when
+/// everything went well is a field that lies the one time it matters.
+#[tauri::command]
+pub fn notes_configure(
+    state: State<'_, AppState>,
+    remote: String,
+    branch: String,
+    sync: bool,
+) -> Result<NotesStatus> {
+    tracing::info!(%remote, %branch, sync, "notes_configure");
+    state.settings.update(crate::settings::SettingsPatch {
+        notes_remote: Some(remote),
+        notes_branch: Some(branch),
+        notes_sync: Some(sync),
+        ..Default::default()
+    })?;
+    Ok(status_of(&state))
+}
+
+/// Delete the local clone, notes and all.
+///
+/// **Asked for explicitly, and it is the escape hatch adoption needs.** Connecting adopts whatever is
+/// already in the directory rather than clobbering it, which is right — but it means a directory in a
+/// state the user does not want has no way out from inside the app. This is that way out, and the UI
+/// puts a confirmation in front of it naming what goes.
+#[tauri::command]
+pub fn notes_reset(state: State<'_, AppState>) -> Result<NotesStatus> {
+    let clone = notes::clone_dir(&state.data_dir);
+    tracing::info!(path = %clone.display(), "notes_reset");
+    match std::fs::remove_dir_all(&clone) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(AppError::io(clone.display().to_string(), e)),
+    }
+    if let Ok(mut last) = LAST.lock() {
+        *last = (None, None);
+    }
+    Ok(status_of(&state))
+}
+
 /// Point the notes at a repository that **already exists**.
 ///
 /// The app never creates one: a creation flow would have to choose a visibility, and choosing wrong
@@ -65,13 +109,15 @@ pub fn notes_connect(
     branch: String,
 ) -> Result<NotesStatus> {
     tracing::info!(%remote, %branch, "notes_connect");
-    let clone = notes::clone_dir(&state.data_dir);
-    notes::git::connect(&clone, &remote, &branch)?;
+    // Saved BEFORE the attempt, so a remote that turns out to be unreachable is still what the field
+    // shows afterwards — the user typed it, and it is theirs to correct rather than to retype.
     state.settings.update(crate::settings::SettingsPatch {
-        notes_remote: Some(remote),
-        notes_branch: Some(branch),
+        notes_remote: Some(remote.clone()),
+        notes_branch: Some(branch.clone()),
         ..Default::default()
     })?;
+    let clone = notes::clone_dir(&state.data_dir);
+    notes::git::connect(&clone, &remote, &branch)?;
     if let Ok(mut last) = LAST.lock() {
         *last = (Some(now()), None);
     }

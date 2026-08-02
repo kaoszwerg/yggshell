@@ -65,6 +65,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::notes::notes_status,
+            commands::notes::notes_configure,
+            commands::notes::notes_reset,
             commands::notes::notes_connect,
             commands::notes::notes_disconnect,
             commands::notes::notes_sync,

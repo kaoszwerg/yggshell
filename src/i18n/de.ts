@@ -194,6 +194,8 @@ export const de: Translations = {
   "notes.sync.localOnly": "Nur lokal — nichts verlässt dieses Gerät",
   "notes.sync.noGit": "git nicht gefunden — die Notizen bleiben lokal",
   "settings.notes.title": "Notizen",
+  "settings.notes.description":
+    "Aufgaben und Notizen je Projekt, in einem Git-Repository deiner Wahl.",
   "settings.notes.remote": "Repository",
   "settings.notes.remoteHint":
     "Alles in deinen Notizen wird wortwörtlich gepusht. Dieses Repository sollte privat sein — die App kann das nicht prüfen, sie hält kein Token.",
@@ -204,6 +206,12 @@ export const de: Translations = {
   "settings.notes.path": "Abgelegt in",
   "settings.notes.orphans": "Nicht referenzierte Bilder: {count} · {size}",
   "settings.notes.clean": "Löschen",
+  "settings.notes.clear": "Lokale Notizen löschen",
+  "settings.notes.clear.title": "Lokale Notizen löschen",
+  "settings.notes.clear.question": "Das lokale Notizverzeichnis löschen?",
+  "settings.notes.clear.detail":
+    "Alles unter {path} verschwindet, auch Notizen, die nie gepusht wurden. Was schon im Repository liegt, bleibt dort und kommt beim nächsten Verbinden zurück.",
+  "settings.notes.clear.confirm": "Löschen",
   "clipboard.path": "Pfad kopiert",
   "clipboard.port": "Port kopiert",
   "clipboard.pid": "PID kopiert",

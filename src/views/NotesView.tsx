@@ -156,6 +156,10 @@ export function NotesView() {
           ) : (
             <Markdown
               source={text}
+              // rule:content-size — a note reads like a terminal, and the size the user chose for
+              // the terminal is the size they need for this. On the scroll region, once, rather than
+              // on every block: a size repeated per element is one that gets forgotten on the sixth.
+              style={{ fontSize: `${fontSize}px` }}
               className="max-w-3xl"
               image={(src, alt) => <NoteImage project={project} src={src} alt={alt} />}
             />

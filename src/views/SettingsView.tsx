@@ -364,7 +364,7 @@ function ToolsSection() {
       <HudPanel
         accent="cyan"
         label={t("settings.notes.title")}
-        description={t("settings.notes.remoteHint")}
+        description={t("settings.notes.description")}
       >
         <NotesSettings />
       </HudPanel>

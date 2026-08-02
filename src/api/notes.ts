@@ -23,6 +23,25 @@ export const notesApi = {
   connect: (remote: string, branch: string) =>
     invoke<NotesStatus>("notes_connect", { remote, branch }),
 
+  /**
+   * Save what is configured, without connecting.
+   *
+   * The settings fields call this on every edit, so what they show is what is stored. They used to
+   * be local state written only on a successful connect — which left them looking empty after a
+   * failed attempt, with the text the user had just typed gone.
+   */
+  configure: (remote: string, branch: string, sync: boolean) =>
+    invoke<NotesStatus>("notes_configure", { remote, branch, sync }),
+
+  /**
+   * Delete the local clone, notes and all.
+   *
+   * The escape hatch adoption needs: connecting adopts what is already in the directory rather than
+   * clobbering it, so a directory in a state you do not want otherwise has no way out from inside
+   * the app.
+   */
+  reset: () => invoke<NotesStatus>("notes_reset"),
+
   /** Stop syncing and keep every local note. */
   disconnect: () => invoke<NotesStatus>("notes_disconnect"),
 

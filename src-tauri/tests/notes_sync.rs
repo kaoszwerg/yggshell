@@ -100,3 +100,46 @@ fn a_remote_that_is_a_command_never_reaches_git() {
     assert!(!Path::new(&clone).join(".git").exists(), "it cloned anyway");
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[test]
+#[ignore = "needs the network and the user's git credentials"]
+fn notes_written_before_a_remote_was_named_are_adopted_rather_than_clobbered() {
+    // **The first path anyone actually takes**, and the one that failed on the maintainer's machine:
+    // the tool works local-only until a URL is typed, so by the time they type one the directory is
+    // full — and `git clone` refuses a non-empty destination with "already exists and is not an empty
+    // directory". Reported from a running build, with a screenshot.
+    //
+    // What must hold: the local note is still there afterwards, byte for byte, and it reaches the
+    // remote. Nothing may be checked out over a working tree that holds the only copy of something.
+    let data = temp("adopt");
+    let root = notes::root(&data);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_secs();
+    let marker = format!("written before any remote {stamp}");
+    notes::capture(&root, "github.com/kaoszwerg/yggshell", &marker).expect("capture");
+    assert!(
+        !notes::git::is_clone(&notes::clone_dir(&data)),
+        "the fixture is not the situation being tested"
+    );
+
+    notes::git::connect(&notes::clone_dir(&data), REMOTE, "main").expect("adopt");
+
+    // Still here, untouched — this is the assertion the whole design turns on.
+    let local = notes::read(&root, "github.com/kaoszwerg/yggshell", "inbox").expect("read back");
+    assert!(
+        local.contains(&marker),
+        "the local note did not survive: {local}"
+    );
+
+    notes::git::push(&notes::clone_dir(&data), &format!("notes: adopt {stamp}")).expect("push");
+    let there = read_from_remote("notes/github.com/kaoszwerg/yggshell/inbox.md")
+        .expect("the note is not in the repository");
+    assert!(
+        there.contains(&marker),
+        "the adopted note never reached the remote"
+    );
+
+    let _ = std::fs::remove_dir_all(&data);
+}

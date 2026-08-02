@@ -156,6 +156,21 @@ pub fn connect(clone_dir: &Path, remote: &str, branch: &str) -> Result<()> {
         return Ok(());
     }
 
+    // **A directory that already holds notes is ADOPTED, never cloned over.**
+    //
+    // Writing notes before naming a remote is the normal first path, not an edge case: the tool works
+    // local-only until somebody types a URL, so by the time they do, the directory is full. `git
+    // clone` refuses a non-empty destination — *"already exists and is not an empty directory"* — and
+    // that error is what the maintainer saw the first time they connected.
+    //
+    // Adopting rather than cloning is also what keeps the promise that changing the remote never
+    // discards notes: nothing is checked out over the working tree, so no local file is touched. The
+    // local state becomes a commit, the remote's history is fetched, and ours is rebased on top —
+    // where a conflict leaves both sides in the file, exactly as `pull` does.
+    if clone_dir.exists() && std::fs::read_dir(clone_dir).is_ok_and(|mut d| d.next().is_some()) {
+        return adopt(clone_dir, remote, branch);
+    }
+
     let target = clone_dir.to_string_lossy().to_string();
     // `--` before the URL: the second half of the argument-injection defence in `valid_remote`.
     run(parent, &["clone", "--", remote, &target])?;
@@ -165,6 +180,77 @@ pub fn connect(clone_dir: &Path, remote: &str, branch: &str) -> Result<()> {
         let _ = run(clone_dir, &["checkout", branch]);
     }
     tracing::info!(remote, branch, "notes cloned");
+    Ok(())
+}
+
+/// Turn a directory of existing local notes into a clone of `remote`, without touching a file.
+///
+/// The order matters and each step is there for a reason:
+/// 1. `init` + `remote add` — the directory becomes a repository where it stands.
+/// 2. commit what is there, so the local notes are *history* rather than uncommitted work that a
+///    later operation could stash or discard.
+/// 3. `fetch` — the remote's side, if it has one.
+/// 4. `rebase` ours on top. Nothing is checked out over the working tree at any point, so a note
+///    written here cannot be replaced by one written elsewhere without the user seeing both.
+fn adopt(clone_dir: &Path, remote: &str, branch: &str) -> Result<()> {
+    if !clone_dir.join(".git").is_dir() {
+        run(clone_dir, &["init"])?;
+    }
+    union_merge(clone_dir)?;
+    let _ = run(clone_dir, &["remote", "remove", "origin"]);
+    run(clone_dir, &["remote", "add", "origin", "--", remote])?;
+
+    run(clone_dir, &["add", "--all", "--", "."])?;
+    let staged = run(clone_dir, &["status", "--porcelain"])?;
+    if !staged.trim().is_empty() {
+        run(
+            clone_dir,
+            &["commit", "--message", "notes: adopt local notes"],
+        )?;
+    }
+
+    let target = if branch.trim().is_empty() {
+        current_branch(clone_dir)
+    } else {
+        branch.trim().to_string()
+    };
+    let heads = run(clone_dir, &["ls-remote", "--heads", "origin", &target])?;
+    if heads.trim().is_empty() {
+        tracing::info!(remote, branch = %target, "notes adopted — the remote is empty");
+        return Ok(());
+    }
+
+    run(clone_dir, &["fetch", "origin", &target])?;
+    // A conflict here keeps BOTH sides' lines (see `union_merge`). If a rebase still stops for some
+    // other reason, it is aborted rather than left standing: a repository frozen mid-rebase is a
+    // state the user cannot get out of from inside this app, and the notes would silently stop
+    // syncing until somebody opened a terminal in a directory they have never heard of.
+    if let Err(error) = run(clone_dir, &["rebase", "FETCH_HEAD"]) {
+        let _ = run(clone_dir, &["rebase", "--abort"]);
+        return Err(error);
+    }
+    tracing::info!(remote, branch = %target, "notes adopted onto the remote's history");
+    Ok(())
+}
+
+/// Keep BOTH sides of a conflicting note, without markers and without stopping.
+///
+/// `*.md merge=union` is git's own answer to exactly this shape of file: a list that grows at both
+/// ends on two machines. The alternative behaviours are both worse here — "newest wins" silently
+/// drops a paragraph written on the other machine, discovered only by going to look for it, and a
+/// conflict that STOPS leaves the repository mid-rebase, which the user cannot get out of from inside
+/// this app.
+///
+/// The cost is honest and small: a note that was edited on both machines briefly shows both versions'
+/// lines, and the user deletes one. Briefly ugly, nothing ever lost (ADR-PROJ-004).
+fn union_merge(clone_dir: &Path) -> Result<()> {
+    let path = clone_dir.join(".gitattributes");
+    let wanted = "*.md merge=union\n";
+    let current = std::fs::read_to_string(&path).unwrap_or_default();
+    if !current.contains("merge=union") {
+        std::fs::write(&path, format!("{current}{wanted}"))
+            .map_err(|e| AppError::io(path.display().to_string(), e))?;
+    }
     Ok(())
 }
 
@@ -180,6 +266,7 @@ pub fn connect(clone_dir: &Path, remote: &str, branch: &str) -> Result<()> {
 /// error, for ever, on the one day it means nothing is wrong. Found by pushing to a real empty
 /// repository; no unit test would have produced an unborn branch.
 pub fn pull(clone_dir: &Path) -> Result<()> {
+    union_merge(clone_dir)?;
     let branch = current_branch(clone_dir);
     let heads = run(clone_dir, &["ls-remote", "--heads", "origin", &branch])?;
     if heads.trim().is_empty() {
@@ -205,10 +292,15 @@ fn current_branch(clone_dir: &Path) -> String {
 pub fn push(clone_dir: &Path, message: &str) -> Result<bool> {
     run(clone_dir, &["add", "--all", "--", "."])?;
     let staged = run(clone_dir, &["status", "--porcelain"])?;
-    if staged.trim().is_empty() {
-        return Ok(false);
+    let committed = !staged.trim().is_empty();
+    if committed {
+        run(clone_dir, &["commit", "--message", message])?;
     }
-    run(clone_dir, &["commit", "--message", message])?;
+    // **Push even with nothing to commit.** The two are not the same question, and conflating them
+    // was a real defect: after `connect` adopts a directory of existing notes, everything is already
+    // committed — so an early return here left the notes sitting in a local commit that never went
+    // anywhere, and the app reported success. Found by pushing to the real repository and looking.
+    // A push with nothing to send answers "Everything up-to-date" and costs one cheap round trip.
     // `--set-upstream HEAD`, always. A fresh clone of an empty repository has no upstream to push
     // to, and a bare `git push` answers that with "has no upstream branch" — the same first-run
     // failure as the pull above, on the same day. Harmless once it is set.

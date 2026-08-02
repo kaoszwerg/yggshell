@@ -8,6 +8,35 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Connecting to a repository failed if you had already written notes** — which is the normal first
+  path, not an edge case: the tool works local-only until you type a URL, so by then the directory is
+  full, and `git clone` refuses a non-empty destination. It is now ADOPTED instead: the directory
+  becomes a repository where it stands, your notes become a commit, and the remote's history is
+  rebased under them. Nothing is checked out over the working tree, so no local note can be replaced
+  by one from another machine without you seeing both.
+
+- **A note edited on two machines keeps both versions.** `*.md merge=union`, which is git's own answer
+  for a list that grows at both ends. The alternatives are worse in opposite directions: "newest wins"
+  silently drops a paragraph written elsewhere, and a conflict that *stops* leaves the repository
+  mid-rebase, which cannot be got out of from inside the app.
+
+- **The sync could commit without pushing.** After adopting a directory, everything is already
+  committed — and the push returned early on "nothing to commit", leaving the notes in a local commit
+  that never went anywhere while the app reported success.
+
+- **The settings fields showed nothing after a failed connect.** They were local state written only on
+  success, so a remote that turned out to be unreachable took the text you had just typed with it.
+  What the fields show is now what is stored, saved as you type.
+
+- **The notes view ignored the terminal's text size.** The tool had followed it since the first
+  version and the page had not (rule:content-size), which is the second time this has been reported.
+
+### Added
+
+- **Clear local notes**, behind a confirmation naming the directory. The escape hatch adoption needs:
+  connecting adopts whatever is already there rather than clobbering it, which is right — and left a
+  directory in a state you did not want with no way out from inside the app.
+
 - **The tmux tool was reachable only with a mouse.** It shipped with a rail entry, a panel and its own
   tests, and no keyboard action at all — while the other five tools each had one. `⌘U` (`Ctrl+Shift+U`
   elsewhere) now toggles it, and a test asserts the invariant that let it slip: the existing checks

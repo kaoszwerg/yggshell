@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { api } from "../../api/commands";
 import { parseMarkdown, type Block, type Inline } from "../../lib/markdown";
 
@@ -36,15 +36,19 @@ const ImageContext = createContext<ImageRenderer | null>(null);
 export function Markdown({
   source,
   className = "",
+  style,
   image = null,
 }: {
   source: string;
   className?: string;
+  /** Forwarded to the container — the notes view puts the terminal's text size here
+   *  (rule:content-size), once, rather than on every block. */
+  style?: CSSProperties;
   image?: ImageRenderer | null;
 }) {
   return (
     <ImageContext.Provider value={image}>
-      <div className={`text-xs leading-relaxed ${className}`.trim()}>
+      <div className={`text-xs leading-relaxed ${className}`.trim()} style={style}>
         {parseMarkdown(source).map((block, at) => (
           <div key={at} data-md-start={block.at.start} data-md-end={block.at.end}>
             <BlockView block={block} />

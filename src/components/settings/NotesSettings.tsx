@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { TextField } from "../ui/TextField";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { notesApi } from "../../api/notes";
 import { humanSize } from "../../lib/humanSize";
 import { useT } from "../../hooks/useT";
@@ -24,17 +25,35 @@ export function NotesSettings() {
   const status = useQuery({ queryKey: ["notes-status"], queryFn: notesApi.status });
   const orphans = useQuery({ queryKey: ["notes-orphans"], queryFn: notesApi.orphans });
 
+  // Seeded from what is STORED, and written back on every edit. They were local state saved only on
+  // a successful connect, which left the fields looking empty after a failed attempt — with the text
+  // the user had just typed gone. A field that only remembers when everything went well is a field
+  // that lies the one time it matters.
   const [remote, setRemote] = useState<string | null>(null);
   const [branch, setBranch] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["notes-status"] });
     void qc.invalidateQueries({ queryKey: ["notes-orphans"] });
   };
 
-  const connect = useMutation({
-    mutationFn: () => notesApi.connect(remote ?? status.data?.remote ?? "", branch ?? ""),
+  const configure = useMutation({
+    mutationFn: ({ url, on }: { url: string; on: string }) =>
+      notesApi.configure(url, on, status.data?.sync ?? true),
     onSuccess: refresh,
+  });
+  const connect = useMutation({
+    mutationFn: () =>
+      notesApi.connect(remote ?? status.data?.remote ?? "", branch ?? status.data?.branch ?? ""),
+    onSuccess: refresh,
+  });
+  const reset = useMutation({
+    mutationFn: notesApi.reset,
+    onSuccess: () => {
+      setClearing(false);
+      refresh();
+    },
   });
   const disconnect = useMutation({ mutationFn: notesApi.disconnect, onSuccess: refresh });
   const sync = useMutation({ mutationFn: notesApi.sync, onSuccess: refresh });
@@ -55,6 +74,9 @@ export function NotesSettings() {
           onChange={(event) => {
             setRemote(event.target.value);
           }}
+          onBlur={(event) => {
+            configure.mutate({ url: event.target.value, on: branch ?? status.data?.branch ?? "" });
+          }}
           placeholder="git@github.com:you/notes.git"
         />
       </label>
@@ -67,6 +89,9 @@ export function NotesSettings() {
           value={branch ?? current?.branch ?? ""}
           onChange={(event) => {
             setBranch(event.target.value);
+          }}
+          onBlur={(event) => {
+            configure.mutate({ url: remote ?? status.data?.remote ?? "", on: event.target.value });
           }}
           placeholder="main"
         />
@@ -101,7 +126,36 @@ export function NotesSettings() {
         >
           {t("settings.notes.disconnect")}
         </Button>
+        {/* The escape hatch adoption needs: connecting ADOPTS whatever is already in the directory
+            rather than clobbering it, which is right — and leaves a directory in a state you do not
+            want with no way out from inside the app. This is that way out. */}
+        <Button
+          variant="ghost"
+          accent="danger"
+          onClick={() => {
+            setClearing(true);
+          }}
+          disabled={current?.connected !== true && current?.path === undefined}
+        >
+          {t("settings.notes.clear")}
+        </Button>
       </div>
+
+      {!clearing ? null : (
+        <ConfirmDialog
+          label={t("settings.notes.clear.title")}
+          question={t("settings.notes.clear.question")}
+          detail={t("settings.notes.clear.detail", { path: current?.path ?? "" })}
+          confirmLabel={t("settings.notes.clear.confirm")}
+          cancelLabel={t("notes.cancel")}
+          onConfirm={() => {
+            reset.mutate();
+          }}
+          onCancel={() => {
+            setClearing(false);
+          }}
+        />
+      )}
 
       {/* The honest half of "automatic": a sync that silently stopped three days ago is the failure
           this line exists to make impossible. git's own message, verbatim — "Permission denied
@@ -145,9 +199,12 @@ export function NotesSettings() {
         </div>
       )}
 
-      {connect.error === null && sync.error === null && clean.error === null ? null : (
+      {connect.error === null &&
+      sync.error === null &&
+      clean.error === null &&
+      reset.error === null ? null : (
         <p className="text-danger font-mono text-[10px]">
-          {String(connect.error ?? sync.error ?? clean.error)}
+          {String(connect.error ?? sync.error ?? clean.error ?? reset.error)}
         </p>
       )}
     </div>
