@@ -239,19 +239,12 @@
    border is shown in these states, so the asymmetric clip-path can't make it look uneven. The dark
    label on the bright accent stays perfectly legible. */
 
-/* Hide the dark core in hover/active → solid accent fill (no uneven border). */
-.hud-btn:hover::before,
-
-
-
-
 /* xterm does NOT use a native scrollbar — it renders its own from DOM elements (derived from VS
    Code\'s), so none of the rules above reach it. Its width is written as an INLINE style by xterm\'s
    own JS, which is why `!important` is unavoidable here: there is no option for it and no selector
    that outranks an inline declaration. The colours come from the theme in TerminalSurface.tsx, not
    from here. Same deal as above: the slider paints 2px, the track it lives in keeps its width so it
    can still be grabbed. */
-
 
 /* ── HUD-styled range sliders ──
    Native browser thumbs (Windows blue, macOS pill) and tracks clash with the HUD palette.
@@ -263,20 +256,10 @@
      `::-moz-range-track`, which read the per-slider fill gradient from the `--slider-fill`
      CSS custom property set inline on the input. */
 
-
-
-
-
-
-
-
 input[type="range"]:disabled::-webkit-slider-thumb,
 
 
 /* ── Neon glow helpers ── */
-
-
-
 
 /* ── Animated neon window frame around the app shell. ──
    The gradient is painted ONCE onto .window-frame-glow and then spun by a `transform`, so every frame
@@ -296,14 +279,7 @@ input[type="range"]:disabled::-webkit-slider-thumb,
      the application, not the covered gradient.
    - The spun element must be SQUARE and cover the window's diagonal. A rotated non-square box would
      deform the gradient rather than merely advance its phase. */
-@keyframes frame-spin {
-  from {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-  to {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
+
 
 /* The band itself: an even-odd ring clip (the window chamfer, minus the same chamfer inset by the band
    width) over a square that carries the gradient and spins. Only the ring is ever composited to screen. */
@@ -335,21 +311,6 @@ input[type="range"]:disabled::-webkit-slider-thumb,
    something is running, on every terminal that is running something.
    The gradient is painted ONCE onto the strip's `::before`, which is two periods wide, and shifted
    by exactly one period — so the loop is seamless and every frame is a compositor operation. */
-@keyframes activity-sweep {
-  /* LEFT to RIGHT, and the direction is not a detail — it was reversed for one version and reported.
-     The old rule animated `background-position` to `-200%`, which reads as "move left" and moved
-     RIGHT: a percentage background position resolves against `element width − image width`, and the
-     image was twice the element, so the bracket is negative and the sign flips. Translating is
-     honest about its direction, which is exactly why the port had to state one.
-     Both ends cover the strip: at -50% the child spans -100%…+100% of it, at 0% it spans 0…200%.
-     One full period apart, so the loop is seamless and there is nothing to reset. */
-  from {
-    transform: translateX(-50%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
 
 /* ONE colour, travelling — not four.
    The first version swept green → cyan → purple → gold, which is the same set the window frame's own
@@ -408,6 +369,40 @@ input[type="range"]:disabled::-webkit-slider-thumb,
 /* A row that exists on one side only. Deliberately unlike an empty line — a blank line is a line. */
 
 @layer components {
+  /* The keyframes live INSIDE the layer, beside the rules that use them, and that is not tidiness.
+     Lightning CSS eliminates keyframes it believes are unused, and it did not match a usage inside
+     `@layer components` against a definition at column 0: the production build shipped
+     `animation: … frame-spin` with no `@keyframes frame-spin` at all. With no keyframes there is no
+     `translate(-50%, -50%)` either — that lives only in them — so the spun square sat with its CORNER
+     at the window's centre and only the bottom-right of the border was ever painted. Reported as "the
+     border died and only the bottom-right corner is left".
+     It survived for `activity-sweep` by accident of ordering, which is exactly why neither is left
+     outside now. */
+  @keyframes frame-spin {
+    from {
+      transform: translate(-50%, -50%) rotate(0deg);
+    }
+    to {
+      transform: translate(-50%, -50%) rotate(360deg);
+    }
+  }
+
+  @keyframes activity-sweep {
+    /* LEFT to RIGHT, and the direction is not a detail — it was reversed for one version and reported.
+       The old rule animated `background-position` to `-200%`, which reads as "move left" and moved
+       RIGHT: a percentage background position resolves against `element width − image width`, and the
+       image was twice the element, so the bracket is negative and the sign flips. Translating is
+       honest about its direction, which is exactly why the port had to state one.
+       Both ends cover the strip: at -50% the child spans -100%…+100% of it, at 0% it spans 0…200%.
+       One full period apart, so the loop is seamless and there is nothing to reset. */
+    from {
+      transform: translateX(-50%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
   .hud-clip {
     --hud-clip: polygon(
       14px 0,
@@ -573,6 +568,12 @@ input[type="range"]:disabled::-webkit-slider-thumb,
       color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 35%, transparent);
   }
 
+  /* Hide the dark core in hover/active → solid accent fill (no uneven border).
+     The `:hover` half was LOST when these rules were moved into layers: the grouped selector spans two
+     lines, and the block parser doing the move keyed on the line carrying the `{`. The result was a
+     button whose interior stayed dark while `:hover` set the label to `--saga-bg-deep` — a black icon
+     on black, on every tab and every rail entry. Reported. */
+  .hud-btn:hover::before,
   .hud-btn-active::before {
     background: transparent;
   }

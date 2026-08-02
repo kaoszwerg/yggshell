@@ -54,3 +54,32 @@ describe("Sidebar", () => {
     expect(terminal.className).toContain("green");
   });
 });
+
+describe("telling the two kinds of rail entry apart", () => {
+  it("wears the accent at rest, not only when open", () => {
+    // Everything fell back to cyan until it was selected, so the one distinction that matters — a
+    // view REPLACES the page, a tool opens BESIDE it — was visible only for the entry you had already
+    // chosen. The colours said nothing at the moment you were deciding where to go.
+    render(<Sidebar />);
+
+    // A view you are NOT in — the one whose colour used to say nothing at all. "Terminal" is the
+    // active view in a fresh store and would be green, which is the other half of the rule.
+    const tool = screen.getByRole("button", { name: "Git" });
+    const view = screen.getByRole("button", { name: "Logs" });
+
+    expect(tool.className).toContain("hud-accent-purple");
+    expect(view.className).toContain("hud-accent-cyan");
+  });
+
+  it("keeps green for where you ARE, on a view", () => {
+    // Green is a state, not a label: a permanently green rail would say "you are here" about five
+    // places at once. A tool never goes green — being a tool is not a state.
+    useUiStore.setState({ view: "settings", activeTool: "git" });
+    render(<Sidebar />);
+
+    expect(screen.getByRole("button", { name: "Settings" }).className).toContain(
+      "hud-accent-green",
+    );
+    expect(screen.getByRole("button", { name: "Git" }).className).toContain("hud-accent-purple");
+  });
+});

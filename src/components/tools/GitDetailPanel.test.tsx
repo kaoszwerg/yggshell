@@ -15,10 +15,15 @@ vi.mock("../../hooks/useSettings", () => ({
   useTerminalThemes: () => ({ data: [] }),
 }));
 
+vi.mock("../../api/files", () => ({
+  filesApi: { readText: vi.fn() },
+}));
+
 vi.mock("../../api/git", () => ({
   gitApi: { fileDiff: vi.fn(), commit: vi.fn(), commitFileDiff: vi.fn() },
 }));
 
+import { filesApi } from "../../api/files";
 import { gitApi } from "../../api/git";
 
 const DIFF: GitDiff = {
@@ -249,5 +254,46 @@ describe("GitDetailPanel", () => {
     const inside = container.querySelector<HTMLElement>(".scheme-surface")?.innerHTML ?? "";
     expect(inside).not.toContain("text-fg");
     expect(inside).not.toContain("text-dim");
+  });
+});
+
+describe("reading a file here", () => {
+  beforeEach(() => {
+    vi.mocked(filesApi.readText).mockResolvedValue({
+      text: "# Title\n\nsome text\n",
+      truncated: false,
+    });
+  });
+
+  it("draws it on a scheme surface, not on the HUD's panel", async () => {
+    // Reported as "the view does not respect the themes AND highlighting is broken" — one cause. The
+    // nine custom properties were set on the element and nothing read them, because `scheme-surface`
+    // is the class that applies them. Syntax colours on the wrong background read as no colours.
+    showDetail({ kind: "text", root: "/repo", path: "/repo/README.md" });
+    const { container } = renderPanel();
+
+    await screen.findByText(/some text/);
+    const surface = container.querySelector<HTMLElement>(".scheme-surface");
+    expect(surface).not.toBeNull();
+    expect(surface?.style.getPropertyValue("--scheme-bg")).not.toBe("");
+    expect(surface?.style.getPropertyValue("--scheme-fg")).not.toBe("");
+  });
+
+  it("says so when only part of the file is shown", async () => {
+    // A file that silently stops is read as a file that ends there.
+    vi.mocked(filesApi.readText).mockResolvedValue({ text: "x", truncated: true });
+    showDetail({ kind: "text", root: "/repo", path: "/repo/big.log" });
+    renderPanel();
+
+    expect(await screen.findByText(/Only the first part/)).toBeTruthy();
+  });
+
+  it("surfaces a refusal instead of an empty panel", async () => {
+    // "It is binary" and "it is gone" are different problems and only the message says which.
+    vi.mocked(filesApi.readText).mockRejectedValue(new Error("logo.png is not a text file"));
+    showDetail({ kind: "text", root: "/repo", path: "/repo/logo.png" });
+    renderPanel();
+
+    expect(await screen.findByText(/not a text file/)).toBeTruthy();
   });
 });

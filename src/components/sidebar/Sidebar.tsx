@@ -75,6 +75,9 @@ export function Sidebar() {
           Icon={item.Icon}
           label={t(item.label)}
           active={view === item.id}
+          // Cyan at rest, green where you ARE. Green is a state, not a label — a permanent green
+          // rail would say "you are here" about five places at once.
+          accent={view === item.id ? "green" : "cyan"}
           current={view === item.id ? "page" : undefined}
           onClick={() => setView(item.id)}
         />
@@ -109,6 +112,8 @@ export function Sidebar() {
           Icon={item.Icon}
           label={t(item.label)}
           active={view === item.id}
+          // Logs and Settings are views like any other — same rule as the nav above.
+          accent={view === item.id ? "green" : "cyan"}
           current={view === item.id ? "page" : undefined}
           onClick={() => setView(item.id)}
         />
@@ -125,7 +130,7 @@ function RailButton({
   active,
   current,
   pressed,
-  accent = "green",
+  accent,
   onClick,
 }: {
   Icon: LucideIcon;
@@ -134,13 +139,22 @@ function RailButton({
   current?: "page";
   pressed?: boolean;
   /** The colour this entry fills with when it is on. Views are green; tools are purple. */
-  accent?: HudAccent;
+  /** Worn at rest as well as when active — the rail's kinds have to be told apart before you pick. */
+  accent: HudAccent;
   onClick: () => void;
 }) {
   return (
     <IconButton
       label={label}
-      accent={active ? accent : "cyan"}
+      // The accent is worn at REST too, not only when open. Everything in the rail used to fall back
+      // to cyan until it was selected, so the one distinction that matters — a view REPLACES the page,
+      // a tool opens BESIDE it — was visible only for the single entry you had already chosen. The
+      // colours said nothing at exactly the moment you were deciding where to go.
+      //
+      // Views keep cyan at rest and go green when you are in one: green is "you are here", and that
+      // has to stay a change of state rather than a permanent label. Tools are purple throughout,
+      // because being a tool is not a state.
+      accent={accent}
       active={active}
       onClick={onClick}
       aria-current={current}

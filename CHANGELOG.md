@@ -8,6 +8,40 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The window frame stopped animating, and only its bottom-right corner was drawn.** The build shipped
+  `animation: … frame-spin` with **no `@keyframes frame-spin` at all**: Lightning CSS eliminates
+  keyframes it believes are unused, and it did not match a usage inside `@layer components` against a
+  definition at column 0 — which is where the layering of 0.40.1 left it. With no keyframes there is
+  no `translate(-50%, -50%)` either, because that lives only in them, so the spun square sat with its
+  **corner** at the window's centre instead of centred. Exactly the reported picture.
+
+  Both keyframes blocks are inside the layer now. `activity-sweep` had survived by accident of
+  ordering, which is why neither is left outside. A test pins the invariant, negative-controlled.
+
+- **A hovered button drew a black icon on black**, on every tab and every rail entry. The layering of
+  0.40.1 lost `.hud-btn:hover::before` — the rule that hides the dark core so the accent fills the
+  button — because the selector is grouped across two lines and the block parser doing the move keyed
+  on the line carrying the `{`. `:hover` then set the label to `--saga-bg-deep` over a core that was
+  still dark. The same truncation hit `input[type="range"]:disabled::-webkit-slider-thumb`.
+
+  Both restored, both pinned. And the check that would have caught them at the time — comparing the
+  selector set against the previous stylesheet, which the upstream did and this port did not — has now
+  been run: only the three rules changed on purpose differ.
+
+- **"View here" ignored the configured theme and looked unhighlighted.** One cause: the container was
+  missing `scheme-surface`, the class that *applies* the nine custom properties `surfaceStyle` sets.
+  Syntax colours on the wrong background read as no syntax colours.
+
+### Changed
+
+- **The rail wears its accent at rest, not only when open.** Everything fell back to cyan until it was
+  selected, so the distinction that matters — a **view** replaces the page, a **tool** opens beside it
+  — was visible only for the entry already chosen. The colours said nothing at the moment you were
+  deciding where to go. Tools are purple throughout; views stay cyan and go green where you *are*,
+  because green is a state and a permanently green rail would claim "you are here" about five places.
+
+### Fixed
+
 - **Middle-click pastes the clipboard now, not an emulated X11 selection.** Reported: middle-click did
   not paste what had been copied. It was pasting an app-scoped stand-in for the X11 PRIMARY selection
   — and the handler is skipped on Linux, because there the real PRIMARY works and the WebView does it

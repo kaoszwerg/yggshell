@@ -193,9 +193,10 @@ function TextContent({
   });
 
   const coloured = useQuery({
-    // Keyed on the text itself, so re-opening a file already read costs nothing and a changed file
-    // is re-tokenised rather than shown in the previous file's colours.
-    queryKey: ["highlight-file", detail.path, query.data?.text, scheme?.id ?? "hud"],
+    // Keyed on WHEN the file was read, not on its contents: a two-megabyte string in a query key is
+    // stringified for hashing on every render. `dataUpdatedAt` moves whenever the read above returns,
+    // which is the same signal for a fraction of the cost.
+    queryKey: ["highlight-file", detail.path, query.dataUpdatedAt, scheme?.id ?? "hud"],
     queryFn: () => tokenize(query.data?.text ?? "", languageFor(detail.path), scheme),
     enabled: query.data !== undefined,
   });
@@ -207,7 +208,14 @@ function TextContent({
         subtitle={detail.path}
         show={show}
       />
-      <div className="min-h-0 flex-1 overflow-auto" style={surfaceStyle(scheme, fontSize)}>
+      {/* `scheme-surface` is what APPLIES the variables `surfaceStyle` sets — without it the nine
+          custom properties sit on the element and nothing reads them, so the file drew on the HUD's
+          panel background with the HUD's foreground, and syntax colours on the wrong background read
+          as no highlighting at all. Reported as both at once, which is what it looked like. */}
+      <div
+        className="scheme-surface min-h-0 flex-1 overflow-auto"
+        style={surfaceStyle(scheme, fontSize)}
+      >
         {query.isPending ? (
           <p className="text-dim p-4 font-mono text-xs">{t("files.reading")}</p>
         ) : query.isError ? (
