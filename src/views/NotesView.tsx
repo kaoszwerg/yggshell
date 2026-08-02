@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, Terminal } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, Terminal } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { IconButton } from "../components/ui/IconButton";
 import { Markdown } from "../components/ui/Markdown";
@@ -38,13 +38,25 @@ export function NotesView() {
   const fontSize = useContentFontSize();
   const qc = useQueryClient();
   const note = useUiStore((s) => s.note);
+  const setView = useUiStore((s) => s.setView);
+  const openNote = useUiStore((s) => s.openNote);
   const project = note?.project ?? "_inbox";
   const topic = note?.topic ?? "inbox";
 
-  const [writing, setWriting] = useState(false);
+  const [writingHere, setWritingHere] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const caret = useRef<number | null>(null);
+
+  /**
+   * Whether the editor is showing.
+   *
+   * **Derived, not set from an effect.** The tool's "edit this entry" opens the note WITH an offset,
+   * and turning that into `setWriting(true)` inside an effect is the `set-state-in-effect` pattern the
+   * lint rejects — rightly: it renders once in the wrong state and then corrects itself. Reading the
+   * offset as the state means the first frame is already right.
+   */
+  const writing = writingHere || note?.at != null;
 
   const content = useQuery({
     queryKey: ["notes-note", project, topic],
@@ -73,34 +85,67 @@ export function NotesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
 
-  // Put the caret where the click was, once the editor exists.
+  // Escape leaves — the writing state first, then the view. Two presses at most from anywhere in
+  // here, and neither of them is something to know in advance.
   useEffect(() => {
-    if (!writing || caret.current === null) return;
-    const at = caret.current;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (writing) return; // the editor handles its own Escape, which returns to reading
+      setView("terminal");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [writing, setView]);
+
+  // Put the caret where the user pointed, once the editor exists — either the block whose "edit
+  // here" they pressed, or the entry the tool sent them in on.
+  useEffect(() => {
+    if (!writing) return;
+    const at = caret.current ?? note?.at ?? null;
+    if (at === null) return;
     caret.current = null;
     const area = editor.current;
     if (area === null) return;
     area.focus();
     area.setSelectionRange(at, at);
-  }, [writing]);
+  }, [writing, note?.at]);
 
   const text = draft ?? content.data ?? "";
 
   const startWriting = (at: number | null) => {
     setDraft(text);
     caret.current = at;
-    setWriting(true);
+    setWritingHere(true);
   };
 
   const stopWriting = () => {
     if (draft !== null) save.mutate(draft);
-    setWriting(false);
+    setWritingHere(false);
     setDraft(null);
+    // Clears the offset the tool sent, or `writing` would stay derived-true and reading would be
+    // unreachable — the state has one source and this is where it is put back.
+    if (note !== null && note.at !== null) openNote(note.project, note.topic);
   };
 
   return (
     <div className="flex h-full flex-col">
       <header className="border-cyan/15 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+        {/* **The way out.** The plan said "back is the rail, like every other view", and that was not
+            enough: reported as "kein Stück Pfeil, nichts, kein close view, kein esc". A view you can
+            enter with one press and only leave by knowing where else to click is a trap, however
+            consistent it is with the others. Escape does the same, below. */}
+        <IconButton
+          label={t("common.back")}
+          variant="ghost"
+          className="h-5 w-5 shrink-0"
+          onClick={() => {
+            setView("terminal");
+          }}
+        >
+          <ArrowLeft size={13} aria-hidden />
+        </IconButton>
         <span className="text-dim min-w-0 flex-1 truncate font-mono text-[11px]">
           {project} · {topic}
         </span>
@@ -134,28 +179,26 @@ export function NotesView() {
           className="min-h-0 flex-1 rounded-none border-0 font-mono leading-relaxed"
         />
       ) : (
-        // ONE handler for the whole document, not one per block. Every top-level block carries its
-        // source range as a data attribute, so the nearest one answers "edit WHAT?" — where making
-        // each block interactive would have nested a hundred buttons around the links already inside
-        // them, which is both an accessibility violation and invalid HTML.
-        //
-        // The keyboard route is not missing: it is the "Write" control in the header, and Escape to
-        // leave. This click is a SHORTCUT to a place in the text, and a keydown handler on a region
-        // full of links would take Enter away from them — which would be the real accessibility
-        // defect, in the name of avoiding a reported one.
-        // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-        <div
-          className="min-h-0 flex-1 cursor-text overflow-auto px-3 py-2"
-          onClick={(event) => {
-            const block = (event.target as HTMLElement).closest<HTMLElement>("[data-md-start]");
-            startWriting(block === null ? null : Number(block.dataset.mdStart ?? 0));
-          }}
-        >
+        // **Reading is reading.** The first version turned the whole surface into a click target that
+        // switched to writing, and it fought everything the text contains — a link, a checkbox, the
+        // copy control, selecting a sentence. Reported, and the maintainer is right: an explicit
+        // affordance says what it does and takes nothing away. Each block carries its own "edit here"
+        // beside its copy control, and the header carries the state toggle.
+        <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
           {text.trim() === "" ? (
             <p className="text-dim font-mono text-[11px]">{t("notes.none")}</p>
           ) : (
             <Markdown
               source={text}
+              // A copy control per block, the way documentation sites do it. The point of the tool is
+              // handing something over; "select the code fence with the mouse without catching the
+              // line above it" is the friction that decides whether it gets used.
+              onCopyBlock={(block) => {
+                copyText(block, "clipboard.note");
+              }}
+              onEditBlock={(at) => {
+                startWriting(at);
+              }}
               // rule:content-size — a note reads like a terminal, and the size the user chose for
               // the terminal is the size they need for this. On the scroll region, once, rather than
               // on every block: a size repeated per element is one that gets forgotten on the sixth.

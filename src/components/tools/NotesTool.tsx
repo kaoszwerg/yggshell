@@ -14,6 +14,7 @@ import { useT } from "../../hooks/useT";
 import { useUiStore } from "../../store/ui";
 import { useTerminalStore } from "../../store/terminal";
 import { KebabMenu } from "../ui/KebabMenu";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { copyText } from "../../lib/clipboard";
 import { terminalApi } from "../../api/terminal";
 
@@ -40,6 +41,7 @@ export function NotesTool() {
   const project = useNoteProject();
   const setView = useUiStore((s) => s.setView);
   const openNote = useUiStore((s) => s.openNote);
+  const setNotesProject = useUiStore((s) => s.setNotesProject);
   const sessionId = useTerminalStore(
     (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
   );
@@ -53,6 +55,19 @@ export function NotesTool() {
   // which is exactly what was reported. Decided in the plan and missing from the first build.
   const [everything, setEverything] = useState(false);
   const [newTopic, setNewTopic] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renamingTopic, setRenamingTopic] = useState<{
+    project: string;
+    topic: string;
+    to: string;
+  } | null>(null);
+  /** What a confirmation is currently about. A note and a project are both asked for by name. */
+  const [confirming, setConfirming] = useState<{
+    kind: "note" | "project";
+    project: string;
+    topic: string;
+  } | null>(null);
 
   const allProjects = useQuery({
     queryKey: ["notes-projects"],
@@ -121,6 +136,35 @@ export function NotesTool() {
     onSuccess: refresh,
   });
 
+  /**
+   * Move an entry to another note.
+   *
+   * Read, splice, append, write — twice. Not a backend command: both halves are edits this tool
+   * already knows how to make, and a third way of deciding what an item IS would be a third place for
+   * the definitions to drift (ADR-CORE-005). The append happens FIRST, so a failure between the two
+   * leaves a duplicate rather than a hole.
+   */
+  const moveItem = useMutation({
+    mutationFn: async ({
+      from,
+      to,
+      item,
+    }: {
+      from: { project: string; topic: string };
+      to: { project: string; topic: string };
+      item: Task;
+    }) => {
+      const source = await notesApi.read(from.project, from.topic);
+      const block = source.slice(item.offset, item.end);
+      const target = await notesApi.read(to.project, to.topic);
+      const gap = target === "" || target.endsWith("\n") ? "" : "\n";
+      await notesApi.write(to.project, to.topic, `${target}${gap}${block}\n`);
+      const rest = source.slice(item.end).replace(/^\n/, "");
+      await notesApi.write(from.project, from.topic, source.slice(0, item.offset) + rest);
+    },
+    onSuccess: refresh,
+  });
+
   const removeNote = useMutation({
     mutationFn: ({ project: p, topic }: { project: string; topic: string }) =>
       notesApi.remove(p, topic),
@@ -130,6 +174,52 @@ export function NotesTool() {
   const removeProject = useMutation({
     mutationFn: (p: string) => notesApi.removeProject(p),
     onSuccess: refresh,
+  });
+
+  const addProject = useMutation({
+    mutationFn: (name: string) => notesApi.createProject(name),
+    onSuccess: (_r, name) => {
+      setNewProject(null);
+      setEverything(false);
+      setNotesProject(name);
+      refresh();
+    },
+  });
+
+  const renameProject = useMutation({
+    mutationFn: ({ from, to }: { from: string; to: string }) => notesApi.renameProject(from, to),
+    onSuccess: (_r, { to }) => {
+      setRenaming(null);
+      setNotesProject(to);
+      refresh();
+    },
+  });
+
+  /**
+   * Rename a topic — read it, write it under the new name, drop the old one.
+   *
+   * Copy-then-delete rather than a filesystem rename in the backend, and in that order: a failure
+   * between the two leaves the note under both names, where the other order would leave it under
+   * neither. Losing a note is not a trade worth making to avoid a duplicate.
+   */
+  const renameTopic = useMutation({
+    mutationFn: async ({
+      project: p,
+      topic,
+      to,
+    }: {
+      project: string;
+      topic: string;
+      to: string;
+    }) => {
+      const text = await notesApi.read(p, topic);
+      await notesApi.write(p, to, text);
+      await notesApi.remove(p, topic);
+    },
+    onSuccess: () => {
+      setRenamingTopic(null);
+      refresh();
+    },
   });
 
   const addTopic = useMutation({
@@ -181,10 +271,81 @@ export function NotesTool() {
       },
     },
     {
+      // Editing an entry IS opening its file at that entry — a note is markdown, and an entry is
+      // some lines of it. A separate one-line editor here would be a second way to change a note,
+      // which is a second definition of what an entry is (ADR-CORE-005).
+      id: "edit",
+      label: t("notes.editItem"),
+      onSelect: () => {
+        openNote(inProject, topic, item.offset);
+        setView("notes");
+      },
+    },
+    ...moveTargets(inProject, topic).map((to) => ({
+      id: `move:${to.project}:${to.topic}`,
+      label: t("notes.moveTo", { where: to.label }),
+      onSelect: () => {
+        moveItem.mutate({ from: { project: inProject, topic }, to, item });
+      },
+    })),
+    {
       id: "delete",
       label: t("notes.delete"),
       onSelect: () => {
         removeItem.mutate({ project: inProject, topic, from: item.offset, to: item.end });
+      },
+    },
+  ];
+
+  /** Every other note this entry could go to — the same project's topics first, then the rest. */
+  const moveTargets = (fromProject: string, fromTopic: string) =>
+    sections
+      .filter((s) => !(s.project === fromProject && s.topic === fromTopic))
+      .map((s) => ({
+        project: s.project,
+        topic: s.topic,
+        label:
+          s.project === fromProject
+            ? s.topic
+            : `${s.project.split("/").at(-1) ?? s.project} · ${s.topic}`,
+      }));
+
+  /**
+   * The project menu: every project there is, plus making one.
+   *
+   * **Addressable from any tab**, which is the point. It was derived from the front tab's git remote
+   * and nothing else, so there was exactly one project and no way to reach another — reported as "es
+   * gibt nur ein Projekt … der hat aber rein garnichts mit dem Projekt zu tun".
+   */
+  const projectMenu = [
+    {
+      id: "all",
+      label: t("notes.allProjects"),
+      onSelect: () => {
+        setEverything(true);
+      },
+    },
+    ...(allProjects.data ?? []).map((p) => ({
+      id: `p:${p}`,
+      label: p,
+      onSelect: () => {
+        setEverything(false);
+        setNotesProject(p);
+      },
+    })),
+    { separator: true as const },
+    {
+      id: "newProject",
+      label: t("notes.newProject"),
+      onSelect: () => {
+        setNewProject("");
+      },
+    },
+    {
+      id: "renameProject",
+      label: t("notes.renameProject"),
+      onSelect: () => {
+        setRenaming(project);
       },
     },
   ];
@@ -199,17 +360,24 @@ export function NotesTool() {
       },
     },
     {
+      id: "rename",
+      label: t("notes.renameTopic"),
+      onSelect: () => {
+        setRenamingTopic({ project: inProject, topic, to: topic });
+      },
+    },
+    {
       id: "delete",
       label: t("notes.deleteNote.title"),
       onSelect: () => {
-        removeNote.mutate({ project: inProject, topic });
+        setConfirming({ kind: "note", project: inProject, topic });
       },
     },
     {
       id: "deleteProject",
       label: t("notes.deleteProject.title"),
       onSelect: () => {
-        removeProject.mutate(inProject);
+        setConfirming({ kind: "project", project: inProject, topic });
       },
     },
   ];
@@ -241,16 +409,15 @@ export function NotesTool() {
           placeholder={t("common.search")}
           className="min-w-0 flex-1"
         />
-        <Button
-          variant="ghost"
-          accent={everything ? "cyan" : "green"}
-          className="shrink-0 px-1.5 py-0.5 text-[0.56rem] tracking-[0.12em]"
-          onClick={() => {
-            setEverything((on) => !on);
-          }}
-        >
-          {everything ? t("notes.allProjects") : t("notes.thisProject")}
-        </Button>
+        {/* The project, and every other one. A picker rather than a toggle: projects are chosen, not
+            derived from whichever tab is in front. */}
+        <KebabMenu
+          label={t("notes.projectMenu", {
+            project: everything ? t("notes.allProjects") : project,
+          })}
+          items={projectMenu}
+          size={11}
+        />
         <IconButton
           label={t("notes.open")}
           onClick={() => {
@@ -270,6 +437,61 @@ export function NotesTool() {
           <RefreshCw size={12} aria-hidden className={notes.isFetching ? "animate-spin" : ""} />
         </IconButton>
       </header>
+
+      {newProject === null && renaming === null ? null : (
+        <div className="border-cyan/10 flex shrink-0 items-center gap-1 border-b px-2 py-1">
+          <TextField
+            ref={(el) => {
+              el?.focus();
+            }}
+            aria-label={t(newProject === null ? "notes.renameProject" : "notes.newProject")}
+            value={newProject ?? renaming ?? ""}
+            onChange={(event) => {
+              if (newProject === null) setRenaming(event.target.value);
+              else setNewProject(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setNewProject(null);
+                setRenaming(null);
+                return;
+              }
+              if (event.key !== "Enter") return;
+              const value = (newProject ?? renaming ?? "").trim();
+              if (value === "") return;
+              if (newProject === null) renameProject.mutate({ from: project, to: value });
+              else addProject.mutate(value);
+            }}
+            placeholder={t(newProject === null ? "notes.renameProject" : "notes.newProject")}
+            className="min-w-0 flex-1"
+          />
+        </div>
+      )}
+
+      {renamingTopic === null ? null : (
+        <div className="border-cyan/10 flex shrink-0 items-center gap-1 border-b px-2 py-1">
+          <TextField
+            ref={(el) => {
+              el?.focus();
+            }}
+            aria-label={t("notes.renameTopic")}
+            value={renamingTopic.to}
+            onChange={(event) => {
+              setRenamingTopic({ ...renamingTopic, to: event.target.value });
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setRenamingTopic(null);
+              if (event.key !== "Enter" || renamingTopic.to.trim() === "") return;
+              renameTopic.mutate({
+                project: renamingTopic.project,
+                topic: renamingTopic.topic,
+                to: renamingTopic.to.trim(),
+              });
+            }}
+            className="min-w-0 flex-1"
+          />
+        </div>
+      )}
 
       {newTopic === null ? null : (
         <div className="border-cyan/10 flex shrink-0 items-center gap-1 border-b px-2 py-1">
@@ -292,6 +514,26 @@ export function NotesTool() {
             placeholder={t("notes.topicName")}
             className="min-w-0 flex-1"
           />
+        </div>
+      )}
+
+      {query.trim() !== "" ? null : (
+        <div className="border-cyan/10 flex shrink-0 items-center gap-2 border-b px-2 py-0.5">
+          {/* Where the note is about to land, named. Without it the model is invisible — and it was:
+              "es entstehen keine Projekte" is what a capture going somewhere you cannot see looks
+              like from outside. */}
+          <span className="text-dim/70 min-w-0 flex-1 truncate font-mono text-[10px]">
+            {everything ? t("notes.allProjects") : t("notes.filesInto", { project })}
+          </span>
+          <Button
+            variant="ghost"
+            className="shrink-0 px-1 py-0 text-[0.56rem] tracking-[0.12em]"
+            onClick={() => {
+              setNewTopic("");
+            }}
+          >
+            {t("notes.newTopic")}
+          </Button>
         </div>
       )}
 
@@ -368,6 +610,22 @@ export function NotesTool() {
                   size={11}
                 />
               </div>
+              {section.items.filter((item) => !item.done).length === 0 ? (
+                // A topic with no OPEN tasks still shows — prose, a code block, a finished list are
+                // all real notes, and a heading that disappears the moment its last box is ticked is
+                // a topic the user cannot get back to.
+                <Row
+                  label={section.heading}
+                  onActivate={() => {
+                    open(section.project, section.topic);
+                  }}
+                  className="gap-2 px-2 font-mono"
+                >
+                  <span className="text-dim/60 min-w-0 flex-1 truncate italic">
+                    {t("notes.openThis")}
+                  </span>
+                </Row>
+              ) : null}
               {section.items
                 .filter((item) => !item.done)
                 .map((item) => (
@@ -429,6 +687,42 @@ export function NotesTool() {
           </section>
         )}
       </div>
+
+      {confirming === null ? null : (
+        // **Names what is inside**, the way the tmux tool names a session's command and window count
+        // rather than asking "are you sure?" about a name. And it says the thing that makes deletion
+        // safe rather than frightening: every deletion here is a commit, so nothing is truly gone.
+        <ConfirmDialog
+          label={t(
+            confirming.kind === "note" ? "notes.deleteNote.title" : "notes.deleteProject.title",
+          )}
+          question={
+            confirming.kind === "note"
+              ? t("notes.deleteNote.question", { topic: confirming.topic })
+              : t("notes.deleteProject.question", { project: confirming.project })
+          }
+          detail={
+            confirming.kind === "note"
+              ? t("notes.deleteNote.detail")
+              : t("notes.deleteProject.detail", {
+                  notes: sections.filter((s) => s.project === confirming.project).length,
+                })
+          }
+          confirmLabel={t("notes.deleteNote.confirm")}
+          cancelLabel={t("notes.cancel")}
+          onConfirm={() => {
+            if (confirming.kind === "note") {
+              removeNote.mutate({ project: confirming.project, topic: confirming.topic });
+            } else {
+              removeProject.mutate(confirming.project);
+            }
+            setConfirming(null);
+          }}
+          onCancel={() => {
+            setConfirming(null);
+          }}
+        />
+      )}
 
       {capture.error === null && toggle.error === null ? null : (
         <p className="text-danger px-2 py-1 font-mono text-[10px]">

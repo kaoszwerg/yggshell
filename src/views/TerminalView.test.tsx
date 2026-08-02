@@ -36,6 +36,13 @@ const THEMES = [
   { id: "ayu", name: "Ayu", ansi: [], background: null },
 ];
 
+// Filing a note from the terminal's context menu goes through react-query, and this suite renders
+// the view bare. Mocked rather than wrapped in a provider: this is a suite about the terminal, and
+// the capture has its own tests where the mutation is the subject.
+vi.mock("../hooks/useCaptureNote", () => ({
+  useCaptureNote: () => ({ mutate: vi.fn() }),
+}));
+
 vi.mock("../hooks/useSettings", () => ({
   useSettings: () => ({
     data: { ui_scale: 1, terminal_font_size: 13, terminal_theme: "", copy_on_select: true },

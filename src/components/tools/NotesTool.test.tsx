@@ -111,7 +111,12 @@ describe("NotesTool", () => {
 
     fireEvent.click(await screen.findByText("notarise"));
     expect(useUiStore.getState().view).toBe("notes");
-    expect(useUiStore.getState().note).toEqual({ project: "github.com/x/y", topic: "release" });
+    expect(useUiStore.getState().note).toEqual({
+      project: "github.com/x/y",
+      topic: "release",
+      // No offset: opening a hit is "show me this note", not "put me in the editor at this byte".
+      at: null,
+    });
   });
 
   it("draws its content at the terminal's own text size", async () => {
@@ -159,12 +164,14 @@ describe("managing what is in the list", () => {
     });
   });
 
-  it("says how a project comes about instead of just 'nothing here'", async () => {
-    // Asked outright after connecting: "how do I create projects?". They are not created, they
-    // appear — and the empty state is the only place that can say so.
+  it("says where a note would land instead of just 'nothing here'", async () => {
+    // Asked outright: "how do I create projects?" and "wo landen Eingaben die ich ins Note something
+    // Feld tippe?". The empty state and the line above the field are the only places that can answer
+    // either, and neither said anything.
     vi.mocked(notesApi.topics).mockResolvedValue([]);
     renderTool();
 
-    expect(await screen.findByText(/a project appears for it/)).toBeTruthy();
+    expect(await screen.findByText(/lands in this project's inbox/)).toBeTruthy();
+    expect(screen.getByText(/files into github.com\/a\/b/)).toBeTruthy();
   });
 });

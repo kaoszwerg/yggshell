@@ -8,6 +8,35 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Projects are yours: created, renamed, picked — from any tab.** They were derived from the front
+  tab's git remote and nothing else, so there was exactly one and no way to reach another. Which
+  repository a terminal happens to be sitting in has nothing to do with which project a note belongs
+  to. The tab still supplies the first suggestion; it is never a constraint, and the choice is
+  remembered.
+
+- **The line above the capture field says where the note will land**, by name. Without it the model
+  was invisible — "no projects appear" is what a capture going somewhere you cannot see looks like.
+
+- **Everything is managed from the `⋮`.** An entry: type into the terminal, copy, open, edit, move to
+  another file or project, delete. A file: new one, rename, delete — and delete the project.
+
+- **The rest of the plan that the first build skipped.** Automatic sync (pull on start and on window
+  focus, push after an edit) — it previously synced only when somebody opened Settings and pressed.
+  Capture from context in all three places the plan names: a path in the Files tool, a commit in the
+  Git tool, the selection or directory from the terminal's own menu. A copy control per block. Delete
+  confirmations that name what is inside. And remote images fetched by the backend on request, as
+  designed — dropping that was a deviation I took alone, and it turned out to cost nothing, because
+  Tauri already carries the client.
+
+### Fixed
+
+- **There was no way out of the notes view** — no back control, no Escape. "Back is the rail like
+  every other view" was the plan's answer and it is not good enough for a view you enter with one
+  press.
+
+- **A file with no open tasks vanished from the list**, so a newly created one disappeared the moment
+  it was made, and a finished one could not be reached again.
+
 - **The `⋮` menu the notes needed, on a visible control.** Per entry: type it into the terminal, copy
   it, open it in the view, delete it. Per topic: a new topic beside it, or delete the note or the whole
   project. It opens on a plain click — the actions existed on right-click first, and the first question

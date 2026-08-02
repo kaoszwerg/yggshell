@@ -76,6 +76,26 @@ export const notesApi = {
 
   removeProject: (project: string) => invoke<void>("notes_delete_project", { project }),
 
+  /**
+   * Rename a project, keeping every note and image in it.
+   *
+   * Projects are named by the user rather than derived from the front tab's git remote, which is how
+   * they started: which repository a terminal is sitting in has nothing to do with which project a
+   * note belongs to, and a name you cannot change is a name that is wrong for ever.
+   */
+  renameProject: (from: string, to: string) => invoke<void>("notes_rename_project", { from, to }),
+
+  /** Create an empty project. "A project exists" and "a project has notes" are different states. */
+  createProject: (project: string) => invoke<void>("notes_create_project", { project }),
+
+  /**
+   * Fetch a remote image, once, because the user pressed.
+   *
+   * Never on render: rendering it from a pasted note would call a stranger's server the instant the
+   * note is read, and reading a note is not consent to that (ADR-PROJ-004).
+   */
+  fetchImage: (url: string) => invoke<number[]>("notes_image_fetch", { url }),
+
   /** Case-insensitive plain text, across every project. Not a regex, deliberately. */
   search: (query: string) => invoke<NoteHit[]>("notes_search", { query }),
 

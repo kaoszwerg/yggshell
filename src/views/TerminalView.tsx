@@ -22,6 +22,7 @@ import type { Activity, ActivityState } from "../lib/osc133";
 import { useT } from "../hooks/useT";
 import { useTerminalStore } from "../store/terminal";
 import { copyText } from "../lib/clipboard";
+import { useCaptureNote } from "../hooks/useCaptureNote";
 
 /**
  * A call to a session that may already be gone.
@@ -292,6 +293,9 @@ function Pane({
   const [schemeOpen, setSchemeOpen] = useState(false);
   const setTitle = useTerminalStore((s) => s.setTitle);
   const setCwd = useTerminalStore((s) => s.setCwd);
+  // For "note this": the directory the shell last reported, used when nothing is selected.
+  const paneCwd = useTerminalStore((s) => s.panes.find((p) => p.key === paneKey)?.cwd ?? null);
+  const capture = useCaptureNote();
   const setPaneTmuxSession = useTerminalStore((s) => s.setPaneTmuxSession);
   const ringBell = useTerminalStore((s) => s.ringBell);
   const requestClosePane = useTerminalStore((s) => s.requestClosePane);
@@ -590,6 +594,22 @@ function Pane({
                   if (text !== "") handle.current?.paste(text);
                 })
                 .catch(survivable("paste"));
+            },
+          },
+          { separator: true },
+          {
+            // Capture from context, the third of the three the plan names. What is noted is the
+            // SELECTION when there is one — a failed command, a stack trace, a question the agent
+            // asked — and the directory otherwise. Both are what you were looking at when the thought
+            // arrived, which is the whole point of capturing where you are.
+            id: "note",
+            label: t("notes.captureThis"),
+            onSelect: () => {
+              // The SELECTION when there is one, the directory otherwise. Both are what was on screen
+              // when the thought arrived, which is what capturing where you are means.
+              const selection = readPrimarySelection();
+              const text = selection !== "" ? selection : (paneCwd ?? "");
+              if (text !== "") capture.mutate(text);
             },
           },
           { separator: true },

@@ -219,6 +219,27 @@ pub fn notes_delete(state: State<'_, AppState>, project: String, topic: String) 
     notes::delete_note(&root(&state), &project, &topic)
 }
 
+/// Rename a project, keeping everything in it.
+#[tauri::command]
+pub fn notes_rename_project(state: State<'_, AppState>, from: String, to: String) -> Result<()> {
+    notes::rename_project(&root(&state), &from, &to)
+}
+
+/// Create an empty project, so one can exist before anything has been filed into it.
+///
+/// The frontend could do this by writing an empty note, and deliberately does not: "a project exists"
+/// and "a project has a note in it" are different states, and the tool has to be able to show the
+/// first one.
+#[tauri::command]
+pub fn notes_create_project(state: State<'_, AppState>, project: String) -> Result<()> {
+    notes::project_dir(&root(&state), &project)?;
+    // An inbox, so the project has somewhere for its first capture to land and shows up in a listing
+    // — a directory with no `.md` in it is not a project as far as `projects()` is concerned.
+    notes::write(&root(&state), &project, notes::INBOX, "")?;
+    tracing::info!(%project, "notes_create_project");
+    Ok(())
+}
+
 /// Delete a whole project, with every note and image in it.
 #[tauri::command]
 pub fn notes_delete_project(state: State<'_, AppState>, project: String) -> Result<()> {
@@ -265,6 +286,15 @@ pub fn notes_image_read(
     path: String,
 ) -> Result<Vec<u8>> {
     notes::images::read(&root(&state), &project, &path)
+}
+
+/// Fetch a remote image, once, because the user pressed.
+///
+/// Never on render: rendering `![](https://…)` from a pasted note would call a stranger's server the
+/// instant the note is read, and reading a note is not consent to that (ADR-PROJ-004).
+#[tauri::command]
+pub async fn notes_image_fetch(url: String) -> Result<Vec<u8>> {
+    notes::images::fetch_remote(&url).await
 }
 
 /// Every image no note refers to, with its size. Deletes nothing.

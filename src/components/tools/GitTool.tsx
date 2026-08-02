@@ -9,6 +9,8 @@ import { Splitter } from "../ui/Splitter";
 import { useTerminalStore } from "../../store/terminal";
 import { useGitSnapshot } from "../../hooks/useGitSnapshot";
 import { useT } from "../../hooks/useT";
+import { useCaptureNote } from "../../hooks/useCaptureNote";
+import { KebabMenu } from "../ui/KebabMenu";
 import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type PaneDetail } from "../../store/ui";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
@@ -261,6 +263,8 @@ function History({ commits }: { commits: GitCommit[] }) {
 /** One commit in the graph. Clicking it opens the commit — the whole message and its files — in the
  *  detail panel over the terminal. */
 function CommitRow({ row, width, last }: { row: GraphRow; width: number; last: boolean }) {
+  const t = useT();
+  const capture = useCaptureNote();
   const activeKey = useTerminalStore((s) => s.activeKey);
   const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
   const shown = useTerminalStore((s) => {
@@ -295,6 +299,22 @@ function CommitRow({ row, width, last }: { row: GraphRow; width: number; last: b
           {ref}
         </span>
       ))}
+      {/* Capture from context: a commit becomes a note where it is being read, rather than after a
+          trip to another panel and a retype. The short sha and the summary, because that is what
+          makes the note findable later — a sha alone says nothing in six weeks. */}
+      <KebabMenu
+        label={t("notes.actions", { name: row.commit.short_sha })}
+        size={11}
+        items={[
+          {
+            id: "note",
+            label: t("notes.captureThis"),
+            onSelect: () => {
+              capture.mutate(`\`${row.commit.short_sha}\` ${row.commit.summary}`);
+            },
+          },
+        ]}
+      />
     </Row>
   );
 }

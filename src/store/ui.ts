@@ -132,8 +132,21 @@ export interface UiState {
 
   setView: (v: ViewId) => void;
   /** Which note the Notes view is showing. The tool sets it; the view reads it. */
-  note: { project: string; topic: string } | null;
-  openNote: (project: string, topic: string) => void;
+  note: { project: string; topic: string; at: number | null } | null;
+  /** `at` is a byte offset to start WRITING at — the tool's "edit this entry" passes the item's. */
+  openNote: (project: string, topic: string, at?: number) => void;
+  /**
+   * Which project the notes tool is filing into and showing.
+   *
+   * **Chosen, not derived.** It was keyed off the front tab's git remote at first, and the maintainer
+   * overruled that: which repository a terminal happens to be sitting in has nothing to do with which
+   * project a note belongs to, and it left projects unaddressable from any other tab. `null` means
+   * "the one the front tab suggests", which is a useful default and never a constraint.
+   *
+   * Persisted, because it is a place you are working in rather than a moment.
+   */
+  notesProject: string | null;
+  setNotesProject: (project: string | null) => void;
   /** Show a tool. Choosing the one already shown collapses the column — the rail button is a toggle. */
   toggleTool: (t: ToolId) => void;
   setToolWidth: (px: number) => void;
@@ -179,7 +192,9 @@ export const useUiStore = create<UiState>()(
 
       setView: (view) => set({ view }),
       note: null,
-      openNote: (project, topic) => set({ note: { project, topic } }),
+      openNote: (project, topic, at) => set({ note: { project, topic, at: at ?? null } }),
+      notesProject: null,
+      setNotesProject: (notesProject) => set({ notesProject }),
       toggleTool: (tool) => set((s) => ({ activeTool: s.activeTool === tool ? null : tool })),
       setToolWidth: (px) => set({ toolWidth: clampWidth(px) }),
       setGitSplit: (percent) => set({ gitSplit: clampSplit(percent) }),
@@ -213,6 +228,8 @@ export const useUiStore = create<UiState>()(
         gitSplit: s.gitSplit,
         diffSplit: s.diffSplit,
         statusLayout: s.statusLayout,
+        // A place you are working in, not a moment — it should still be the one you chose tomorrow.
+        notesProject: s.notesProject,
         locale: s.locale,
         shortcuts: s.shortcuts,
         filesShowHidden: s.filesShowHidden,

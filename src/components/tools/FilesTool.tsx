@@ -12,6 +12,7 @@ import { useT } from "../../hooks/useT";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { humanSize } from "../../lib/humanSize";
 import { copyText } from "../../lib/clipboard";
+import { useCaptureNote } from "../../hooks/useCaptureNote";
 import type { DirEntry } from "../../bindings/DirEntry";
 
 /** How deep a nested folder is indented, in pixels per level. */
@@ -182,6 +183,7 @@ function Entry({
   showHidden: boolean;
 }) {
   const t = useT();
+  const capture = useCaptureNote();
   const activeKey = useTerminalStore((s) => s.activeKey);
   const setPaneDetail = useTerminalStore((s) => s.setPaneDetail);
   const setActive = useTerminalStore((s) => s.setActive);
@@ -270,6 +272,16 @@ function Entry({
             label: t("files.copyPath"),
             onSelect: () => {
               copyText(entry.path, "clipboard.path");
+            },
+          },
+          {
+            // Capture from context: the path becomes a note where the user is looking at it, rather
+            // than after a trip to another panel and a retype. That difference is what decides
+            // whether a staging area gets used at all.
+            id: "note",
+            label: t("notes.captureThis"),
+            onSelect: () => {
+              capture.mutate(`\`${entry.path}\``);
             },
           },
         ]}

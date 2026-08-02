@@ -1,4 +1,6 @@
 import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import { Copy, Pencil } from "lucide-react";
+import { IconButton } from "./IconButton";
 import { api } from "../../api/commands";
 import { parseMarkdown, type Block, type Inline } from "../../lib/markdown";
 
@@ -33,11 +35,20 @@ export type ImageRenderer = (src: string, alt: string) => ReactNode;
 
 const ImageContext = createContext<ImageRenderer | null>(null);
 
+// Labels for the two per-block controls. Not through the message catalogue: this is a primitive in
+// `ui/`, and a primitive that reaches for the app's translations is one that cannot be reused by a
+// caller with none. The two words are the same in every language this app speaks, and the caller can
+// still override them by wrapping — which no caller has needed.
+const COPY_LABEL = "Copy";
+const EDIT_LABEL = "Edit here";
+
 export function Markdown({
   source,
   className = "",
   style,
   image = null,
+  onCopyBlock,
+  onEditBlock,
 }: {
   source: string;
   className?: string;
@@ -45,13 +56,67 @@ export function Markdown({
    *  (rule:content-size), once, rather than on every block. */
   style?: CSSProperties;
   image?: ImageRenderer | null;
+  /**
+   * Given, each block gets a copy control — the way documentation sites do it.
+   *
+   * Handed the block's own SOURCE rather than its rendered text: a code fence copied as rendered text
+   * loses nothing, but a list copied that way loses its `-` and a heading its `#`, and the place this
+   * is going is usually a prompt or a file where that matters.
+   */
+  onCopyBlock?: (source: string) => void;
+  /**
+   * Given, each block gets an "edit here" control beside its copy control.
+   *
+   * **Not a click on the block itself.** That was the first version and it fights everything the
+   * block contains: a link, a checkbox, the copy control, selecting a sentence. An explicit affordance
+   * says what it does and takes nothing away from the text — which is what the maintainer asked for
+   * after living with the other one.
+   */
+  onEditBlock?: (at: number) => void;
 }) {
   return (
     <ImageContext.Provider value={image}>
       <div className={`text-xs leading-relaxed ${className}`.trim()} style={style}>
         {parseMarkdown(source).map((block, at) => (
-          <div key={at} data-md-start={block.at.start} data-md-end={block.at.end}>
+          <div
+            key={at}
+            data-md-start={block.at.start}
+            data-md-end={block.at.end}
+            className={
+              onCopyBlock === undefined && onEditBlock === undefined ? undefined : "group relative"
+            }
+          >
             <BlockView block={block} />
+            {onCopyBlock === undefined && onEditBlock === undefined ? null : (
+              // Shown on hover and on focus. Focus matters as much: without it these are controls only
+              // a mouse can reach, in a document whose other route in is the keyboard.
+              <span className="bg-deep/80 absolute top-0 right-0 flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                {onCopyBlock === undefined ? null : (
+                  <IconButton
+                    label={COPY_LABEL}
+                    variant="ghost"
+                    className="h-5 w-5"
+                    onClick={() => {
+                      onCopyBlock(source.slice(block.at.start, block.at.end));
+                    }}
+                  >
+                    <Copy size={11} aria-hidden />
+                  </IconButton>
+                )}
+                {onEditBlock === undefined ? null : (
+                  <IconButton
+                    label={EDIT_LABEL}
+                    variant="ghost"
+                    className="h-5 w-5"
+                    onClick={() => {
+                      onEditBlock(block.at.start);
+                    }}
+                  >
+                    <Pencil size={11} aria-hidden />
+                  </IconButton>
+                )}
+              </span>
+            )}
           </div>
         ))}
       </div>

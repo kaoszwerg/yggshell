@@ -1,23 +1,27 @@
 import { useGitSnapshot } from "./useGitSnapshot";
+import { useUiStore } from "../store/ui";
 
 /**
- * The notes project the front tab belongs to.
+ * Which project the notes tool is filing into.
  *
- * **The git remote, falling back to the folder name**, so the same project is the same folder on
- * every machine however differently it is checked out — `git@github.com:kaoszwerg/yggshell.git` and
- * the https form both become `github.com/kaoszwerg/yggshell`. A tab with no repository at all gets
- * the shared `_inbox`, so a thought is never refused for being had in the wrong window.
+ * **The user's choice first.** This was derived from the front tab's git remote and nothing else, and
+ * the maintainer overruled it: which repository a terminal happens to be sitting in has nothing to do
+ * with which project a note belongs to, and it left every project unreachable from any other tab —
+ * "es gibt nur ein Projekt … der hat aber rein garnichts mit dem Projekt zu tun". Projects are now
+ * created, renamed and picked deliberately.
  *
- * **Following the front tab is right here and would be wrong for the attention signal**, which the
- * rules warn about at length (`rule:attention-signals`). The difference is what the surface is for:
- * that one has to reach somebody looking elsewhere, this one is a panel you are reading. Gating it on
- * the front tab is the feature.
+ * **The tab still supplies the default**, because it is a good guess on the day you start: the git
+ * remote reduced to a key, so the same repository is the same folder on every machine however
+ * differently it is checked out. A tab with no repository falls back to the shared `_inbox`, so a
+ * thought is never refused for being had in the wrong window.
  */
 export function useNoteProject(): string {
+  const chosen = useUiStore((s) => s.notesProject);
   const { query } = useGitSnapshot();
   const remote = query.data?.remote ?? "";
   const root = query.data?.root ?? "";
-  return projectKey(remote) ?? folderKey(root) ?? "_inbox";
+  // The user's choice wins, always. The tab only ever supplies a first suggestion.
+  return chosen ?? projectKey(remote) ?? folderKey(root) ?? "_inbox";
 }
 
 /**

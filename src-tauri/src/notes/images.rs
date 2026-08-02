@@ -134,6 +134,55 @@ pub fn orphans(root: &Path) -> Vec<(String, u64)> {
     out
 }
 
+/// Fetch a remote image, once, because the user pressed.
+///
+/// **Never on render.** A `![](https://…)` in a pasted note would otherwise make the app call a
+/// stranger's server the instant the note is read, which is exactly what a tracking pixel counts on —
+/// and reading a note is not consent to that (ADR-PROJ-004).
+///
+/// **The BACKEND fetches, never the webview.** The webview then opens no connection of its own, which
+/// keeps the CSP posture intact and stops the request carrying a referrer or a user agent anywhere.
+/// HTTPS only, with a timeout and a size cap, because this is the one place in the application where
+/// a URL out of untrusted content reaches the network (`rule:security`).
+pub async fn fetch_remote(url: &str) -> Result<Vec<u8>> {
+    if !url.starts_with("https://") {
+        return Err(AppError::Other(format!(
+            "refusing to fetch a non-https image: {url}"
+        )));
+    }
+    tracing::info!(%url, "notes image fetch");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        // No redirect chase into a different scheme, and a bounded one at that: an open redirect is
+        // how an https URL becomes a request somewhere the user never saw.
+        .redirect(reqwest::redirect::Policy::limited(3))
+        .build()
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(AppError::Other(format!(
+            "{url} answered {}",
+            response.status()
+        )));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    if bytes.len() > MAX_INLINE {
+        return Err(AppError::Other(format!(
+            "{url} is {} bytes, over the {MAX_INLINE}-byte inline limit",
+            bytes.len()
+        )));
+    }
+    tracing::info!(%url, bytes = bytes.len(), "notes image fetched");
+    Ok(bytes.to_vec())
+}
+
 /// Delete the images the user picked from an [`orphans`] listing.
 pub fn remove(root: &Path, keys: &[String]) -> Result<usize> {
     let mut removed = 0;

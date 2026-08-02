@@ -19,6 +19,7 @@ import { useShortcuts } from "./hooks/useShortcuts";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
 import { useAttentionBell } from "./hooks/useAttentionBell";
 import { useRefreshOnCommandEnd } from "./hooks/useRefreshOnCommandEnd";
+import { useNotesSync } from "./hooks/useNotesSync";
 import { useUiStore } from "./store/ui";
 
 /** Application shell: frameless HUD chrome with a sidebar and the routed views. Product views are
@@ -45,6 +46,10 @@ export default function App() {
   // containers — and none of them had a way to hear that it changed. A command ending is that
   // moment, and OSC 133 already reports it (`hooks/useRefreshOnCommandEnd`).
   useRefreshOnCommandEnd();
+  // The notes keep themselves in step: pull on start and when the window comes back, push what
+  // changed. Without this the sync only ever ran when somebody opened Settings and pressed a button,
+  // which is not what "any machine running YggShell has them" means (`hooks/useNotesSync`).
+  useNotesSync();
 
   return (
     <div className="window-frame h-full">

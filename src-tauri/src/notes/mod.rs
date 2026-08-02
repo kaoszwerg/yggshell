@@ -270,6 +270,29 @@ pub fn delete_note(root: &Path, project: &str, topic: &str) -> Result<()> {
     Ok(())
 }
 
+/// Rename a project, keeping every note and image in it.
+///
+/// **Projects are named by the user, not derived from whatever tab happens to be in front.** They
+/// were keyed off the front tab's git remote at first, and the maintainer overruled it: which
+/// repository a terminal is sitting in has nothing to do with which project a note belongs to, and a
+/// name you cannot change is a name that is wrong for ever.
+pub fn rename_project(root: &Path, from: &str, to: &str) -> Result<()> {
+    let source = project_dir(root, from)?;
+    let target = project_dir(root, to)?;
+    if source == target {
+        return Ok(());
+    }
+    if std::fs::read_dir(&target).is_ok_and(|mut d| d.next().is_some()) {
+        return Err(AppError::Other(format!("{to} already has notes in it")));
+    }
+    // Created by `project_dir` a moment ago; a rename onto an existing empty directory fails on some
+    // platforms, so it goes first.
+    let _ = std::fs::remove_dir(&target);
+    std::fs::rename(&source, &target).map_err(|e| AppError::io(target.display().to_string(), e))?;
+    tracing::info!(from, to, "notes project renamed");
+    Ok(())
+}
+
 /// Delete a whole project directory, with everything in it.
 pub fn delete_project(root: &Path, project: &str) -> Result<()> {
     let dir = project_dir(root, project)?;

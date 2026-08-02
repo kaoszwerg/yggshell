@@ -24,7 +24,7 @@ function renderView() {
 describe("NotesView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useUiStore.setState({ locale: "en", note: { project: "p", topic: "inbox" } });
+    useUiStore.setState({ locale: "en", note: { project: "p", topic: "inbox", at: null } });
     useTerminalStore.setState({ panes: [], activeKey: null });
     vi.mocked(notesApi.read).mockResolvedValue("# A note\n\n- [ ] something\n");
   });
