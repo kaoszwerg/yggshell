@@ -32,6 +32,16 @@ const INDENT = 12;
  * a file manager sitting next to an agent that edits files is a combination nobody asked for, and
  * the same reason the Git tool is read-only.
  */
+
+/**
+ * How often an open directory re-reads while it is on screen.
+ *
+ * A build, a `git checkout` or an `rm` rewrites a tree without telling anyone, and a file list that
+ * is minutes old is worse than none — it looks current. Four seconds while visible; nothing while
+ * the panel is closed or the window hidden.
+ */
+const REFRESH_MS = 4_000;
+
 export function FilesTool() {
   const t = useT();
   const root = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
@@ -99,6 +109,9 @@ function Directory({
   const query = useQuery({
     queryKey: ["files", root, path],
     queryFn: () => filesApi.list(root, path),
+    // A directory the terminal is writing to changes without asking anyone. Only while the panel is
+    // mounted and the window visible — TanStack stops an interval on both.
+    refetchInterval: REFRESH_MS,
   });
 
   if (query.isPending) {

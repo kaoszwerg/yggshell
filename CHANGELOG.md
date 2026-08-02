@@ -8,6 +8,35 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Three panels sat on screen showing something that was no longer true.** *"Ich will auf einen
+  Blick die aktuelle Situation erfassen können, nicht durch Rumklicken."* Activity was read once and
+  then only on its refresh button; Files had no interval at all, so a file the shell had just written
+  never appeared; and Docker's **container list** was pinned at `staleTime: Infinity`, so a container
+  that had just started showed up nowhere. Only Docker's *stats* were live, which made the panel look
+  current while its list was not.
+
+  Both halves are now in place, because neither alone is enough:
+  - **A command ending re-reads all three**, over OSC 133, which the app already receives and the
+    store already carries per pane. That is the exact moment a build, a `git checkout` or a
+    `docker compose up` has changed what these panels describe — earlier than any timer could be, and
+    free when nothing is happening. It fires on the **edge** out of `running`, in **any** tab, since a
+    build finishing over there creates the file you are looking at over here.
+  - **Each panel also polls while it is on screen.** A dev server that opens a port ten seconds into a
+    run crosses no command boundary, and a watcher writing files crosses none either. Only while
+    mounted and only while the window is visible — TanStack stops an interval on both counts, which
+    is what makes two process spawns per read affordable. Closed or hidden, they cost nothing.
+
+  This deliberately replaces a documented decision (*"read on demand, never on a timer"*). That
+  reasoning was about cost and it was right about cost; it was wrong about the value of a panel you
+  have to click to trust — which is right only at the moment you click it, and convincingly wrong
+  every moment after.
+
+  `git` and the agent session keep their own polls: they change without a command boundary, so a
+  trigger would be a second mechanism rather than a better one. `docker-stats` samples over time and
+  costs ~2 s a read; it keeps its own cadence.
+
+### Fixed
+
 - **Paste from the terminal's context menu did nothing, and froze the menu while it did it.** It read
   the clipboard with `navigator.clipboard.readText()`, which is permission-gated in this webview: the
   confirmation it wants was never visible, nothing was pasted, the menu stayed open and rendering

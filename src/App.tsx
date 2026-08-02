@@ -16,6 +16,7 @@ import { useLaunchRequests } from "./hooks/useLaunchRequests";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
 import { useAttentionBell } from "./hooks/useAttentionBell";
+import { useRefreshOnCommandEnd } from "./hooks/useRefreshOnCommandEnd";
 import { useUiStore } from "./store/ui";
 
 /** Application shell: frameless HUD chrome with a sidebar and the routed views. Product views are
@@ -38,6 +39,10 @@ export default function App() {
   // An agent asking for something marks ITS tab — at the shell root, because the whole point is that
   // it reaches you while you are looking somewhere else entirely (`hooks/useAttentionBell`).
   useAttentionBell();
+  // Three panels describe state the terminal produces — what it is running, the directory, the
+  // containers — and none of them had a way to hear that it changed. A command ending is that
+  // moment, and OSC 133 already reports it (`hooks/useRefreshOnCommandEnd`).
+  useRefreshOnCommandEnd();
 
   return (
     <div className="window-frame h-full">

@@ -14,15 +14,32 @@ import type { ProcessInfo } from "../../bindings/ProcessInfo";
 const INDENT = 10;
 
 /**
+ * How often the process list re-reads while it is on screen.
+ *
+ * Five seconds, because a read is a `ps` **and** an `lsof` — the second of which walks every open
+ * file descriptor on the machine. Fast enough that a port opening feels immediate, slow enough that
+ * two spawns are not a background hum. Nothing runs while the panel is closed or the window hidden.
+ */
+const REFRESH_MS = 5_000;
+
+/**
  * What this tab is running, and what it has open.
  *
  * **The question it answers.** A harness starts a dev server, a watcher, a build; it scrolls away,
  * or the tab is closed, and nothing says any of it is still there. The next run then fails on a port
  * that is already taken, with an error naming neither the process nor the tab it came from.
  *
- * **Read on demand, never on a timer.** It costs a `ps` and an `lsof`, which have no business
- * running every few seconds behind a panel nobody is looking at. The refresh button is the contract:
- * what you see is what was true when you asked.
+ * **Current while you are looking at it, idle when you are not.** It costs a `ps` and an `lsof`, so
+ * it polls only while the panel is mounted and the window is visible — TanStack stops an interval on
+ * both counts, which is the whole reason this is affordable. Closed or hidden, it costs nothing.
+ *
+ * It also re-reads the moment a command ends anywhere, which a timer cannot be early enough for
+ * (`hooks/useRefreshOnCommandEnd`). The two answer different halves: the trigger catches the change
+ * that has a boundary, the interval catches the dev server that opened a port ten seconds into a run
+ * that has not finished.
+ *
+ * This replaces a refresh-button-only contract, deliberately: **a panel you have to click to trust is
+ * a panel you read wrong the rest of the time.** The button stays for the impatient case.
  *
  * **It shows; it does not act.** No stop button, no kill. The terminal is right there and already
  * has every signal a process understands — a button that ends a process from a panel, next to an
@@ -39,9 +56,9 @@ export function ActivityTool() {
     queryKey: ["activity", sessionId],
     queryFn: () => (sessionId === null ? null : terminalApi.activity(sessionId)),
     enabled: sessionId !== null,
-    // Never on its own. See the comment above — this is two process spawns per read.
-    refetchOnWindowFocus: false,
-    staleTime: Number.POSITIVE_INFINITY,
+    // Only while this panel is on screen: an unmounted query runs no interval, and a hidden window
+    // stops one. Two process spawns per read is affordable when somebody is reading them.
+    refetchInterval: REFRESH_MS,
   });
 
   if (sessionId === null) return <Empty>{t("activity.noSession")}</Empty>;

@@ -37,8 +37,10 @@ export function DockerTool() {
     queryKey: ["docker"],
     queryFn: () => dockerApi.containers(),
     // On demand: this shells out to the daemon, and a panel nobody is looking at must not poll it.
-    refetchOnWindowFocus: false,
-    staleTime: Number.POSITIVE_INFINITY,
+    // The LIST, on the same cadence as the stats beside it: a container that has just started is
+    // exactly what you open this panel to see, and it appeared nowhere until somebody pressed
+    // refresh. Only while the panel is mounted and the window visible.
+    refetchInterval: STATS_MS,
   });
 
   /**

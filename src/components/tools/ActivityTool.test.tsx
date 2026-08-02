@@ -136,3 +136,29 @@ describe("ActivityTool", () => {
     expect(sized?.style.fontSize).toBe("17px");
   });
 });
+
+describe("keeping itself current", () => {
+  it("re-reads on a timer while it is on screen", async () => {
+    // The panel is meant to be read at a glance. Behind a refresh button it was only ever right at
+    // the moment you clicked — and wrong, convincingly, every moment after. A dev server that opens a
+    // port ten seconds into a run crosses no command boundary, so a trigger alone cannot catch it.
+    vi.useFakeTimers();
+    try {
+      useTerminalStore.setState({
+        panes: [pane({ key: "a", sessionId: 1 })],
+        activeKey: "a",
+        bootstrapped: true,
+      });
+      vi.mocked(terminalApi.activity).mockResolvedValue(ACTIVITY);
+      renderTool();
+      await vi.advanceTimersByTimeAsync(0);
+      const first = vi.mocked(terminalApi.activity).mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(11_000);
+
+      expect(vi.mocked(terminalApi.activity).mock.calls.length).toBeGreaterThan(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
