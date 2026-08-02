@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "count": 33,
+  "count": 34,
   "adrs": [
     {
       "id": "ADR-APP-001",
@@ -996,6 +996,52 @@
       "supersededBy": null,
       "path": "docs/adr/project/proj-003-window-frame-paints-only-the-band.md",
       "hash": "0c8bb6c7f3816715"
+    },
+    {
+      "id": "ADR-PROJ-004",
+      "layer": "proj",
+      "title": "The notes leave the device, and exactly how",
+      "tldr": "Notes sync to a private repo the user names, through their own git; nothing else leaves. A remote image is fetched by the backend on request, never on render.",
+      "scope": "fullstack",
+      "load": "conditional",
+      "status": "accepted",
+      "triggers": [
+        "notes",
+        "note",
+        "sync",
+        "egress",
+        "network",
+        "remote",
+        "push",
+        "pull",
+        "clone",
+        "git",
+        "credentials",
+        "ssh",
+        "token",
+        "privacy",
+        "telemetry",
+        "image",
+        "images",
+        "tracking",
+        "pixel",
+        "link",
+        "external",
+        "browser",
+        "repository",
+        "private",
+        "threat",
+        "injection"
+      ],
+      "applies-to": [
+        "src-tauri/src/notes/**",
+        "src/components/tools/NotesTool.tsx",
+        "src/views/NotesView.tsx",
+        "src/api/notes.ts"
+      ],
+      "supersededBy": null,
+      "path": "docs/adr/project/proj-004-notes-egress-and-trust.md",
+      "hash": "f6d90b5df2540f7b"
     }
   ]
 }
