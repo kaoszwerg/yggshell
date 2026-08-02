@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "governanceVersion": "0.10.3",
+  "governanceVersion": "0.10.4",
   "upstream": "kaoszwerg/saga-rust-template",
   "layers": [
     {
@@ -11,11 +11,11 @@
     {
       "id": "app",
       "source": "kaoszwerg/saga-rust-template",
-      "version": "0.10.3"
+      "version": "0.10.4"
     }
   ],
   "optedOut": [],
-  "count": 132,
+  "count": 133,
   "files": [
     {
       "path": ".claude/memory/glossary.md",
@@ -470,6 +470,11 @@
     {
       "path": "docs/migrations/app-108-test-env-web-storage.md",
       "hash": "a09f549c1e21224a",
+      "layer": "app"
+    },
+    {
+      "path": "docs/migrations/app-109-window-frame-composited.md",
+      "hash": "18e07c20bd34807c",
       "layer": "app"
     },
     {
