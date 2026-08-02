@@ -1,7 +1,7 @@
 ---
 id: mem:open-work-backlog
 title: Open follow-up work on YggShell
-tldr: "Traps this repo already paid for — hud-panel beats `absolute`, flat config REPLACES rule options — plus the live backlog and its measurements."
+tldr: "Traps this repo already paid for — EVERY .hud-* class beats every utility, flat config REPLACES rule options — plus the live backlog and its measurements."
 scope: project
 load: conditional
 triggers:
@@ -475,6 +475,15 @@ change.
 
 ## Defects with a diagnosis, not yet closed
 
+- **Reported upstream 2026-08-02, answer pending:** that every `.hud-*` class is unlayered and so
+  overrides any utility passed through `className` — which makes the `className` prop a promise the
+  shell cannot keep for any property its base classes declare. Their call: move the definitions into
+  `@layer components` (utilities win, as the prop implies, but every current override flips) or say so
+  in `rule:theming` where it is met. Also passed on: `background-position` is the same repaint class as
+  the `--frame-angle` they fixed in app-109, so the sweep after that fix should have been for the
+  class and not the property; and `navigator.clipboard.readText()` is permission-gated in the Tauri
+  WebView, where it looks exactly like a hang.
+
 - **tmux replaces a TAB in `-F` output with `_` for this app's process, and nobody knows why.**
   Narrowed, worked around, still open (2026-08-02).
 
@@ -597,11 +606,30 @@ change.
   in a stylesheet. **A decorative animation is a per-frame cost times the element's area; a 12 s
   revolution does not need 60 fps.** If you raise the step count, re-measure — the cost is in the
   paint, not in the animation.
-- **`.hud-panel` pins `position: relative`, and unlayered CSS beats every `@layer` — including
-  Tailwind's utilities.** `className="hud-panel absolute inset-0"` therefore does NOT float: the
-  element stays in the flow, `inset-0` does nothing, and an `overflow-auto` child never bounds. Use
-  `.hud-popover` (same chamfered border, `position` left to the caller) for anything floating. Gated
-  now by `hud/floating-panel-position` (`scripts/project/eslint-hud-position.mjs`).
+- **EVERY `.hud-*` class is unlayered, and unlayered CSS beats every `@layer` — including Tailwind's
+  utilities.** Verified across the stylesheet: `.hud-panel`, `.hud-btn`, `.hud-clip*`, `.hud-activity`,
+  `.window-frame` — all of them, all outside any layer. It is a property of the design system, not of
+  one class, and it cuts **both ways**:
+
+  - **Consuming one:** `className="hud-panel absolute inset-0"` does NOT float — the element stays in
+    the flow, `inset-0` does nothing, and an `overflow-auto` child never bounds. Use `.hud-popover`
+    (same chamfered border, `position` left to the caller). Gated by `hud/floating-panel-position`
+    (`scripts/project/eslint-hud-position.mjs`).
+  - **Authoring one:** adding a property to a `.hud-*` class silently takes it away from every caller
+    who set it with a utility. **This entry existed and was walked into anyway** (2026-08-02): a
+    `position: relative` added to `.hud-activity` for an unrelated reason overrode the view's
+    `absolute inset-x-0 top-0`, and the activity line dropped out of the top edge. Nothing failed —
+    it was found by the maintainer looking at the screen.
+
+    The entry had been written as a fact about `.hud-panel` and about *using* it, so it did not read
+    as a warning about *writing* one. That is the handover failure, not the CSS: knowledge in the repo
+    that the next agent does not recognise as being about their task has not arrived
+    (rule:knowledge-handover). Hence the rewrite above.
+
+  A `.hud-*` class that must not fight its caller should declare nothing the caller would reasonably
+  set — `.hud-activity` needs `overflow: hidden` and no `position` at all, because its travelling
+  child overflows in normal flow rather than being positioned. Reported upstream; whether they move the
+  definitions into `@layer components` is theirs to decide, and either answer needs saying out loud.
 - **ESLint flat config REPLACES a rule's options, it does not merge them.** Adding an entry to the
   base config's `no-restricted-syntax` from the project overlay silently switched off its bans on
   native `<button>`, `<input>` and the `title` tooltip — config loaded, lint passed, gate gone. If you
