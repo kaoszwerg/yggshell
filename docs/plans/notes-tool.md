@@ -371,6 +371,37 @@ Three consequences that are decisions, not details:
   other default, and this belongs in ADR-PROJ-004 beside the sync: it is the second way this feature
   reaches the network and by far the easier one to overlook.
 
+### The app touches many repositories and may WRITE to exactly one
+
+Raised by the maintainer, and it is the most dangerous property this feature has: YggShell already runs
+`git` inside **every project the user has a tab in** — status, fetch, diff, log — and all of it is
+read-only. The notes sync is the first code in this application that commits and pushes. A write path
+that ever pointed at the wrong directory would commit and push the maintainer's actual work, from a
+background timer, without anyone asking for it.
+
+That is not a thing to be careful about. It is a thing to make impossible:
+
+- **Two modules, and the boundary is the module.** `git/` stays read-only and never grows a write
+  path. `notes/` owns the only `commit`/`push`/`add`/`rm` in the codebase. Nothing is shared but the
+  process-spawning helper.
+- **The notes root is never supplied by the frontend.** It is derived in Rust from the app data
+  directory and the configured clone. The webview can ask for "sync now"; it cannot say *which
+  directory* to sync. Same principle as `ADR-PROJ-001 §5` — the frontend must not be able to choose
+  what runs — and the same shape as `launch::resolve`, which validates a path once before anything
+  acts on it.
+- **Every write re-checks its ground.** The target is canonicalised and must be under the notes root,
+  `files::verify`-style, even though the path is internal. Cheap, and the one check that survives a
+  refactor moving code between modules.
+- **A gate, because this is exactly what a gate is for** (`rule:knowledge-handover` §1: the strongest
+  form the change allows). A script in `check:all` scans the Rust sources and **fails the build if a
+  writing git subcommand — `commit`, `push`, `add`, `rm`, `reset`, `checkout`, `merge`, `rebase` —
+  appears outside `src-tauri/src/notes/`**. The precedent is `scripts/project/check-no-process-kill.mjs`,
+  which exists for the same class of mistake: an ordinary command that is correct almost everywhere and
+  catastrophic in one place.
+
+  A future agent adding "just a quick `git add`" to the Git tool then meets a red build with a sentence
+  explaining why, rather than a review that may not happen.
+
 ### Getting rid of things — images, notes, whole projects
 
 A store that only accepts is a store that rots. This is the same failure the attention signal was
