@@ -334,12 +334,17 @@ Three consequences that are decisions, not details:
     viewer (`open_path`, which already exists). Large binaries in a git repository are the other half
     of that cost, and this is a notes repo, not an asset store.
 
-- **Remote images are egress, and default to not fetching.** A remote `![](https://…)` in a pasted note makes
-  the app call out to a server the moment it is rendered — a tracking pixel would work exactly as
-  designed. `rule:privacy` forbids that by default, so: **images from the notes repository render;
-  remote ones show as a link with a one-press "load this image", and the choice is per image.** This
-  belongs in ADR-PROJ-004 beside the sync, because it is the second way this feature can reach the
-  network and the easier one to overlook.
+- **A repository image is simply shown. There is nothing to press.** `![](assets/frame.png)` renders
+  inline in LESEN, in the note, at once — that is the normal case and the whole point of pasting a
+  screenshot into a note. The tool column still shows none of it (it is a list), and the writing state
+  shows the markdown, because that is what writing markdown is.
+
+- **Only a REMOTE image waits, and only because it is egress.** A `![](https://…)` in a pasted note
+  would make the app call out to a stranger's server the instant the note is rendered — a tracking
+  pixel would work exactly as designed, and *reading a note* is not consent to that. So a remote image
+  renders as a placeholder with its URL and one *load* control, per image. `rule:privacy` allows no
+  other default, and this belongs in ADR-PROJ-004 beside the sync: it is the second way this feature
+  reaches the network and by far the easier one to overlook.
 
 ### Getting rid of things — images, notes, whole projects
 
@@ -431,14 +436,17 @@ them turned up five more that would have been decided silently at the keyboard.
     not hold (`rule:security` — no token, ever). Claiming to check would be worse than not checking, so
     instead:
 
-    - **the app never creates a repository.** It pushes to one the user named and nothing else. A
-      creation flow would have to choose a visibility, and choosing wrong is silent.
+    - **The app never creates a repository — it expects one that already exists.** Connecting means
+      naming a remote it can reach; if it cannot, that is reported where the URL was typed, with git's
+      own message. A creation flow would have to pick a visibility, and picking wrong is silent and
+      permanent.
     - **Settings › Notes states it where the URL is typed**, plainly: everything in the notes is pushed
       verbatim, and this repository should be private. Said at the moment of the decision, not in a
       document nobody opens.
-    - the implementation task is authorised (2026-08-02) to **create the maintainer's own notes
-      repository as `private` and push to it** while building this, which is a one-off setup act by a
-      person, not a capability the product grows.
+    - **The repository is created once, by the agent, with the `gh` CLI, as `private`** — explicitly
+      authorised on 2026-08-02 as part of the implementation task. It is a one-off setup act performed
+      by a person with credentials, and deliberately not a capability the product grows: the app holds
+      no token and could not do this if it wanted to (`rule:security`).
 
 **What ADR-PROJ-004 still has to WRITE** — these are work, not open questions:
 
