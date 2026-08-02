@@ -511,6 +511,32 @@ change.
 
 ## Traps this session paid for — do not re-learn them
 
+- **A `clip-path: polygon(evenodd, …)` cannot make a ring, however many points you give it.** One
+  polygon is one closed contour. Listing an outer contour and then an inset one in the same point list
+  produces a path that traces the outer, **jumps** to the first inner point, traces the inner, and
+  closes back to the start — and those two connecting segments are real edges. Along them the
+  even-odd rule cancels itself out and the fill has a gap.
+
+  The gap is always there; *where* it shows depends only on which points happen to be first and last.
+  In the window frame it landed on the top-left chamfer, the most visible edge on the window, and was
+  reported from a production build with a screenshot (2026-08-02, upstream's app-109 block, ported in
+  0.36.2, fixed in 0.39.1).
+
+  **Ask what the ring is for before building one.** Here nothing needed it: `.window-frame` has
+  `padding: var(--frame-band)` and `.window-frame-inner` is opaque above it, so the shell already
+  covered everything but the band. The band's width belongs to the **layout**, not to a second contour
+  kept in sync with the first through `calc()` — and the file's own older comment already said the
+  matching thing about `mask`: *"the earlier mask + mask-composite ring was silently broken by the
+  production CSS minifier and flooded the whole window. Padding survives minification."*
+
+  Pinned in `src/styles/globals.test.ts`, which reads the stylesheet as text — jsdom applies no
+  stylesheets, so neither a type nor a lint nor a render test can see a wrong polygon.
+
+- **Checking a migration briefing's steps is not checking the change.** All seven of app-109's points
+  were verified and all seven held; the block they told us to copy was itself wrong. A checklist says
+  *what to do*, never *whether what you were handed is correct* — and a port is exactly the moment
+  nobody is reading the code, because someone upstream already did.
+
 - **An animated custom property inside a `conic-gradient` is a PAINT across the element's whole box,
   every frame, for ever.** `.window-frame` animated `--frame-angle` at `linear` over an element that
   *is the whole window*, to show a 1.5 px border — the rest is covered by `.window-frame-inner` and
