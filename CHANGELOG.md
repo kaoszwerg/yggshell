@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Middle-click pastes the clipboard now, not an emulated X11 selection.** Reported: middle-click did
+  not paste what had been copied. It was pasting an app-scoped stand-in for the X11 PRIMARY selection
+  — and the handler is skipped on Linux, because there the real PRIMARY works and the WebView does it
+  properly. So the emulation ran on exactly the two platforms whose users have never had a PRIMARY
+  selection: a macOS user middle-clicking means "paste what I copied", which is what iTerm2 does, and
+  got their last *selection* instead. The stand-in was redundant here anyway — `copy_on_select`
+  already puts a selection in the clipboard for anyone who wants selecting to be copying.
+
+  It reads through the backend, like every other paste since 0.39.6. This was the third call site of
+  `navigator.clipboard.readText()` and the one missed then; it would have hung the same way.
+
+### Changed
+
+- **Upstream v0.10.6 pulled, and the `.hud-*` classes moved into `@layer components`** (briefing
+  `app-111`) — the finding this fork reported. A caller's utility now wins over a component class,
+  which is what accepting a `className` prop promises.
+
+  The migration's real cost is the fork's own audit, and it came out clean: every `className`
+  containing a `.hud-*`, `.scheme-*` or `.window-frame` class was checked against the properties that
+  class declares, multi-line templates included. **Zero collisions** — the one that existed was
+  `.hud-activity`'s `position`, already removed in 0.39.6 when it dropped the activity line out of the
+  window's top edge.
+
+  `src/styles/layers.test.ts` is ported with it and is the only thing in the gate that can see this:
+  unlayered CSS is valid, lints clean, typechecks clean, and fails only as *nothing happening* when a
+  caller passes a utility. Negative-controlled against an unlayered `.hud-panel`.
+
+  **The reduced-motion queries stay unlayered on purpose**, and that is pinned too: an accessibility
+  override has to outrank everything, a caller's utility included, and a layered one would not.
+
 ### Added
 
 - **Four things you can do with a path in the file browser**, where there were two:

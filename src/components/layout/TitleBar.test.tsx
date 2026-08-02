@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TitleBar } from "./TitleBar";
 import { APP_NAME, APP_TAGLINE } from "../../lib/app";
 import type { BuildInfo } from "../../bindings/BuildInfo";
-import { clearPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
+import { clearPrimarySelection } from "../../lib/primarySelection";
 import { clearPasteTargets, registerPasteTarget } from "../../lib/terminalHandles";
 import { useTerminalStore } from "../../store/terminal";
 import type { TmuxSession } from "../../bindings/TmuxSession";
@@ -38,6 +38,12 @@ const refetchSessions = vi.fn(() => Promise.resolve({ data: running }));
 function session(name: string): TmuxSession {
   return { name, windows: 1, attached: false, command: "zsh" };
 }
+
+/** What the fake clipboard holds. A test names it before rendering. */
+let clipboard = "";
+vi.mock("../../api/terminal", () => ({
+  terminalApi: { clipboardText: () => Promise.resolve(clipboard) },
+}));
 
 vi.mock("../../hooks/useSettings", () => ({
   useTerminalProfiles: () => ({
@@ -77,6 +83,7 @@ const devBuild: BuildInfo = {
 describe("TitleBar", () => {
   beforeEach(() => {
     running = [];
+    clipboard = "";
     minimize.mockReset();
     toggleMaximize.mockReset();
     close.mockReset();
@@ -187,12 +194,15 @@ describe("TitleBar", () => {
       expect(useUiStore.getState().view).toBe("logs");
     });
 
-    it("pastes into a terminal on middle-click, and never closes it", () => {
+    it("pastes the CLIPBOARD into a terminal on middle-click, and never closes it", async () => {
       // Middle-click means paste everywhere in this app — on the tab exactly as inside the terminal.
       // One gesture that closes here and pastes there is how a user loses a running process.
+      //
+      // The clipboard, not an emulated X11 PRIMARY selection: that emulation ran on the two platforms
+      // whose users have never had one, and "paste what I copied" is what the gesture means there.
       const paste = vi.fn();
       registerPasteTarget("term-1", { paste, clear: vi.fn() });
-      setPrimarySelection("cargo test --locked");
+      clipboard = "cargo test --locked";
       useTerminalStore.setState({
         panes: [
           pane({ key: "term-0", title: "zsh", cwd: null }),
@@ -207,14 +217,14 @@ describe("TitleBar", () => {
         new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }),
       );
 
-      expect(paste).toHaveBeenCalledExactlyOnceWith("cargo test --locked");
+      await waitFor(() => expect(paste).toHaveBeenCalledExactlyOnceWith("cargo test --locked"));
       expect(useTerminalStore.getState().panes).toHaveLength(2);
       // Brought to the front first: text landing in a terminal the user cannot see is alarming.
       expect(useTerminalStore.getState().activeKey).toBe("term-1");
       expect(useUiStore.getState().view).toBe("terminal");
     });
 
-    it("still shows the tab on middle-click when nothing is selected", () => {
+    it("still shows the tab on middle-click when the clipboard is empty", () => {
       const paste = vi.fn();
       registerPasteTarget("term-1", { paste, clear: vi.fn() });
       useTerminalStore.setState({

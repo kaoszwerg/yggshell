@@ -144,67 +144,88 @@
     background-color: rgb(var(--saga-neon-green-rgb) / 0.2);
     color: var(--saga-text);
   }
+
+  .xterm .xterm-scrollable-element > .scrollbar > .slider {
+    width: 2px !important;
+    left: auto !important;
+    right: 0 !important;
+    border-radius: 1px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    /* Element height = thumb height. The 4px track sits centred in this 12px box. */
+    height: 12px;
+  }
+
+  input[type="range"]:focus {
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--slider-fill, rgb(var(--saga-bg-elevated-rgb)));
+  }
+
+  input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--slider-fill, rgb(var(--saga-bg-elevated-rgb)));
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    width: 12px;
+    background: var(--saga-neon-green);
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgb(var(--saga-neon-green-rgb) / 0.7);
+    /* Offset relative to the runnable-track top, not the element top — re-centres on the 4px
+       track. (4 - 12) / 2 = -4. */
+    margin-top: -4px;
+    transition:
+      box-shadow 0.15s,
+      transform 0.15s;
+  }
+
+  input[type="range"]:hover::-webkit-slider-thumb {
+    transform: scale(1.15);
+    box-shadow: 0 0 12px rgb(var(--saga-neon-green-rgb) / 0.9);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    height: 12px;
+    width: 12px;
+    background: var(--saga-neon-green);
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgb(var(--saga-neon-green-rgb) / 0.7);
+    transition:
+      box-shadow 0.15s,
+      transform 0.15s;
+  }
+
+  input[type="range"]:hover::-moz-range-thumb {
+    transform: scale(1.15);
+    box-shadow: 0 0 12px rgb(var(--saga-neon-green-rgb) / 0.9);
+  }
+
+  input[type="range"]:disabled::-moz-range-thumb {
+    background: var(--saga-text-dim);
+    box-shadow: none;
+  }
 }
 
 /* Neon glow + text glow helpers. */
-.neon-glow-cyan {
-  box-shadow:
-    0 0 5px rgb(var(--saga-neon-cyan-rgb) / 0.4),
-    0 0 10px rgb(var(--saga-neon-cyan-rgb) / 0.2),
-    0 0 20px rgb(var(--saga-neon-cyan-rgb) / 0.1);
-}
-.text-glow-cyan {
-  text-shadow:
-    0 0 7px rgb(var(--saga-neon-cyan-rgb) / 0.5),
-    0 0 10px rgb(var(--saga-neon-cyan-rgb) / 0.3);
-}
-.text-glow-green {
-  text-shadow:
-    0 0 7px rgb(var(--saga-neon-green-rgb) / 0.5),
-    0 0 10px rgb(var(--saga-neon-green-rgb) / 0.3);
-}
 
 /* ── HUD primitives (plain CSS so the build never drops them) ── */
-.hud-clip {
-  --hud-clip: polygon(
-    14px 0,
-    calc(100% - 6px) 0,
-    100% 6px,
-    100% calc(100% - 14px),
-    calc(100% - 14px) 100%,
-    6px 100%,
-    0 calc(100% - 6px),
-    0 14px
-  );
-  clip-path: var(--hud-clip);
-}
-.hud-clip-sm {
-  --hud-clip: polygon(
-    8px 0,
-    calc(100% - 4px) 0,
-    100% 4px,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    4px 100%,
-    0 calc(100% - 4px),
-    0 8px
-  );
-  clip-path: var(--hud-clip);
-}
-.hud-panel {
-  position: relative;
-  isolation: isolate;
-  background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 55%, transparent);
-}
-.hud-panel::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  background: var(--saga-bg-surface);
-  clip-path: var(--hud-clip, none);
-  pointer-events: none;
-  z-index: -1;
-}
+
 /* Dropdown / popover variant of hud-panel: same chamfered-border trick (outer accent layer +
    inner inset background via ::before, both clipped to the same polygon) but with a lighter
    surface so it floats convincingly over the parent. Use together with hud-clip-sm and one of
@@ -213,122 +234,16 @@
    Caller is responsible for `position: absolute|fixed` (Tailwind `absolute`/`fixed` utility) —
    we intentionally don't pin `position` here so the utility class wins. `position: absolute`
    still gives ::before the positioned ancestor it needs for `inset: 1px`. */
-.hud-popover {
-  isolation: isolate;
-  background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 45%, transparent);
-}
-.hud-popover::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  background: var(--saga-bg-elevated);
-  clip-path: var(--hud-clip, none);
-  pointer-events: none;
-  z-index: -1;
-}
-.hud-panel::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  box-shadow: inset 0 0 14px
-    color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 18%, transparent);
-  clip-path: var(--hud-clip, none);
-  pointer-events: none;
-  z-index: 0;
-}
-.hud-label {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--hud-label-size, 0.75rem);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--hud-accent, var(--saga-neon-cyan));
-  text-shadow: 0 0 8px color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 40%, transparent);
-}
-.hud-divider {
-  height: 10px;
-  background-image: repeating-linear-gradient(
-    -45deg,
-    var(--hud-accent, var(--saga-neon-cyan)) 0 1px,
-    transparent 1px 6px
-  );
-  opacity: 0.45;
-}
-.hud-accent-cyan {
-  --hud-accent: var(--saga-neon-cyan);
-}
-.hud-accent-green {
-  --hud-accent: var(--saga-neon-green);
-}
-.hud-accent-gold {
-  --hud-accent: var(--saga-gold);
-}
-.hud-accent-danger {
-  --hud-accent: var(--saga-danger);
-}
-.hud-accent-purple {
-  --hud-accent: var(--saga-rune-purple);
-}
-.hud-grid-bg {
-  background-color: var(--saga-bg-deep);
-  background-image:
-    linear-gradient(rgb(var(--saga-neon-cyan-rgb) / 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(var(--saga-neon-cyan-rgb) / 0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-.hud-strip {
-  position: relative;
-  background: var(--saga-bg-surface);
-  border-bottom: 1px solid rgb(var(--saga-neon-cyan-rgb) / 0.3);
-}
-.hud-strip-bottom {
-  border-bottom: none;
-  border-top: 1px solid rgb(var(--saga-neon-cyan-rgb) / 0.3);
-}
-.hud-btn {
-  position: relative;
-  isolation: isolate;
-  background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 40%, transparent);
-  /* Accent-coloured label on the dark core so it stays legible at rest. */
-  color: var(--hud-accent, var(--saga-neon-cyan));
-  transition:
-    background-color 0.15s,
-    box-shadow 0.15s,
-    color 0.15s;
-}
-.hud-btn::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  background: var(--saga-bg-deep);
-  clip-path: var(--hud-clip, none);
-  pointer-events: none;
-  z-index: -1;
-}
+
 /* Hover + active: fill the whole chamfer solid with the accent and switch to a dark label. No 1px
    border is shown in these states, so the asymmetric clip-path can't make it look uneven. The dark
    label on the bright accent stays perfectly legible. */
-.hud-btn:hover {
-  background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 80%, transparent);
-  color: var(--saga-bg-deep);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 35%, transparent);
-}
-.hud-btn-active {
-  background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 80%, transparent);
-  color: var(--saga-bg-deep);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 35%, transparent);
-}
+
 /* Hide the dark core in hover/active → solid accent fill (no uneven border). */
 .hud-btn:hover::before,
-.hud-btn-active::before {
-  background: transparent;
-}
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+
+
+
 
 /* xterm does NOT use a native scrollbar — it renders its own from DOM elements (derived from VS
    Code\'s), so none of the rules above reach it. Its width is written as an INLINE style by xterm\'s
@@ -336,12 +251,7 @@
    that outranks an inline declaration. The colours come from the theme in TerminalSurface.tsx, not
    from here. Same deal as above: the slider paints 2px, the track it lives in keeps its width so it
    can still be grabbed. */
-.xterm .xterm-scrollable-element > .scrollbar > .slider {
-  width: 2px !important;
-  left: auto !important;
-  right: 0 !important;
-  border-radius: 1px;
-}
+
 
 /* ── HUD-styled range sliders ──
    Native browser thumbs (Windows blue, macOS pill) and tracks clash with the HUD palette.
@@ -352,86 +262,21 @@
    - The visible 4px track is rendered by `::-webkit-slider-runnable-track` /
      `::-moz-range-track`, which read the per-slider fill gradient from the `--slider-fill`
      CSS custom property set inline on the input. */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
-  /* Element height = thumb height. The 4px track sits centred in this 12px box. */
-  height: 12px;
-}
-input[type="range"]:focus {
-  outline: none;
-}
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-fill, rgb(var(--saga-bg-elevated-rgb)));
-}
-input[type="range"]::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-fill, rgb(var(--saga-bg-elevated-rgb)));
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 12px;
-  width: 12px;
-  background: var(--saga-neon-green);
-  border: none;
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgb(var(--saga-neon-green-rgb) / 0.7);
-  /* Offset relative to the runnable-track top, not the element top — re-centres on the 4px
-     track. (4 - 12) / 2 = -4. */
-  margin-top: -4px;
-  transition:
-    box-shadow 0.15s,
-    transform 0.15s;
-}
-input[type="range"]:hover::-webkit-slider-thumb {
-  transform: scale(1.15);
-  box-shadow: 0 0 12px rgb(var(--saga-neon-green-rgb) / 0.9);
-}
-input[type="range"]::-moz-range-thumb {
-  height: 12px;
-  width: 12px;
-  background: var(--saga-neon-green);
-  border: none;
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgb(var(--saga-neon-green-rgb) / 0.7);
-  transition:
-    box-shadow 0.15s,
-    transform 0.15s;
-}
-input[type="range"]:hover::-moz-range-thumb {
-  transform: scale(1.15);
-  box-shadow: 0 0 12px rgb(var(--saga-neon-green-rgb) / 0.9);
-}
+
+
+
+
+
+
+
+
 input[type="range"]:disabled::-webkit-slider-thumb,
-input[type="range"]:disabled::-moz-range-thumb {
-  background: var(--saga-text-dim);
-  box-shadow: none;
-}
+
 
 /* ── Neon glow helpers ── */
-.neon-glow-green {
-  box-shadow:
-    0 0 5px rgb(var(--saga-neon-green-rgb) / 0.4),
-    0 0 10px rgb(var(--saga-neon-green-rgb) / 0.2),
-    0 0 20px rgb(var(--saga-neon-green-rgb) / 0.1);
-}
-.neon-glow-gold {
-  box-shadow:
-    0 0 5px rgb(var(--saga-gold-rgb) / 0.4),
-    0 0 10px rgb(var(--saga-gold-rgb) / 0.2),
-    0 0 20px rgb(var(--saga-gold-rgb) / 0.1);
-}
-.text-glow-gold {
-  text-shadow:
-    0 0 7px rgb(var(--saga-gold-rgb) / 0.5),
-    0 0 10px rgb(var(--saga-gold-rgb) / 0.3);
-}
+
+
+
 
 /* ── Animated neon window frame around the app shell. ──
    The gradient is painted ONCE onto .window-frame-glow and then spun by a `transform`, so every frame
@@ -459,84 +304,14 @@ input[type="range"]:disabled::-moz-range-thumb {
     transform: translate(-50%, -50%) rotate(360deg);
   }
 }
-.window-frame {
-  /* Chamfered window outline matching the HUD buttons/panels (same asymmetric clip signature, scaled
-     up for the window). The inner wrapper reuses this same polygon (inherited custom property), so the
-     1.5px animated band follows the chamfer cleanly — the corners outside it are clipped to transparent
-     and reveal the desktop (main window is transparent). */
-  --hud-window-clip: polygon(
-    20px 0,
-    calc(100% - 10px) 0,
-    100% 10px,
-    100% calc(100% - 20px),
-    calc(100% - 20px) 100%,
-    10px 100%,
-    0 calc(100% - 10px),
-    0 20px
-  );
-  --frame-band: 1.5px;
-  position: relative;
-  overflow: hidden;
-  padding: var(--frame-band);
-  clip-path: var(--hud-window-clip);
-}
 
 /* The band itself: an even-odd ring clip (the window chamfer, minus the same chamfer inset by the band
    width) over a square that carries the gradient and spins. Only the ring is ever composited to screen. */
-.window-frame > .window-frame-glow {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-  /* The OUTER chamfer only — one closed contour, and that is the whole point.
-     
-     This used to be an `evenodd` ring: the outer contour followed by an inset one, in a single point
-     list. **A single polygon cannot have a hole.** The path runs the outer contour, then jumps
-     straight to the first inner point and traces that, then closes back to where it started — and
-     those two connecting segments are real edges. They cut diagonally across the top-left chamfer,
-     where the fill rule then cancels itself out and leaves a visible gap in the border. Reported from
-     a running build; the geometry is wrong wherever that seam happens to land, not just here.
-     
-     No ring is needed at all. `.window-frame` has `padding: var(--frame-band)` and
-     `.window-frame-inner` is opaque (`--saga-bg-deep`) and sits above this on `z-index: 1` — so the
-     shell already covers everything except the band. That is how the pre-animation version worked,
-     and the reason it was right is still in the comment above it: padding survives the production CSS
-     minifier, where a mask-composite ring did not. */
-  clip-path: var(--hud-window-clip);
-}
-.window-frame > .window-frame-glow::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  /* Square, and wide enough that its inscribed circle still covers the window diagonal at any aspect
-     ratio up to square. vmax (not %) keeps it square without a second length. */
-  width: 145vmax;
-  height: 145vmax;
-  background: conic-gradient(
-    var(--saga-neon-green),
-    var(--saga-neon-cyan),
-    var(--saga-rune-purple),
-    var(--saga-gold),
-    var(--saga-neon-green)
-  );
-  animation: frame-spin 12s linear infinite;
-  will-change: transform;
-}
+
 /* Inner content shell: same chamfer (inset by the 1.5px padding) + inner glow on the content edge.
    Scoped to the explicit wrapper so it never applies to sibling overlays (e.g. the About dialog), which
    must keep their own position: fixed. */
-.window-frame > .window-frame-inner {
-  position: relative;
-  /* Above the glow layer, so the opaque shell covers everything but the 1.5px band. */
-  z-index: 1;
-  overflow: hidden;
-  clip-path: var(--hud-window-clip);
-  box-shadow:
-    inset 0 0 15px rgb(var(--saga-neon-green-rgb) / 0.06),
-    inset 0 0 30px rgb(var(--saga-neon-cyan-rgb) / 0.04);
-}
+
 /* The animation lives on the spun square, so this must target THAT element — targeting .window-frame
    (where it used to live) would leave the frame spinning for users who asked it not to. */
 @media (prefers-reduced-motion: reduce) {
@@ -575,21 +350,7 @@ input[type="range"]:disabled::-moz-range-thumb {
     transform: translateX(0);
   }
 }
-.hud-activity {
-  height: 2px;
-  background: var(--saga-neon-cyan);
-  opacity: 0.18;
-  /* The travelling strip is wider than this and must not escape it. */
-  overflow: hidden;
-  /* NO `position` here, deliberately. Every `.hud-*` class in this file sits OUTSIDE `@layer`, so it
-     beats every Tailwind utility — a `position: relative` here silently overrode the caller's
-     `absolute inset-x-0 top-0` and the line dropped out of the top edge into normal flow. Reported.
-     The travelling child needs no positioned ancestor: it is a block in normal flow that is simply
-     wider than its parent, and `overflow: hidden` above is what clips it. */
-  transition:
-    opacity 250ms ease,
-    background-color 250ms ease;
-}
+
 /* ONE colour, travelling — not four.
    The first version swept green → cyan → purple → gold, which is the same set the window frame's own
    conic gradient is already rotating through. Two multicoloured animations a few pixels apart do not
@@ -600,52 +361,10 @@ input[type="range"]:disabled::-moz-range-thumb {
    frame also separates the two by more than brightness.
    The movement stays; only the hue stops changing. The sweep is the same gradient at three
    opacities, so it still travels and still reads as "something is happening". */
-.hud-activity-running {
-  opacity: 1;
-  /* The gradient lives on the ::before now; the line itself carries no colour of its own while it
-     runs, or the moving strip would travel over a static copy of itself. */
-  background: transparent;
-}
-.hud-activity-running::before {
-  content: "";
-  /* In flow, not positioned — see the note in `.hud-activity`. A block that overflows its parent
-     horizontally and is clipped by it needs nothing from the cascade the caller also writes to. */
-  display: block;
-  height: 100%;
-  /* Four element-widths: two periods of a gradient that is itself TWO element-widths long.
-     The period is the part that had to be kept, and I halved it on the first attempt: the original
-     put `background-size: 200%` on the element, so one period spanned two window widths and the
-     visible strip showed half a period — a single smooth ramp, brightest somewhere in the middle,
-     never dark at an edge. A one-width period puts the gradient's own faint ends AT both edges, and
-     the line reads as not reaching them. Reported exactly that way.
-     Two periods wide so shifting by one lands on an identical frame: no seam, no reset. */
-  width: 400%;
-  background-image: linear-gradient(
-    90deg,
-    rgb(var(--saga-gold-rgb) / 0.25),
-    var(--saga-gold),
-    rgb(var(--saga-gold-rgb) / 0.25)
-  );
-  /* Half the child = one period = two element-widths, which is the original's geometry. */
-  background-size: 50% 100%;
-  background-repeat: repeat-x;
-  animation: activity-sweep 2.4s linear infinite;
-  /* NO `will-change`. It was here for a day and it was cargo-cult: an animated `transform` is
-     composited without it, so the hint bought nothing — and it is not free. The frame's spun square
-     exists ONCE; this exists once per terminal, and every pane that is running something would hold a
-     permanently promoted, full-width layer for as long as it runs. Over-promotion costs memory and is
-     a documented cause of exactly the artefacts this was meant to prevent. */
-}
+
 /* What the command DID, which is the part you miss when you look away. Held briefly, then faded back
    to rest by the transition above. */
-.hud-activity-ok {
-  opacity: 0.9;
-  background: var(--saga-neon-green);
-}
-.hud-activity-failed {
-  opacity: 0.9;
-  background: var(--saga-danger);
-}
+
 @media (prefers-reduced-motion: reduce) {
   /* The animation lives on the ::before now, so this must target THAT element — the same trap the
      window frame's reduced-motion query walked into: move the animation, leave the query behind,
@@ -673,58 +392,437 @@ input[type="range"]:disabled::-moz-range-thumb {
    `--saga-*`, or the surface would be HUD again. `color-mix` rather than fixed tints: a light
    scheme needs its "added" wash mixed into ITS background, and a hard-coded rgba would either
    vanish or glare depending on which scheme was picked. */
-.scheme-surface {
-  background: var(--scheme-bg);
-  color: var(--scheme-fg);
-}
-.scheme-fg {
-  color: var(--scheme-fg);
-}
+
 /* Secondary text: a commit body, a file path, a count.
    Mixed towards the FOREGROUND, never towards transparency. A scheme's "quiet" slot is often very
    close to its background — measured, Yggdrasil's was 1.78:1 and Alien Blood's 2.00:1 — and fading
    it further is how dimmed text becomes invisible text. Mixing towards the foreground keeps the
    dimming while putting a floor under it, in every scheme including one imported tomorrow. */
-.scheme-dim {
-  color: color-mix(in srgb, var(--scheme-dim) 70%, var(--scheme-fg));
-}
+
 /* The `@@ … @@` header, and a ref chip. Lifted off the surface rather than given an accent of its
    own, so it reads as a separator in any scheme instead of as one more colour. */
-.scheme-meta {
-  background: color-mix(in srgb, var(--scheme-fg) 8%, var(--scheme-bg));
-  color: var(--scheme-meta);
-  border-color: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
-}
+
 /* Line numbers: present, never competing with the code beside them — and never fading into the
    background either, for the reason given above `.scheme-dim`. */
-.scheme-num {
-  color: color-mix(in srgb, var(--scheme-dim) 80%, var(--scheme-fg));
-}
-.scheme-add {
-  background: color-mix(in srgb, var(--scheme-add) 14%, transparent);
-}
-.scheme-del {
-  background: color-mix(in srgb, var(--scheme-del) 14%, transparent);
-}
+
 /* A row that exists on one side only. Deliberately unlike an empty line — a blank line is a line. */
-.scheme-gap {
-  background: color-mix(in srgb, var(--scheme-fg) 5%, transparent);
+
+@layer components {
+  .hud-clip {
+    --hud-clip: polygon(
+      14px 0,
+      calc(100% - 6px) 0,
+      100% 6px,
+      100% calc(100% - 14px),
+      calc(100% - 14px) 100%,
+      6px 100%,
+      0 calc(100% - 6px),
+      0 14px
+    );
+    clip-path: var(--hud-clip);
+  }
+
+  .hud-clip-sm {
+    --hud-clip: polygon(
+      8px 0,
+      calc(100% - 4px) 0,
+      100% 4px,
+      100% calc(100% - 8px),
+      calc(100% - 8px) 100%,
+      4px 100%,
+      0 calc(100% - 4px),
+      0 8px
+    );
+    clip-path: var(--hud-clip);
+  }
+
+  .hud-panel {
+    position: relative;
+    isolation: isolate;
+    background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 55%, transparent);
+  }
+
+  .hud-panel::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    background: var(--saga-bg-surface);
+    clip-path: var(--hud-clip, none);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .hud-popover {
+    isolation: isolate;
+    background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 45%, transparent);
+  }
+
+  .hud-popover::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    background: var(--saga-bg-elevated);
+    clip-path: var(--hud-clip, none);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .hud-panel::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    box-shadow: inset 0 0 14px
+      color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 18%, transparent);
+    clip-path: var(--hud-clip, none);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .hud-label {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: var(--hud-label-size, 0.75rem);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--hud-accent, var(--saga-neon-cyan));
+    text-shadow: 0 0 8px
+      color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 40%, transparent);
+  }
+
+  .hud-divider {
+    height: 10px;
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--hud-accent, var(--saga-neon-cyan)) 0 1px,
+      transparent 1px 6px
+    );
+    opacity: 0.45;
+  }
+
+  .hud-accent-cyan {
+    --hud-accent: var(--saga-neon-cyan);
+  }
+
+  .hud-accent-green {
+    --hud-accent: var(--saga-neon-green);
+  }
+
+  .hud-accent-gold {
+    --hud-accent: var(--saga-gold);
+  }
+
+  .hud-accent-danger {
+    --hud-accent: var(--saga-danger);
+  }
+
+  .hud-accent-purple {
+    --hud-accent: var(--saga-rune-purple);
+  }
+
+  .hud-grid-bg {
+    background-color: var(--saga-bg-deep);
+    background-image:
+      linear-gradient(rgb(var(--saga-neon-cyan-rgb) / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--saga-neon-cyan-rgb) / 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .hud-strip {
+    position: relative;
+    background: var(--saga-bg-surface);
+    border-bottom: 1px solid rgb(var(--saga-neon-cyan-rgb) / 0.3);
+  }
+
+  .hud-strip-bottom {
+    border-bottom: none;
+    border-top: 1px solid rgb(var(--saga-neon-cyan-rgb) / 0.3);
+  }
+
+  .hud-btn {
+    position: relative;
+    isolation: isolate;
+    background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 40%, transparent);
+    /* Accent-coloured label on the dark core so it stays legible at rest. */
+    color: var(--hud-accent, var(--saga-neon-cyan));
+    transition:
+      background-color 0.15s,
+      box-shadow 0.15s,
+      color 0.15s;
+  }
+
+  .hud-btn::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    background: var(--saga-bg-deep);
+    clip-path: var(--hud-clip, none);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .hud-btn:hover {
+    background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 80%, transparent);
+    color: var(--saga-bg-deep);
+    box-shadow: 0 0 10px
+      color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 35%, transparent);
+  }
+
+  .hud-btn-active {
+    background: color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 80%, transparent);
+    color: var(--saga-bg-deep);
+    box-shadow: 0 0 12px
+      color-mix(in srgb, var(--hud-accent, var(--saga-neon-cyan)) 35%, transparent);
+  }
+
+  .hud-btn-active::before {
+    background: transparent;
+  }
+
+  .window-frame {
+    /* Chamfered window outline matching the HUD buttons/panels (same asymmetric clip signature, scaled
+       up for the window). The inner wrapper reuses this same polygon (inherited custom property), so the
+       1.5px animated band follows the chamfer cleanly — the corners outside it are clipped to transparent
+       and reveal the desktop (main window is transparent). */
+    --hud-window-clip: polygon(
+      20px 0,
+      calc(100% - 10px) 0,
+      100% 10px,
+      100% calc(100% - 20px),
+      calc(100% - 20px) 100%,
+      10px 100%,
+      0 calc(100% - 10px),
+      0 20px
+    );
+    --frame-band: 1.5px;
+    position: relative;
+    overflow: hidden;
+    padding: var(--frame-band);
+    clip-path: var(--hud-window-clip);
+  }
+
+  .window-frame > .window-frame-glow {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    /* The OUTER chamfer only — one closed contour, and that is the whole point.
+       
+       This used to be an `evenodd` ring: the outer contour followed by an inset one, in a single point
+       list. **A single polygon cannot have a hole.** The path runs the outer contour, then jumps
+       straight to the first inner point and traces that, then closes back to where it started — and
+       those two connecting segments are real edges. They cut diagonally across the top-left chamfer,
+       where the fill rule then cancels itself out and leaves a visible gap in the border. Reported from
+       a running build; the geometry is wrong wherever that seam happens to land, not just here.
+       
+       No ring is needed at all. `.window-frame` has `padding: var(--frame-band)` and
+       `.window-frame-inner` is opaque (`--saga-bg-deep`) and sits above this on `z-index: 1` — so the
+       shell already covers everything except the band. That is how the pre-animation version worked,
+       and the reason it was right is still in the comment above it: padding survives the production CSS
+       minifier, where a mask-composite ring did not. */
+    clip-path: var(--hud-window-clip);
+  }
+
+  .window-frame > .window-frame-glow::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* Square, and wide enough that its inscribed circle still covers the window diagonal at any aspect
+       ratio up to square. vmax (not %) keeps it square without a second length. */
+    width: 145vmax;
+    height: 145vmax;
+    background: conic-gradient(
+      var(--saga-neon-green),
+      var(--saga-neon-cyan),
+      var(--saga-rune-purple),
+      var(--saga-gold),
+      var(--saga-neon-green)
+    );
+    animation: frame-spin 12s linear infinite;
+    will-change: transform;
+  }
+
+  .window-frame > .window-frame-inner {
+    position: relative;
+    /* Above the glow layer, so the opaque shell covers everything but the 1.5px band. */
+    z-index: 1;
+    overflow: hidden;
+    clip-path: var(--hud-window-clip);
+    box-shadow:
+      inset 0 0 15px rgb(var(--saga-neon-green-rgb) / 0.06),
+      inset 0 0 30px rgb(var(--saga-neon-cyan-rgb) / 0.04);
+  }
+
+  .hud-activity {
+    height: 2px;
+    background: var(--saga-neon-cyan);
+    opacity: 0.18;
+    /* The travelling strip is wider than this and must not escape it. */
+    overflow: hidden;
+    /* NO `position` here, deliberately. Every `.hud-*` class in this file sits OUTSIDE `@layer`, so it
+       beats every Tailwind utility — a `position: relative` here silently overrode the caller's
+       `absolute inset-x-0 top-0` and the line dropped out of the top edge into normal flow. Reported.
+       The travelling child needs no positioned ancestor: it is a block in normal flow that is simply
+       wider than its parent, and `overflow: hidden` above is what clips it. */
+    transition:
+      opacity 250ms ease,
+      background-color 250ms ease;
+  }
+
+  .hud-activity-running {
+    opacity: 1;
+    /* The gradient lives on the ::before now; the line itself carries no colour of its own while it
+       runs, or the moving strip would travel over a static copy of itself. */
+    background: transparent;
+  }
+
+  .hud-activity-running::before {
+    content: "";
+    /* In flow, not positioned — see the note in `.hud-activity`. A block that overflows its parent
+       horizontally and is clipped by it needs nothing from the cascade the caller also writes to. */
+    display: block;
+    height: 100%;
+    /* Four element-widths: two periods of a gradient that is itself TWO element-widths long.
+       The period is the part that had to be kept, and I halved it on the first attempt: the original
+       put `background-size: 200%` on the element, so one period spanned two window widths and the
+       visible strip showed half a period — a single smooth ramp, brightest somewhere in the middle,
+       never dark at an edge. A one-width period puts the gradient's own faint ends AT both edges, and
+       the line reads as not reaching them. Reported exactly that way.
+       Two periods wide so shifting by one lands on an identical frame: no seam, no reset. */
+    width: 400%;
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--saga-gold-rgb) / 0.25),
+      var(--saga-gold),
+      rgb(var(--saga-gold-rgb) / 0.25)
+    );
+    /* Half the child = one period = two element-widths, which is the original's geometry. */
+    background-size: 50% 100%;
+    background-repeat: repeat-x;
+    animation: activity-sweep 2.4s linear infinite;
+    /* NO `will-change`. It was here for a day and it was cargo-cult: an animated `transform` is
+       composited without it, so the hint bought nothing — and it is not free. The frame's spun square
+       exists ONCE; this exists once per terminal, and every pane that is running something would hold a
+       permanently promoted, full-width layer for as long as it runs. Over-promotion costs memory and is
+       a documented cause of exactly the artefacts this was meant to prevent. */
+  }
+
+  .hud-activity-ok {
+    opacity: 0.9;
+    background: var(--saga-neon-green);
+  }
+
+  .hud-activity-failed {
+    opacity: 0.9;
+    background: var(--saga-danger);
+  }
+
+  .scheme-surface {
+    background: var(--scheme-bg);
+    color: var(--scheme-fg);
+  }
+
+  .scheme-fg {
+    color: var(--scheme-fg);
+  }
+
+  .scheme-dim {
+    color: color-mix(in srgb, var(--scheme-dim) 70%, var(--scheme-fg));
+  }
+
+  .scheme-meta {
+    background: color-mix(in srgb, var(--scheme-fg) 8%, var(--scheme-bg));
+    color: var(--scheme-meta);
+    border-color: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
+  }
+
+  .scheme-num {
+    color: color-mix(in srgb, var(--scheme-dim) 80%, var(--scheme-fg));
+  }
+
+  .scheme-add {
+    background: color-mix(in srgb, var(--scheme-add) 14%, transparent);
+  }
+
+  .scheme-del {
+    background: color-mix(in srgb, var(--scheme-del) 14%, transparent);
+  }
+
+  .scheme-gap {
+    background: color-mix(in srgb, var(--scheme-fg) 5%, transparent);
+  }
+
+  .scheme-mark-add {
+    color: var(--scheme-add);
+  }
+
+  .scheme-mark-del {
+    color: var(--scheme-del);
+  }
+
+  .scheme-mark-alt {
+    color: var(--scheme-alt);
+  }
+
+  .scheme-mark-warn {
+    color: var(--scheme-warn);
+  }
+
+  .scheme-mark-none {
+    color: color-mix(in srgb, var(--scheme-dim) 45%, transparent);
+  }
+
+  .scheme-divider {
+    background: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
+  }
 }
-.scheme-mark-add {
-  color: var(--scheme-add);
-}
-.scheme-mark-del {
-  color: var(--scheme-del);
-}
-.scheme-mark-alt {
-  color: var(--scheme-alt);
-}
-.scheme-mark-warn {
-  color: var(--scheme-warn);
-}
-.scheme-mark-none {
-  color: color-mix(in srgb, var(--scheme-dim) 45%, transparent);
-}
-.scheme-divider {
-  background: color-mix(in srgb, var(--scheme-meta) 22%, transparent);
+
+@layer utilities {
+  .neon-glow-cyan {
+    box-shadow:
+      0 0 5px rgb(var(--saga-neon-cyan-rgb) / 0.4),
+      0 0 10px rgb(var(--saga-neon-cyan-rgb) / 0.2),
+      0 0 20px rgb(var(--saga-neon-cyan-rgb) / 0.1);
+  }
+
+  .text-glow-cyan {
+    text-shadow:
+      0 0 7px rgb(var(--saga-neon-cyan-rgb) / 0.5),
+      0 0 10px rgb(var(--saga-neon-cyan-rgb) / 0.3);
+  }
+
+  .text-glow-green {
+    text-shadow:
+      0 0 7px rgb(var(--saga-neon-green-rgb) / 0.5),
+      0 0 10px rgb(var(--saga-neon-green-rgb) / 0.3);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .neon-glow-green {
+    box-shadow:
+      0 0 5px rgb(var(--saga-neon-green-rgb) / 0.4),
+      0 0 10px rgb(var(--saga-neon-green-rgb) / 0.2),
+      0 0 20px rgb(var(--saga-neon-green-rgb) / 0.1);
+  }
+
+  .neon-glow-gold {
+    box-shadow:
+      0 0 5px rgb(var(--saga-gold-rgb) / 0.4),
+      0 0 10px rgb(var(--saga-gold-rgb) / 0.2),
+      0 0 20px rgb(var(--saga-gold-rgb) / 0.1);
+  }
+
+  .text-glow-gold {
+    text-shadow:
+      0 0 7px rgb(var(--saga-gold-rgb) / 0.5),
+      0 0 10px rgb(var(--saga-gold-rgb) / 0.3);
+  }
 }

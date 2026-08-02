@@ -19,8 +19,49 @@ function atRule(prelude: string): string {
   return from.slice(0, from.indexOf("\n}")).replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
+/**
+ * The stylesheet with every `@media` block removed.
+ *
+ * A rule inside one is an override of the rule outside it, so a selector lookup that finds the
+ * media-query copy first reads the exception as if it were the rule — which is what happened the
+ * moment the layers went in and the reduced-motion block stayed at column 0. Deliberately: an
+ * accessibility override has to outrank everything, including a utility the caller passes, and a
+ * layered one would not.
+ */
+const unconditional = withoutMediaBlocks(css);
+
+/**
+ * `text` with every `@media { … }` removed, by counting braces rather than matching them.
+ *
+ * A regex for a balanced block needs a nested quantifier, and `security/detect-unsafe-regex` rejects
+ * that on sight — rightly: the same pattern is how a linear input becomes an exponential match. This
+ * is longer and cannot backtrack at all.
+ */
+function withoutMediaBlocks(text: string): string {
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const start = text.indexOf("@media", at);
+    if (start === -1) return out + text.slice(at);
+    out += text.slice(at, start);
+    const open = text.indexOf("{", start);
+    if (open === -1) return out + text.slice(start);
+    let depth = 0;
+    let cursor = open;
+    for (; cursor < text.length; cursor += 1) {
+      const char = text.charAt(cursor);
+      if (char === "{") depth += 1;
+      else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    at = cursor + 1;
+  }
+}
+
 function declarations(selector: string): string {
-  const from = css.slice(css.indexOf(`${selector} {`));
+  const from = unconditional.slice(unconditional.indexOf(`${selector} {`));
   return from.slice(0, from.indexOf("}")).replace(/\/\*[\s\S]*?\*\//g, "");
 }
 

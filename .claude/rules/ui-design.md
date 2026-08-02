@@ -39,4 +39,11 @@ applies-to: ["src/components/**", "src/views/**"]
 - **Robustness:** no overflow or breakout; handle empty, loading and error states for every view;
   respect reduced-motion. Avoid relying on `backdrop-filter` (weak on Linux WebKitGTK) — provide a
   solid fallback.
+- **A visual change is verified visually — at the scale the defect would appear.** Types, lints and
+  tests see none of this: a wrong `clip-path`, a reversed animation, an element that dropped out of
+  position all render as *something*, and every one of them has reached a release here or downstream
+  while the gate stayed green. Confirm the result **looks the same** (or looks as intended), not merely
+  that the mechanism changed — and look at the part that changed, magnified. A full-window screenshot
+  hides a 1.5 px seam on one chamfer; that is exactly how the app-109 clip shipped
+  (docs/migrations/app-110).
 - **Accessibility:** semantic markup, focus states, sufficient contrast; the jsx-a11y lint must pass.

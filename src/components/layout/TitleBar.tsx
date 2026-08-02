@@ -5,7 +5,7 @@ import { IconButton } from "../ui/IconButton";
 import { ContextMenu } from "../ui/ContextMenu";
 import { Tabs } from "../ui/Tabs";
 import { useBuildInfo } from "../../hooks/useBuildInfo";
-import { readPrimarySelection } from "../../lib/primarySelection";
+import { terminalApi } from "../../api/terminal";
 import { pasteInto } from "../../lib/terminalHandles";
 import { useTerminalProfiles, useTmuxSessions } from "../../hooks/useSettings";
 import { useT } from "../../hooks/useT";
@@ -51,7 +51,16 @@ export function TitleBar() {
   // they did not witness is a paste they will not trust.
   const pasteIntoTab = (key: string) => {
     show(key);
-    pasteInto(key, readPrimarySelection());
+    // The clipboard, like the middle-click inside a terminal — one gesture, one source. It read an
+    // emulated X11 PRIMARY selection before, on the two platforms that have never had one.
+    void terminalApi
+      .clipboardText()
+      .then((text) => {
+        if (text !== "") pasteInto(key, text);
+      })
+      .catch((error: unknown) => {
+        console.error("could not read the clipboard", error);
+      });
   };
 
   return (

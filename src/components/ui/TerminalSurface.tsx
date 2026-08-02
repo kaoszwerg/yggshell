@@ -11,7 +11,7 @@ import { fontStack, waitForFont } from "../../lib/fonts";
 import { parseOsc7 } from "../../lib/osc7";
 import { parseOsc133, type Activity } from "../../lib/osc133";
 import { isLinux, isMac } from "../../lib/platform";
-import { readPrimarySelection, setPrimarySelection } from "../../lib/primarySelection";
+import { setPrimarySelection } from "../../lib/primarySelection";
 import { encodeKey } from "../../lib/terminalKeys";
 import { resolveTheme } from "../../lib/terminalTheme";
 import type { TerminalTheme } from "../../bindings/TerminalTheme";
@@ -388,7 +388,18 @@ export function TerminalSurface({
       return true;
     });
 
-    // Middle-click pastes the primary selection, the way it does in every terminal on X11.
+    // Middle-click pastes the CLIPBOARD.
+    //
+    // It used to paste an app-scoped stand-in for the X11 PRIMARY selection, and that was the wrong
+    // call in a way worth writing down: the handler is skipped on Linux (below), because there the
+    // real PRIMARY works and the WebView does it properly. So the emulation ran on exactly the two
+    // platforms whose users have never had a PRIMARY selection and do not expect one — a macOS user
+    // middle-clicking means "paste what I copied", which is what iTerm2 does, and got what they had
+    // last selected instead.
+    //
+    // The stand-in is redundant here anyway: `copy_on_select` already puts a selection in the
+    // clipboard for anyone who wants selecting to be copying. With it off, the clipboard is what was
+    // deliberately copied, which is the whole point of the gesture.
     //
     // Two things this went wrong on before:
     //
@@ -405,11 +416,14 @@ export function TerminalSurface({
     // receive the click instead in some terminals, but losing the paste is the more surprising break.
     const onMiddleDown = (event: globalThis.MouseEvent) => {
       if (event.button !== 1) return;
-      const text = readPrimarySelection();
-      if (text === "") return;
       event.preventDefault();
       event.stopPropagation();
-      term.paste(text);
+      // Through the caller's reader, not `navigator.clipboard`: that one is permission-gated in this
+      // webview and produces a native confirmation nobody sees — it pasted nothing, and looked like
+      // the app had hung (0.39.6). This was the third such call site and the one I missed then.
+      void handlers.current.onReadClipboard?.().then((text) => {
+        if (text !== "") term.paste(text);
+      });
     };
     if (!isLinux()) host.addEventListener("mousedown", onMiddleDown, true);
 
