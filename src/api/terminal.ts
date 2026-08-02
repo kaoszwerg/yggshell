@@ -85,6 +85,17 @@ export const terminalApi = {
    */
   renameSession: (from: string, to: string) => invoke<void>("tmux_rename_session", { from, to }),
 
+  /**
+   * The clipboard's text, read in the backend.
+   *
+   * **Never `navigator.clipboard.readText()`.** That is permission-gated in this webview: choosing
+   * Paste from the terminal's context menu produced a native confirmation the user never saw — it
+   * pasted nothing, left the menu stuck and stalled rendering until they clicked elsewhere. macOS'
+   * ⌘V is unaffected because WebKit's own paste event carries the text; only the paths that ASK for
+   * the clipboard were.
+   */
+  clipboardText: () => invoke<string>("clipboard_text"),
+
   /** Send input — keystrokes, a paste, a control sequence. */
   write: (id: SessionId, data: string) => invoke<void>("terminal_write", { id, data }),
 

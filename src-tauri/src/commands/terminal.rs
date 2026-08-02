@@ -271,3 +271,25 @@ pub async fn tmux_rename_session(from: String, to: String) -> Result<()> {
         .await
         .map_err(|e| AppError::Other(format!("renaming the tmux session failed: {e}")))?
 }
+
+/// The clipboard's text, read in the **backend**.
+///
+/// **Why not `navigator.clipboard.readText()`**, which is what the webview would reach for: it is
+/// permission-gated in WKWebView. Choosing Paste from the terminal's own context menu produced a
+/// native confirmation the user never saw — nothing was pasted, the menu stayed open, and rendering
+/// stalled until they clicked elsewhere. Reported exactly that way. A terminal that has to ask
+/// permission to paste into itself is not a terminal.
+///
+/// macOS' ⌘V never hit this: that goes through WebKit's own paste event, which carries the text with
+/// it. Only the paths that ASK for the clipboard were affected — the context menu and `Ctrl+Shift+V`.
+///
+/// An empty clipboard is `""`, not an error: there is nothing wrong with pasting nothing.
+#[tauri::command]
+pub fn clipboard_text(app: tauri::AppHandle) -> Result<String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    // Sync on purpose (`scripts/project/check-blocking-commands.mjs`): this reads a pasteboard, it
+    // starts no child process, and it is on the path of a keystroke the user just made.
+    let text = app.clipboard().read_text().unwrap_or_default();
+    tracing::debug!(chars = text.chars().count(), "clipboard_text");
+    Ok(text)
+}

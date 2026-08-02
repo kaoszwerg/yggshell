@@ -8,6 +8,34 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Paste from the terminal's context menu did nothing, and froze the menu while it did it.** It read
+  the clipboard with `navigator.clipboard.readText()`, which is permission-gated in this webview: the
+  confirmation it wants was never visible, nothing was pasted, the menu stayed open and rendering
+  stalled until the user clicked elsewhere — which is also where the "the animation stutters after
+  paste" report came from. The clipboard is now read in the **backend** (`clipboard_text`, official
+  Tauri plugin), so nothing asks permission to paste into your own terminal. macOS' ⌘V was never
+  affected: WebKit's own paste event carries the text. `Ctrl+Shift+V` was, and takes the same route
+  now.
+
+- **Three regressions from yesterday's activity-line rewrite, all reported, all mine.** Converting it
+  from `background-position` to a `transform` was right; the port was careless three times over:
+  - **It ran backwards.** `background-position: -200%` reads as "move left" and moved *right*: a
+    percentage position resolves against `element − image`, the image was twice the element, so the
+    bracket is negative and the sign flips. A translate says what it does, which is why porting one
+    has to state a direction — and why getting it backwards is silent.
+  - **It stopped reaching the edges.** The original's period was **two** window widths, so the strip
+    showed half a period: one smooth ramp, never dark at an edge. I halved it, which put the
+    gradient's faint ends exactly at both edges.
+  - **It left the top edge.** `position: relative` on `.hud-activity` overrode the caller's
+    `absolute inset-x-0 top-0` — every `.hud-*` class in this stylesheet sits outside `@layer` and so
+    beats every Tailwind utility. The travelling child needs no positioned ancestor at all: it
+    overflows in normal flow and `overflow: hidden` clips it.
+
+  Each is pinned by a test now, including the two that are pure geometry and would otherwise only ever
+  be caught by eye.
+
+### Fixed
+
 - **Removed a `will-change: transform` that had been in the activity line for a day.** It was
   cargo-cult — an animated `transform` is composited without it, so the hint bought nothing — and it
   is not free. The window frame's spun square exists **once** and may carry the hint; this one exists

@@ -12,6 +12,13 @@ import css from "./globals.css?raw";
  * documentation before this existed — the same trap `environment.rs` and the kill-session scan both
  * hit, and it is worth solving once rather than by wording each comment around its test.
  */
+/** An at-rule's body, comments stripped — same reasoning as {@link declarations}. */
+function atRule(prelude: string): string {
+  const from = css.slice(css.indexOf(prelude));
+  // To the closing brace in column 0: the body has nested blocks of its own.
+  return from.slice(0, from.indexOf("\n}")).replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 function declarations(selector: string): string {
   const from = css.slice(css.indexOf(`${selector} {`));
   return from.slice(0, from.indexOf("}")).replace(/\/\*[\s\S]*?\*\//g, "");
@@ -109,19 +116,46 @@ describe("the activity line", () => {
     // The same defect as the window frame, one component over, reached the same way: the property
     // reads as a position and behaves as a repaint. A 2px strip is cheaper than a whole window, but
     // it is paid at 60fps for as long as anything is running, in every terminal that is running it.
-    const keyframes = css.slice(css.indexOf("@keyframes activity-sweep"));
-    const block = keyframes.slice(0, keyframes.indexOf("\n}"));
+    const block = atRule("@keyframes activity-sweep");
     expect(block).toContain("transform: translateX(");
     expect(block).not.toContain("background-position");
+  });
+
+  it("travels LEFT to RIGHT, the way it always did", () => {
+    // Reversed for exactly one version, and reported. `background-position: -200%` reads as "move
+    // left" and moved right: a percentage position resolves against `element − image`, the image was
+    // twice the element, so the bracket is negative and the sign flips. A translate says what it
+    // does — which is why porting one has to state a direction, and why getting it backwards is
+    // silent. Rightward means starting shifted left and ending at zero.
+    const block = atRule("@keyframes activity-sweep");
+    const from = block.slice(block.indexOf("from"), block.indexOf("  to {"));
+    const to = block.slice(block.indexOf("  to {"));
+    expect(from).toContain("translateX(-50%)");
+    expect(to).toContain("translateX(0)");
   });
 
   it("moves a strip that is two periods wide, so the loop has no seam", () => {
     // Shifting by exactly one period lands on an identical frame. A strip only one period wide would
     // run out and snap back.
     const rule = declarations(".hud-activity-running::before");
-    expect(rule).toContain("width: 200%");
+    expect(rule).toContain("width: 400%");
     expect(rule).toContain("background-size: 50% 100%");
     expect(rule).toContain("repeat-x");
+  });
+
+  it("keeps the period two window-widths long, so the line is lit at its edges", () => {
+    // The original put `background-size: 200%` on the ELEMENT: one period spanned two window widths,
+    // so the visible strip showed half a period — one smooth ramp, brightest in the middle, never
+    // dark at an edge. Halving that to a one-width period puts the gradient's faint ends AT both
+    // edges and the line reads as not reaching them. Reported that way after the first port.
+    //
+    // Child 400% wide, gradient 50% of the child = 200% of the element. The two numbers only mean
+    // anything together, which is why they are asserted together.
+    const rule = declarations(".hud-activity-running::before");
+    const width = /width:\s*(\d+)%/.exec(rule);
+    const size = /background-size:\s*(\d+)%/.exec(rule);
+    const periodInWindows = (Number(width?.[1]) / 100) * (Number(size?.[1]) / 100);
+    expect(periodInWindows).toBe(2);
   });
 
   it("honours reduced motion on the element that actually animates", () => {
@@ -129,6 +163,18 @@ describe("the activity line", () => {
     // the parent, and nothing errors while the preference is silently ignored.
     const query = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
     expect(query).toContain(".hud-activity-running::before");
+  });
+
+  it("leaves positioning to whoever places it", () => {
+    // Every `.hud-*` class in this file sits OUTSIDE `@layer`, so it beats every Tailwind utility.
+    // A `position` here therefore overrides the caller's — which is exactly what happened: the view
+    // places the line with `absolute inset-x-0 top-0`, a `position: relative` in the base class won,
+    // and the line dropped out of the top edge into normal flow. The travelling child does not need
+    // a positioned ancestor; it overflows in normal flow and `overflow: hidden` clips it.
+    const rule = declarations(".hud-activity");
+    expect(rule).toContain("overflow: hidden");
+    expect(rule).not.toContain("position:");
+    expect(declarations(".hud-activity-running::before")).not.toContain("position:");
   });
 
   it("does not promote a layer per terminal", () => {

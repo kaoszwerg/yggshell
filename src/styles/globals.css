@@ -561,17 +561,31 @@ input[type="range"]:disabled::-moz-range-thumb {
    The gradient is painted ONCE onto the strip's `::before`, which is two periods wide, and shifted
    by exactly one period — so the loop is seamless and every frame is a compositor operation. */
 @keyframes activity-sweep {
-  to {
+  /* LEFT to RIGHT, and the direction is not a detail — it was reversed for one version and reported.
+     The old rule animated `background-position` to `-200%`, which reads as "move left" and moved
+     RIGHT: a percentage background position resolves against `element width − image width`, and the
+     image was twice the element, so the bracket is negative and the sign flips. Translating is
+     honest about its direction, which is exactly why the port had to state one.
+     Both ends cover the strip: at -50% the child spans -100%…+100% of it, at 0% it spans 0…200%.
+     One full period apart, so the loop is seamless and there is nothing to reset. */
+  from {
     transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
 .hud-activity {
   height: 2px;
   background: var(--saga-neon-cyan);
   opacity: 0.18;
-  position: relative;
-  /* The travelling strip is twice as wide as this and must not escape it. */
+  /* The travelling strip is wider than this and must not escape it. */
   overflow: hidden;
+  /* NO `position` here, deliberately. Every `.hud-*` class in this file sits OUTSIDE `@layer`, so it
+     beats every Tailwind utility — a `position: relative` here silently overrode the caller's
+     `absolute inset-x-0 top-0` and the line dropped out of the top edge into normal flow. Reported.
+     The travelling child needs no positioned ancestor: it is a block in normal flow that is simply
+     wider than its parent, and `overflow: hidden` above is what clips it. */
   transition:
     opacity 250ms ease,
     background-color 250ms ease;
@@ -594,17 +608,25 @@ input[type="range"]:disabled::-moz-range-thumb {
 }
 .hud-activity-running::before {
   content: "";
-  position: absolute;
-  inset: 0;
-  /* Two periods wide, so shifting by one lands on an identical frame — the loop has no seam and
-     needs no reset. */
-  width: 200%;
+  /* In flow, not positioned — see the note in `.hud-activity`. A block that overflows its parent
+     horizontally and is clipped by it needs nothing from the cascade the caller also writes to. */
+  display: block;
+  height: 100%;
+  /* Four element-widths: two periods of a gradient that is itself TWO element-widths long.
+     The period is the part that had to be kept, and I halved it on the first attempt: the original
+     put `background-size: 200%` on the element, so one period spanned two window widths and the
+     visible strip showed half a period — a single smooth ramp, brightest somewhere in the middle,
+     never dark at an edge. A one-width period puts the gradient's own faint ends AT both edges, and
+     the line reads as not reaching them. Reported exactly that way.
+     Two periods wide so shifting by one lands on an identical frame: no seam, no reset. */
+  width: 400%;
   background-image: linear-gradient(
     90deg,
     rgb(var(--saga-gold-rgb) / 0.25),
     var(--saga-gold),
     rgb(var(--saga-gold-rgb) / 0.25)
   );
+  /* Half the child = one period = two element-widths, which is the original's geometry. */
   background-size: 50% 100%;
   background-repeat: repeat-x;
   animation: activity-sweep 2.4s linear infinite;

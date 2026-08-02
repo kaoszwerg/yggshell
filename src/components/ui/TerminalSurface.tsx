@@ -96,6 +96,15 @@ export interface TerminalSurfaceProps {
    * entirely — the same finding as OSC 7.
    */
   onBell?: () => void;
+  /**
+   * Read the clipboard, for `Ctrl+Shift+V`.
+   *
+   * A PROP rather than a call: this is a primitive, and a primitive that does IPC behaves differently
+   * depending on where you put it (rule:frontend-architecture). It also cannot use the webview's own
+   * clipboard read — that is permission-gated here and fails in a way that looks like the app
+   * hanging — so the caller supplies the one that works.
+   */
+  onReadClipboard?: () => Promise<string>;
   className?: string;
 }
 
@@ -122,6 +131,7 @@ export function TerminalSurface({
   onCwd,
   onActivity,
   onBell,
+  onReadClipboard,
   fontSize,
   theme,
   copyOnSelect,
@@ -147,6 +157,7 @@ export function TerminalSurface({
     onCwd,
     onActivity,
     onBell,
+    onReadClipboard,
     fontSize,
     theme,
     copyOnSelect,
@@ -165,6 +176,7 @@ export function TerminalSurface({
       onCwd,
       onActivity,
       onBell,
+      onReadClipboard,
       fontSize,
       theme,
       copyOnSelect,
@@ -179,6 +191,7 @@ export function TerminalSurface({
     onCwd,
     onActivity,
     onBell,
+    onReadClipboard,
     fontSize,
     theme,
     copyOnSelect,
@@ -443,7 +456,9 @@ export function TerminalSurface({
           return false;
         }
         case "v": {
-          void navigator.clipboard.readText().then((text) => {
+          // From the backend, for the same reason the context menu reads it there: the webview's own
+          // clipboard read is permission-gated and fails in a way that looks like the app hanging.
+          void handlers.current.onReadClipboard?.().then((text) => {
             if (text !== "") term.paste(text);
           });
           return false;

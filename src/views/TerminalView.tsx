@@ -571,8 +571,11 @@ function Pane({
             label: t("terminal.paste"),
             shortcut: KEYS.paste,
             onSelect: () => {
-              navigator.clipboard
-                .readText()
+              // From the BACKEND, not `navigator.clipboard`: that is permission-gated here and
+              // produced a native confirmation nobody saw — nothing pasted, the menu stuck, and
+              // rendering stalled until the user clicked elsewhere.
+              terminalApi
+                .clipboardText()
                 .then((text) => {
                   // Through the emulator, so it is bracketed: a multi-line paste must not run line by
                   // line the moment it arrives.
@@ -610,6 +613,7 @@ function Pane({
             onCwd={onCwd}
             onActivity={onActivity}
             onBell={onBell}
+            onReadClipboard={terminalApi.clipboardText}
             fontSize={fontSize}
             theme={theme}
             copyOnSelect={settings.data?.copy_on_select ?? false}

@@ -46,6 +46,7 @@ pub fn run() {
         .manage(launch::Pending::default())
         // Persist + restore window size and position across runs.
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             // Tauri turns an `Err` from this closure into `panic!("Failed to setup app: {e}")`
             // (tauri 2.11.2, app.rs) — it never reaches `run()`'s `Result`. The panic hook would catch
@@ -105,6 +106,7 @@ pub fn run() {
             commands::terminal::terminal_activity,
             commands::terminal::agent_session,
             commands::terminal::agent_usage,
+            commands::terminal::clipboard_text,
             commands::terminal::tmux_sessions,
             commands::terminal::tmux_kill_session,
             commands::terminal::tmux_rename_session,
