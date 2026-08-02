@@ -1,7 +1,8 @@
 # Plan — the Notes tool (working title)
 
-**Status: a plan, not a decision.** Nothing here is built. Six questions below need an answer before
-anything is; they are marked **DECIDE**. Raised 2026-08-02.
+**Status: designed and decided, not built.** Every open question was answered by the maintainer on
+2026-08-02. What stands between this and code is **ADR-PROJ-003** — the notes sync sends data off the
+device, and `rule:privacy` requires that decision to be recorded before it is written, not after.
 
 ## What was asked for
 
@@ -52,73 +53,123 @@ Answering "what am I forgetting":
    auch noch managen muss."* A due date makes the tool demand things. Priorities are a sort order, not
    a schedule.
 
-## Open decisions
+## Decided (2026-08-02)
 
-### DECIDE 1 — where the notes live
+### Storage — a notes repository the app keeps in sync
 
-| | In the repository (`.ygg/notes/*.md`) | In app data, keyed by project path |
-| --- | --- | --- |
-| The agent can read them | **yes, directly** | only if told the path |
-| Survives cloning elsewhere | yes | no |
-| Versioned, diffable | yes | no |
-| Pollutes the project | yes — needs `.gitignore` or a commitment to commit them | no |
-| Personal notes in a shared repo | awkward | fine |
-| Works outside a repository | no | yes |
+Neither of the two options offered. **A dedicated git repository holds the notes, configured once, and
+the app manages it automatically** — so any machine running YggShell has them, at any time.
 
-**Recommendation: app data, with the file path exposed.** Notes are personal and half of them are
-about the agent rather than the code; putting them in the repo forces a decision about committing them
-on every project. The agent can still read them — the tool shows the path and can type it into the
-prompt, which is the same hand-over gesture as everything else.
+That is a bigger feature than either alternative and it is worth saying what it drags in:
 
-**But it is genuinely close**, and repo-resident wins outright if the answer to DECIDE 4 is "the agent
-should edit them too".
+- **It is network egress, and this project forbids that by default.** `rule:privacy`: *no telemetry,
+  no remote anything, unless a specific feature requires it — and then as an explicit, opt-in feature
+  with its own ADR stating exactly what leaves the device and where to.* So this needs
+  **ADR-PROJ-003** before a line is written. It qualifies easily (the user names the remote; nothing
+  goes anywhere until they do) but the ADR is not optional.
+- **Credentials: none of our business, deliberately.** Shell out to the user's own `git`, which uses
+  their SSH agent and their config. The app never sees a token, never stores one, and
+  `rule:security`'s "secrets in the keyring" question never arises because there is no secret. It also
+  means a repository they can already push to works with no setup at all.
+- **Offline is the normal case, not the error case.** Notes are written locally and always readable;
+  sync is best-effort and says when it last succeeded. A note must never be lost because a push failed.
+- **Conflicts are the part that can lose data**, so they are the part that gets designed rather than
+  discovered. Two machines editing the same note is rare and must still be safe: pull with rebase, and
+  on a conflict keep *both* versions side by side in the file rather than resolving it silently. A
+  merge marker the user can see beats a note that quietly lost a paragraph.
 
-### DECIDE 2 — one file per project, or many
+### The agent gets no access
 
-One file is simpler, diffs cleanly, and search is trivial. Many files (one per topic) scale better for
-"notes I want to find again" and make a note addressable. **Recommendation: one file per project to
-start**, with headings as the structure. A note that deserves its own file is a sign the tool works and
-can be added later without moving the data.
+**Full control stays with the maintainer.** The agent does not read and does not write the notes.
 
-### DECIDE 3 — markdown as the source, or a database
+Two consequences, and the second is an honest limit rather than a feature:
 
-Markdown is the source of truth in either case (it is what "rendered markdown" means). The question is
-whether search needs an index.
+- It settles the "may the agent write" question outright, and removes the file-watching and
+  write-conflict work with it. Version one is smaller for it.
+- **It is a design stance, not a boundary that holds.** The agent runs as the same user on the same
+  machine and can read any file it is pointed at. What this decision buys is that nothing *invites* it:
+  the notes are not in the project repository, the path is not advertised to it, and no tool hands it
+  over. A determined agent is not stopped by any of that, and pretending otherwise would be the kind
+  of claim `ADR-CORE-004` exists to prevent.
+- The hand-over therefore runs entirely through **you**: copy, or type into the prompt. Which was the
+  recommendation anyway — the agent reading the file directly was only ever the shortcut.
 
-**Recommendation: no database yet.** Notes are kilobytes; a scan is instant at this scale. SQLite would
-need its own ADR (`rule:stack-tauri`: *a database arrives only with the feature that needs one*), and
-the feature that needs one is cross-project search over years of notes — not this.
+### Surface — a tool and a view over one reader
 
-**Priorities as a markdown convention, not metadata**: `- [ ] !! ship the thing`. The file stays a file
-anyone (and any agent) can read.
+As proposed: the tool is the list and the quick capture, the view is where you write and search. One
+store, two renderings, never two readers (`mem:surfaces`).
 
-### DECIDE 4 — may the agent write to the notes?
+### Layout — a folder per project, several files in it
 
-Powerful: "add what we just decided to the notes" is exactly the hand-over in reverse. It also means
-the file changes under the tool, so the tool must watch it and reload, and a half-typed note must not
-be lost when it does.
+```
+<notes-repo>/
+  <project>/
+    inbox.md          ← where a quick capture lands with no topic chosen
+    <topic>.md
+```
 
-**Recommendation: not in the first version, and design for it.** Watching the file is small; the
-editing conflict is not. Ship read-and-write-by-the-user first, with the path visible so the agent can
-be *told* to read it.
+Which raises the one question these answers created, below.
 
-### DECIDE 5 — which surface
+### Configuration — the repository is named by the user, and nothing happens before it is
 
-`mem:surfaces` insists this is decided before code. It needs scrolling, selection and a layout, so it
-is a **tool**. But writing prose in a 280 px column is unpleasant, and this is a writing tool.
+**Settings › Notes**, and it is the on-switch as much as a setting: with no repository configured the
+tool is local-only and **nothing leaves the device**. That is not a nicety, it is what makes the
+feature satisfy `rule:privacy` at all — egress is opt-in, and the opt-in is naming a remote.
 
-**Recommendation: a tool AND a view over one reader** — the case `mem:surfaces` already names. The tool
-is the list and the quick capture; the view is where you write. One store, two renderings, never two
-readers.
+What is configurable:
 
-### DECIDE 6 — checkboxes in rendered markdown
+| | |
+| --- | --- |
+| **Remote URL** | Any repository the user can already push to (`git@…`, `https://…`). Empty means local-only. |
+| **Branch** | Defaults to the remote's default. Named, so a shared repository can keep notes on their own branch. |
+| **Sync on/off** | Independent of the URL: keep the remote configured and pause syncing without losing it. |
+| **Status** | Last successful sync, and the last error verbatim if there was one. |
+| **Disconnect** | Stops syncing and keeps every local note. |
 
-Clicking a rendered checkbox must write back to the source line, which is the one genuinely fiddly
-part. Rendering with a parser that keeps source positions makes it exact; without one it is a
-line-number guess that breaks on a task whose text appears twice.
+Three things that must be decided *because* it is configurable, and would otherwise be discovered:
 
-**Recommendation: render with position information** and treat "which source line is this checkbox"
-as a pinned test, not a hope.
+- **Where the clone lives is NOT configurable.** It sits in the app's data directory, managed by the
+  app. A user-chosen checkout would be a second thing to keep consistent and a way to point the app at
+  a working tree somebody else is using. The path is *shown*, because a directory you cannot find is a
+  directory you cannot back up.
+- **Changing the remote must not silently discard notes.** Local notes are kept and offered to the new
+  repository; the old clone is left on disk rather than deleted. "I switched the URL and my notes were
+  gone" must be impossible, and the safe answer costs nothing but disk.
+- **A URL that does not work is reported where it was typed**, with git's own message. A sync that
+  fails silently is the worst version of this feature: it looks like it is working and the second
+  machine is simply empty.
+
+### Project identity — the git remote, falling back to the folder name
+
+`github.com/kaoszwerg/yggshell` becomes the folder name, so the same project is the same folder on
+every machine however differently it is checked out. No remote falls back to the folder name.
+
+**The key is shown and can be changed**, and that part is not decoration: a wrong guess otherwise
+splits a project's notes in two and nothing says so — the same silent-divergence failure as a stale
+cache. A repository with two remotes, or none, needs a way out that is not "rename your folder".
+
+### Sync — automatic, with the last success visible
+
+Pull on start and on window focus; commit and push after an edit, debounced. A manual push stays, for
+the moment the network comes back.
+
+**The visible "last synced" is the honest half of "automatic".** This app has now twice concluded that
+a panel you must click to trust is wrong the rest of the time (`mem:surfaces`); a sync that silently
+stopped three days ago is the same failure with worse consequences.
+
+### One repository for everything
+
+One notes repository, a folder per project inside it. One setup, one sync, one conflict story, and
+cross-project search costs nothing.
+
+### Conflicts — keep both, visibly
+
+Rebase; on a conflict, both versions stay in the file, marked, and the user resolves them when they
+next look. The file is briefly ugly and nothing is ever lost.
+
+The alternative — newest wins — is clean and silently drops a paragraph written on the other machine,
+which is discovered only by going to look for it. Stopping the sync and demanding a resolution is safe
+and turns the tool into something to manage, which is what this whole app keeps refusing to build.
 
 ## Shape of the first version
 

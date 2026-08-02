@@ -479,8 +479,20 @@ change.
   tasks per project, checkable, as rendered markdown, with priorities, notes that can be found again,
   search, and copying content out (all of it, a code block, a text block).
 
-  **The plan is `docs/plans/notes-tool.md`. Read it before writing anything** — it holds six marked
-  decisions, and three of them change the data model, not the styling.
+  **The plan is `docs/plans/notes-tool.md` and it is fully decided (2026-08-02). Read it before
+  writing anything.** The shape: one notes GIT REPOSITORY the app keeps in sync automatically, a
+  folder per project inside it keyed by the git remote (falling back to the folder name, shown and
+  editable), several files per project, a tool plus a view over one reader, conflicts kept visibly
+  rather than resolved silently.
+
+  **Blocked on ADR-PROJ-003, and that is not a formality.** The sync sends notes off the device, and
+  `rule:privacy` forbids egress without an opt-in feature that records exactly what leaves and where
+  to. The ADR comes before the code.
+
+  **The agent gets no access — the maintainer's decision, in full.** It settles the file-watching and
+  write-conflict work away, and it is a design stance rather than an enforceable boundary: an agent
+  running as the same user can read any file it is pointed at. What it buys is that nothing invites
+  it. Do not "helpfully" hand the notes path to an agent.
 
   The one sentence that matters if the plan is ever skimmed: **this is not a notes app.** Every part
   of the description points at the same purpose — what the next prompt should say, what is still to be
