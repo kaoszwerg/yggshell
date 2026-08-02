@@ -70,8 +70,12 @@ describe("the animated window frame", () => {
     // No ring is needed: the frame's padding makes the band and the opaque inner shell covers the
     // rest. This is the check that stops somebody "restoring" the ring to be explicit about it.
     const rule = declarations(".window-frame > .window-frame-glow");
-    expect(rule).not.toContain("evenodd");
     expect(rule).toContain("clip-path: var(--hud-window-clip)");
+    expect(rule).not.toContain("evenodd");
+    // The POSITIVE invariant too, upstream's improvement on this test: a seam can be reintroduced
+    // without the keyword — any second contour does it — so what is pinned is that the clip is the
+    // shared chamfer and nothing else.
+    expect(rule).not.toContain("polygon(");
   });
 
   it("makes the band out of padding, which is what survives the minifier", () => {
@@ -86,5 +90,44 @@ describe("the animated window frame", () => {
   it("keeps the opaque shell above the glow", () => {
     // Without the stacking order the band is drawn over the application rather than around it.
     expect(declarations(".window-frame > .window-frame-inner")).toContain("z-index: 1");
+  });
+
+  it("keeps the spun square square, and wide enough to cover the diagonal", () => {
+    // A rotated non-square box deforms the gradient instead of advancing its phase, and one narrower
+    // than the window's diagonal sweeps its own corner across the band. `vmax` keeps it square
+    // without a second length.
+    const rule = declarations(".window-frame > .window-frame-glow::before");
+    const width = /width:\s*(\d+)vmax/.exec(rule);
+    const height = /height:\s*(\d+)vmax/.exec(rule);
+    expect(width?.[1]).toBe(height?.[1]);
+    expect(Number(width?.[1])).toBeGreaterThanOrEqual(142);
+  });
+});
+
+describe("the activity line", () => {
+  it("travels by transform, not by background-position", () => {
+    // The same defect as the window frame, one component over, reached the same way: the property
+    // reads as a position and behaves as a repaint. A 2px strip is cheaper than a whole window, but
+    // it is paid at 60fps for as long as anything is running, in every terminal that is running it.
+    const keyframes = css.slice(css.indexOf("@keyframes activity-sweep"));
+    const block = keyframes.slice(0, keyframes.indexOf("\n}"));
+    expect(block).toContain("transform: translateX(");
+    expect(block).not.toContain("background-position");
+  });
+
+  it("moves a strip that is two periods wide, so the loop has no seam", () => {
+    // Shifting by exactly one period lands on an identical frame. A strip only one period wide would
+    // run out and snap back.
+    const rule = declarations(".hud-activity-running::before");
+    expect(rule).toContain("width: 200%");
+    expect(rule).toContain("background-size: 50% 100%");
+    expect(rule).toContain("repeat-x");
+  });
+
+  it("honours reduced motion on the element that actually animates", () => {
+    // The trap the window frame walked into first: move the animation to a child, leave the query on
+    // the parent, and nothing errors while the preference is silently ignored.
+    const query = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(query).toContain(".hud-activity-running::before");
   });
 });

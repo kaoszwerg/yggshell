@@ -541,6 +541,13 @@ change.
 
 ## Traps this session paid for — do not re-learn them
 
+- **Animating `background-position` is a PAINT, exactly like an animated custom property in a
+  gradient.** Both read as "moving a picture" and both re-rasterise the element every frame. The window
+  frame was cured of one (`--frame-angle`, +4.4pp of a core) and `.hud-activity-running` still had the
+  other — a 2 px strip, so cheaper, but paid at 60 fps for as long as anything runs, in every terminal
+  running something. Same cure both times: paint once onto a child, move the child by `transform`, make
+  it two periods wide so shifting by one is seamless. **Look for the third one before it is reported.**
+
 - **A `clip-path: polygon(evenodd, …)` cannot make a ring, however many points you give it.** One
   polygon is one closed contour. Listing an outer contour and then an inset one in the same point list
   produces a path that traces the outer, **jumps** to the first inner point, traces the inner, and
@@ -561,6 +568,19 @@ change.
 
   Pinned in `src/styles/globals.test.ts`, which reads the stylesheet as text — jsdom applies no
   stylesheets, so neither a type nor a lint nor a render test can see a wrong polygon.
+
+- **A screenshot that contains the defect is not a screenshot that shows it.** The upstream verified
+  the broken frame with a full-window capture, where an unfilled 1.5 px stretch on one chamfer is
+  invisible — and a 5× magnification of that exact corner was taken in the same run, sat on disk, and
+  was never opened. "Verified: renders correctly" was a true statement about the wrong image. Judge a
+  hairline at the scale of the hairline.
+
+- **Probing a geometry: sweep ACROSS the feature, never along it.** `clip-path` clips pointer events,
+  so `elementFromPoint` reports the clipped shape exactly — no eyeballing needed. But the upstream's
+  first two probes both returned clean and both were wrong: one sampled outside the window, the other
+  sampled precisely along the line where the two connectors cross. A band is found by crossing it. (Their
+  measurement of the seam, for the record: 4 of 20 chamfer points on the band before, 20 of 20 after;
+  straight edges unaffected either way — which is why only the chamfer looked broken.)
 
 - **Checking a migration briefing's steps is not checking the change.** All seven of app-109's points
   were verified and all seven held; the block they told us to copy was itself wrong. A checklist says

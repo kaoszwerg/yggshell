@@ -8,6 +8,30 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The activity line travels by `transform` now, not by `background-position`.** Reported as the fast
+  border animation stuttering. Animating `background-position` re-rasterises the gradient across the
+  element on every frame — the identical defect the window frame was cured of two versions ago, one
+  component over, and reached the same way: the property reads as a position and behaves as a repaint.
+  A 2 px strip is far cheaper than a whole window, but the cost is paid at 60 fps for as long as
+  anything is running, in every terminal that is running something.
+
+  The gradient is now painted once onto a child two periods wide and shifted by exactly one, so the
+  loop is seamless and every frame is a compositor operation. The reduced-motion query moved with the
+  animation — the same trap the window frame walked into first, where leaving the query behind ignores
+  the preference without erroring.
+
+  **Whether this is the cause of the stutter is not established.** It is a real defect either way and
+  the fix stands on its own; a link to the window-frame change of 0.39.1 is plausible and unmeasured,
+  and is stated as such rather than claimed.
+
+### Changed
+
+- **Upstream v0.10.5 pulled** (briefing `app-110`). Our seam fix is byte-identical to theirs. Their
+  test improvement is adopted: the glow's clip is pinned by its **positive** invariant as well, since a
+  second contour can reintroduce the seam without using the `evenodd` keyword.
+
+### Fixed
+
 - **The tmux tool listed nothing while six sessions were running.** tmux answered every time — 93
   bytes of it — and the parser dropped every line, because the separator it arrived with was not the
   one that was sent. The format asked for a tab; what came back was `0_1_0_zsh`, with a literal

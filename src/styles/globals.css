@@ -552,15 +552,26 @@ input[type="range"]:disabled::-moz-range-thumb {
 
    Only as wide as the terminal it belongs to: the rail and the tool column are not part of what is
    running, and a line sweeping across them would be claiming otherwise. */
+/* Moved by a TRANSFORM, not by `background-position`.
+   Animating `background-position` re-rasterises the gradient across the element's box on every
+   frame — the identical defect the window frame was just cured of, one component over, and reached
+   the same way: the property looks like a position and behaves like a repaint. It is a 2px strip
+   rather than a whole window, so the cost is smaller, but it is paid at 60fps for as long as
+   something is running, on every terminal that is running something.
+   The gradient is painted ONCE onto the strip's `::before`, which is two periods wide, and shifted
+   by exactly one period — so the loop is seamless and every frame is a compositor operation. */
 @keyframes activity-sweep {
   to {
-    background-position: -200% 0;
+    transform: translateX(-50%);
   }
 }
 .hud-activity {
   height: 2px;
   background: var(--saga-neon-cyan);
   opacity: 0.18;
+  position: relative;
+  /* The travelling strip is twice as wide as this and must not escape it. */
+  overflow: hidden;
   transition:
     opacity 250ms ease,
     background-color 250ms ease;
@@ -577,14 +588,27 @@ input[type="range"]:disabled::-moz-range-thumb {
    opacities, so it still travels and still reads as "something is happening". */
 .hud-activity-running {
   opacity: 1;
-  background: linear-gradient(
+  /* The gradient lives on the ::before now; the line itself carries no colour of its own while it
+     runs, or the moving strip would travel over a static copy of itself. */
+  background: transparent;
+}
+.hud-activity-running::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* Two periods wide, so shifting by one lands on an identical frame — the loop has no seam and
+     needs no reset. */
+  width: 200%;
+  background-image: linear-gradient(
     90deg,
     rgb(var(--saga-gold-rgb) / 0.25),
     var(--saga-gold),
     rgb(var(--saga-gold-rgb) / 0.25)
   );
-  background-size: 200% 100%;
+  background-size: 50% 100%;
+  background-repeat: repeat-x;
   animation: activity-sweep 2.4s linear infinite;
+  will-change: transform;
 }
 /* What the command DID, which is the part you miss when you look away. Held briefly, then faded back
    to rest by the transition above. */
@@ -597,8 +621,14 @@ input[type="range"]:disabled::-moz-range-thumb {
   background: var(--saga-danger);
 }
 @media (prefers-reduced-motion: reduce) {
-  .hud-activity-running {
+  /* The animation lives on the ::before now, so this must target THAT element — the same trap the
+     window frame's reduced-motion query walked into: move the animation, leave the query behind,
+     and nothing errors while the preference is quietly ignored. */
+  .hud-activity-running::before {
     animation: none;
+    display: none;
+  }
+  .hud-activity-running {
     /* Still unmistakably "busy", without anything moving — and the same colour as the moving
        version, so reduced motion changes the motion and not the meaning. */
     background: var(--saga-gold);

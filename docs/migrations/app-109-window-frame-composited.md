@@ -1,5 +1,10 @@
 # 109 — the animated window frame no longer repaints the whole window
 
+> **Superseded in part by [app-110](app-110-window-frame-seam.md) — read it before porting this.**
+> The ring clip given below leaves the top-left chamfer unfilled: `polygon()` describes one closed
+> contour and cannot have a hole. The *reason* for this change, and everything else in it, still
+> stands; only the `clip-path` on `.window-frame-glow` is wrong. app-110 has the one-line correction.
+
 Audience: the agent working in a project **forked from this Tauri shell**.
 Layer: **app** — but `src/styles/globals.css` and `src/App.tsx` are **your** files. `governance:update`
 does **not** change them. Port this by hand.
