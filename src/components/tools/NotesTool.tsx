@@ -10,6 +10,7 @@ import { notesApi } from "../../api/notes";
 import { taskItems, type Task } from "../../lib/noteTasks";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { useNoteProject } from "../../hooks/useNoteProject";
+import { useNotesSync } from "../../hooks/useNotesSync";
 import { useT } from "../../hooks/useT";
 import { useUiStore } from "../../store/ui";
 import { useTerminalStore } from "../../store/terminal";
@@ -45,6 +46,10 @@ export function NotesTool() {
   const sessionId = useTerminalStore(
     (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
   );
+
+  // Opening the notes IS the moment to fetch them — and the only moment, because the shell root
+  // deliberately does not: syncing at startup put a Touch ID prompt in front of the app.
+  useNotesSync({ now: true });
 
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");

@@ -13,21 +13,26 @@ const THROTTLE_MS = 30_000;
  * feature whose whole promise is "any machine running YggShell has them" cannot be one you have to
  * remember to run.
  *
- * **At the shell root, and on window focus.** Pull on start, and again when the window comes back —
- * which is the moment the other machine's work is most likely to have arrived, and the moment before
- * you start reading. The same reasoning as the attention signal, one surface over
- * (`rule:attention-signals`): a panel that is only right when you click it is wrong the rest of the
- * time.
+ * **NEVER at startup**, and that is a correction rather than a nicety. The first version pulled on
+ * mount, and on a machine whose ssh key lives in the keychain that put a **Touch ID prompt in front
+ * of the app before it had opened** — a system dialog between the user and their terminal, caused by
+ * a feature they were not using at that moment. Reported from a running build.
  *
- * **Not a timer.** Syncing spawns git and talks to a network; doing that every few minutes for
- * somebody who is not looking at their notes is the battery cost this app refuses elsewhere. Focus is
- * the signal that costs nothing when nobody is there.
+ * `BatchMode` stops git and ssh *asking for a passphrase*; it does nothing about the platform's own
+ * keychain, which is a different mechanism and outside this app's reach. The only reliable way not to
+ * raise that dialog is not to talk to the network until the user is doing something that needs it.
+ *
+ * **So: on window focus, and when a notes surface opens.** Both are moments the user has arrived at
+ * their notes, and neither is the moment they are trying to get a shell.
+ *
+ * **Not a timer either.** Syncing spawns git and talks to a network; doing that every few minutes for
+ * somebody who is not looking at their notes is the battery cost this app refuses elsewhere.
  *
  * A failure is not surfaced here: `notes_sync` records it, and the settings panel shows git's own
  * message. Offline is the normal case, not the error case — the notes are written locally and stay
  * readable either way (ADR-PROJ-004).
  */
-export function useNotesSync() {
+export function useNotesSync({ now = false }: { now?: boolean } = {}) {
   const qc = useQueryClient();
   const last = useRef(0);
 
@@ -50,10 +55,12 @@ export function useNotesSync() {
         });
     };
 
-    run();
+    // `now` only where a notes surface just opened. The shell root passes nothing, so opening the app
+    // never touches the network — see the note above about the Touch ID prompt.
+    if (now) run();
     window.addEventListener("focus", run);
     return () => {
       window.removeEventListener("focus", run);
     };
-  }, [qc]);
+  }, [qc, now]);
 }

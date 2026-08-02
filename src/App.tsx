@@ -17,6 +17,7 @@ import { useSyncLocale } from "./hooks/useT";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
+import { useFileDropGuard } from "./hooks/useFileDropGuard";
 import { useAttentionBell } from "./hooks/useAttentionBell";
 import { useRefreshOnCommandEnd } from "./hooks/useRefreshOnCommandEnd";
 import { useNotesSync } from "./hooks/useNotesSync";
@@ -39,6 +40,9 @@ export default function App() {
   // Keyboard shortcuts, matched on the window so they work wherever the caret is.
   useShortcuts();
   useNativeContextMenuGuard();
+  // A dropped file must never navigate the WebView: that replaces the whole interface with the file,
+  // with no way back, and the only escape is quitting — which takes every terminal with it.
+  useFileDropGuard();
   // An agent asking for something marks ITS tab — at the shell root, because the whole point is that
   // it reaches you while you are looking somewhere else entirely (`hooks/useAttentionBell`).
   useAttentionBell();
@@ -48,7 +52,9 @@ export default function App() {
   useRefreshOnCommandEnd();
   // The notes keep themselves in step: pull on start and when the window comes back, push what
   // changed. Without this the sync only ever ran when somebody opened Settings and pressed a button,
-  // which is not what "any machine running YggShell has them" means (`hooks/useNotesSync`).
+  // which is not what "any machine running YggShell has them" means. It does NOT run at startup: the
+  // first version did, and on a machine whose ssh key lives in the keychain that put a Touch ID
+  // prompt in front of the app before it opened (`hooks/useNotesSync`).
   useNotesSync();
 
   return (

@@ -15,6 +15,9 @@ vi.mock("../../api/notes", () => ({
     remove: vi.fn(() => Promise.resolve()),
     removeProject: vi.fn(() => Promise.resolve()),
     projects: vi.fn(() => Promise.resolve(["github.com/a/b"])),
+    // Opening the tool syncs — that is the only place it happens, because doing it at startup put a
+    // Touch ID prompt in front of the app.
+    sync: vi.fn(() => Promise.resolve()),
     toggle: vi.fn(() => Promise.resolve(true)),
     search: vi.fn(() => Promise.resolve([])),
   },
