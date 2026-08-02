@@ -48,8 +48,21 @@ for any property the base class declares, the caller's utility is not overridden
 - **Single-purpose helpers** (`.neon-glow-*`, `.text-glow-*`, `.no-scrollbar`) → `@layer utilities`,
   where they compete with Tailwind's own on equal terms instead of outranking them.
 - **Element-level styling** (`input[type="range"]`, …) → `@layer base`.
+- **`@keyframes` and `@property` go inside the layer that uses them**, not at column 0. Lightning CSS
+  eliminates keyframes it believes are unused, and a usage inside `@layer components` does not reliably
+  match a definition outside it — the production build then ships an `animation:` naming keyframes that
+  are not in the file. `@property` fails worse: it silently loses its type, so the animation runs and
+  does not animate. Nothing upstream of the built file can see either.
 - Adding a rule at column 0 fails `src/styles/layers.test.ts`. Nothing else in the gate can see this —
   unlayered CSS is valid, lints clean and renders correctly in isolation.
+
+## Nothing in the window chrome is sized from the viewport
+
+A box sized in `vmax`/`vw`/`vh` grows a composited layer with the window. On WebKit that layer is not
+re-rasterised correctly after a resize and the frame loses a corner; Blink tiles oversized layers and
+hides it entirely, so it cannot be found by developing on Windows (docs/migrations/app-112). Anchor a
+gradient with `background-size`/`background-position` instead and keep every *box* small and bounded.
+`src/styles/window-frame.test.ts` rejects viewport-sized boxes in the frame.
 
 **What layering does not fix, and must not be assumed to:** two Tailwind utilities that set the same
 property are in the *same* layer, so the generated sheet's order decides — not the order in

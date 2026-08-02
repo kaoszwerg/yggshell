@@ -116,13 +116,21 @@ place a 1.5 px border can appear.
   is sized from the viewport (`vmax`/`vw`/`vh`). `background-size: 100vw 100vh` is deliberately
   exempt — that is the image the strips sample, not a box anyone rasterises whole. A third round of
   "cover the window and clip it down" would be somebody else's engine, and this is what stops it.
-- **This supersedes the upstream design for this project.** `docs/migrations/app-109` and `app-110`
-  describe v2 as delivered and are left exactly as published (ADR-CORE-035 — a briefing is history and
-  is never rewritten). An agent reading them will be told to keep the spun square; this ADR is what
-  says otherwise, and it is reachable from the same vocabulary.
-- **It is worth upstreaming**, because every consumer on macOS or Linux has the same defect and no way
-  to notice it on Windows. That is a proposal to the maintainer, not something to commit into the
-  template unasked (rule:upstream-changes).
+- **Upstreamed, and adopted — so this is no longer a divergence.** Reported to the template with the
+  measurements above; it shipped as **app-112 / v0.10.7**, implemented to the same specification down
+  to the class names and `--frame-strip`. `docs/migrations/app-109` and `app-110` are left exactly as
+  published (ADR-CORE-035 — a briefing is history and is never rewritten) and app-112 supersedes them
+  upstream. This ADR now records *why* the design is what it is, for the project that found it, rather
+  than a decision declined.
+
+  Two things came back that are worth keeping here. The template could not confirm the fix, only its
+  coverage and seams: **the defect does not reproduce on Blink**, so Windows can neither see it nor
+  verify it gone — which is exactly why it shipped in the first place. And **nobody has measured
+  WebKitGTK**: not them, not us. That is an open gap, recorded rather than assumed away.
+
+  The `@keyframes` elimination did **not** reproduce at their pinned Lightning CSS version, and did
+  here. Whether it fires is a minifier-version detail, not a property of the code — which makes the
+  gate the thing that matters, not the observation.
 
 ## Postscript: the activity line, and porting by analogy
 

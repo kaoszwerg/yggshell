@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "governanceVersion": "0.10.6",
+  "governanceVersion": "0.10.7",
   "upstream": "kaoszwerg/saga-rust-template",
   "layers": [
     {
@@ -11,11 +11,11 @@
     {
       "id": "app",
       "source": "kaoszwerg/saga-rust-template",
-      "version": "0.10.6"
+      "version": "0.10.7"
     }
   ],
   "optedOut": [],
-  "count": 135,
+  "count": 136,
   "files": [
     {
       "path": ".claude/memory/glossary.md",
@@ -194,7 +194,7 @@
     },
     {
       "path": ".claude/rules/theming.md",
-      "hash": "6836b625bb241de0",
+      "hash": "89f04df4e0e56f61",
       "layer": "app"
     },
     {
@@ -485,6 +485,11 @@
     {
       "path": "docs/migrations/app-111-cascade-layers.md",
       "hash": "cdd098d235f609c8",
+      "layer": "app"
+    },
+    {
+      "path": "docs/migrations/app-112-window-frame-strips.md",
+      "hash": "17e12ffbce9c768b",
       "layer": "app"
     },
     {
