@@ -173,9 +173,30 @@ pub fn connect(clone_dir: &Path, remote: &str, branch: &str) -> Result<()> {
 /// Rebase, so the history stays linear; on a conflict the markers are left in the file and the sync
 /// reports it. The file is briefly ugly and nothing is ever lost — where "newest wins" is clean and
 /// silently drops a paragraph written on the other machine, discovered only by going to look for it.
+///
+/// **A branch the remote does not have yet is not a failure.** A repository being used for the first
+/// time has no commits at all, and `git pull` answers that with *"Your configuration specifies to
+/// merge with the ref 'refs/heads/main'"* — which would have been shown to the user as the sync's
+/// error, for ever, on the one day it means nothing is wrong. Found by pushing to a real empty
+/// repository; no unit test would have produced an unborn branch.
 pub fn pull(clone_dir: &Path) -> Result<()> {
+    let branch = current_branch(clone_dir);
+    let heads = run(clone_dir, &["ls-remote", "--heads", "origin", &branch])?;
+    if heads.trim().is_empty() {
+        tracing::info!(%branch, "nothing to pull — the remote has no such branch yet");
+        return Ok(());
+    }
     run(clone_dir, &["pull", "--rebase", "--autostash"])?;
     Ok(())
+}
+
+/// The branch the clone is on, or `main` when HEAD is unborn and git has no answer.
+fn current_branch(clone_dir: &Path) -> String {
+    run(clone_dir, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .ok()
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty() && name != "HEAD")
+        .unwrap_or_else(|| "main".into())
 }
 
 /// Stage everything, commit if there is anything to commit, and push.
@@ -188,7 +209,10 @@ pub fn push(clone_dir: &Path, message: &str) -> Result<bool> {
         return Ok(false);
     }
     run(clone_dir, &["commit", "--message", message])?;
-    run(clone_dir, &["push"])?;
+    // `--set-upstream HEAD`, always. A fresh clone of an empty repository has no upstream to push
+    // to, and a bare `git push` answers that with "has no upstream branch" — the same first-run
+    // failure as the pull above, on the same day. Harmless once it is set.
+    run(clone_dir, &["push", "--set-upstream", "origin", "HEAD"])?;
     tracing::info!("notes pushed");
     Ok(true)
 }

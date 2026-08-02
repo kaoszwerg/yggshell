@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The first sync against an empty repository failed, twice.** A repository being used for the first
+  time has no commits, so `git pull` answered with *"Your configuration specifies to merge with the
+  ref 'refs/heads/main'"* and `git push` with *"has no upstream branch"* — and both would have been
+  shown as the sync's error, for ever, on the one day nothing was actually wrong. Found by pushing to
+  a real empty repository; no unit test produces an unborn branch.
+
 ### Added
 
 - **Notes.** A staging area between you and the agent: what the next prompt should say, what is still
