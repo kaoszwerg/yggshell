@@ -8,6 +8,39 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Copy a block, the way a howto page does it** — a control at the block's top right, always visible
+  on a code block and on hover for the rest. That is what the notes are *for*: they hold prompts and
+  instructions prepared to be sent later, and todos to be ticked. There is no "type into the
+  terminal" anywhere any more, which reverses what the plan called the reason this tool exists —
+  typing a checklist item into a shell is senseless, and handing something over is a paste decided by
+  a person at the place it lands.
+
+- **A showcase note** in the notes repository (`_showcase/markdown.md`) with every supported element,
+  including a real image, so the renderer can be seen rather than assumed.
+
+- **Paste an image into a note** and it is copied into the repository, with the note referring to it
+  relatively. **A remote image loads on request**, fetched by the backend — https only, with a
+  timeout, so the webview still opens no connection of its own.
+
+- **A link between notes opens the note it names.** `[see](tmux.md)` is not a URL and never was;
+  sending it to the external-URL guard got it refused, which was correct of that guard and useless to
+  a reader.
+
+### Fixed
+
+- **A dropped file replaced the whole application.** The WebView did what a browser does with a file
+  nobody handled: navigate to it. No back, and quitting to escape took every terminal with it.
+
+- **The sync asked for a fingerprint at startup.** It ran on launch, so on a machine whose ssh key
+  lives in the keychain a Touch ID prompt stood between the user and their terminal, for a feature
+  they were not using. It now syncs on window focus and when the notes are opened — never on launch.
+
+- **"Move to" could not reach another project**, because the list was built from what was on screen
+  rather than from the whole tree.
+
+- **Unreferenced images are only offered for deletion after a successful pull.** A note written on
+  another machine and not yet pulled still refers to its image, and this machine cannot see that note.
+
 - **Projects are yours: created, renamed, picked — from any tab.** They were derived from the front
   tab's git remote and nothing else, so there was exactly one and no way to reach another. Which
   repository a terminal happens to be sitting in has nothing to do with which project a note belongs

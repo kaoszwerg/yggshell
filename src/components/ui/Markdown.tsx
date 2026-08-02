@@ -5,25 +5,6 @@ import { api } from "../../api/commands";
 import { parseMarkdown, type Block, type Inline } from "../../lib/markdown";
 
 /**
- * Render one of the app's own markdown documents.
- *
- * **Links go through the backend, never through the WebView.** An `<a href>` inside a Tauri window
- * *navigates the window* — the interface would be replaced by a web page, with no way back, and the
- * terminals behind it gone. Every link here is a control that asks the backend to open the user's
- * browser, which is the same route the terminal's own links take.
- *
- * **There is no markup path at all**, which is what makes the input's origin stop mattering. The
- * parser produces data and this component draws it; a raw `<script>` in a note is a `html` node and
- * renders as the text `<script>`. That was a nicety while the only input was two documents shipped in
- * the binary. It is load-bearing now that a note arrives by paste from anywhere (ADR-PROJ-004).
- *
- * **Every top-level block carries its source range as `data-md-start`/`data-md-end`.** That is what
- * lets a reader turn a click into "edit *this*, here" without the renderer knowing anything about
- * editing: one handler on the container reads the nearest such element. Making each block interactive
- * instead would have nested a hundred buttons around the links already inside them, which is both an
- * accessibility violation and invalid HTML.
- */
-/**
  * How an image in the document should be drawn, if the caller can draw one at all.
  *
  * A render prop rather than a rule inside this component, because the *policy* is not the renderer's:
@@ -35,6 +16,26 @@ export type ImageRenderer = (src: string, alt: string) => ReactNode;
 
 const ImageContext = createContext<ImageRenderer | null>(null);
 
+/**
+ * What to do with a link that does not leave the application.
+ *
+ * A note may point at another note — `[see](tmux.md)`. That is not a URL and never was: sending it to
+ * `open_external` gets it refused for not being `http(s)`, which is correct of that guard and useless
+ * to the reader. Given a handler, a relative target opens the thing it names; without one it renders
+ * as plain text, which is what every other caller wants.
+ *
+ * Deliberately NOT a widening of the whitelist: nothing leaves the app, so there is no boundary here
+ * to widen (ADR-PROJ-004).
+ */
+export type LocalLinkHandler = (target: string) => void;
+
+const LocalLinkContext = createContext<LocalLinkHandler | null>(null);
+
+/** Whether a link target is a URL at all, or a path inside whatever is being rendered. */
+function isExternal(href: string): boolean {
+  return href.includes("://") || href.startsWith("mailto:");
+}
+
 // Labels for the two per-block controls. Not through the message catalogue: this is a primitive in
 // `ui/`, and a primitive that reaches for the app's translations is one that cannot be reused by a
 // caller with none. The two words are the same in every language this app speaks, and the caller can
@@ -42,6 +43,23 @@ const ImageContext = createContext<ImageRenderer | null>(null);
 const COPY_LABEL = "Copy";
 const EDIT_LABEL = "Edit here";
 
+/**
+ * Render a markdown document.
+ *
+ * **Links go through the backend, never through the WebView.** An `<a href>` inside a Tauri window
+ * *navigates the window* — the interface would be replaced by a web page, with no way back, and the
+ * terminals behind it gone. Every link here is a control that asks the backend to open the user's
+ * browser, which is the same route the terminal's own links take.
+ *
+ * **There is no markup path at all**, which is what makes the input's origin stop mattering. The
+ * parser produces data and this component draws it; a raw `<script>` in a note is an `html` node and
+ * renders as the text `<script>`. That was a nicety while the only input was two documents shipped in
+ * the binary. It is load-bearing now that a note arrives by paste from anywhere (ADR-PROJ-004).
+ *
+ * **Every top-level block carries its source range as `data-md-start`/`data-md-end`**, which is what
+ * lets a caller act on one block — copy it, or write at it — without this component knowing anything
+ * about copying or editing.
+ */
 export function Markdown({
   source,
   className = "",
@@ -49,6 +67,7 @@ export function Markdown({
   image = null,
   onCopyBlock,
   onEditBlock,
+  onLocalLink,
 }: {
   source: string;
   className?: string;
@@ -73,53 +92,66 @@ export function Markdown({
    * after living with the other one.
    */
   onEditBlock?: (at: number) => void;
+  /** Given, a relative link opens what it names instead of being refused as a non-URL. */
+  onLocalLink?: LocalLinkHandler;
 }) {
   return (
     <ImageContext.Provider value={image}>
-      <div className={`text-xs leading-relaxed ${className}`.trim()} style={style}>
-        {parseMarkdown(source).map((block, at) => (
-          <div
-            key={at}
-            data-md-start={block.at.start}
-            data-md-end={block.at.end}
-            className={
-              onCopyBlock === undefined && onEditBlock === undefined ? undefined : "group relative"
-            }
-          >
-            <BlockView block={block} />
-            {onCopyBlock === undefined && onEditBlock === undefined ? null : (
-              // Shown on hover and on focus. Focus matters as much: without it these are controls only
-              // a mouse can reach, in a document whose other route in is the keyboard.
-              <span className="bg-deep/80 absolute top-0 right-0 flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-                {onCopyBlock === undefined ? null : (
-                  <IconButton
-                    label={COPY_LABEL}
-                    variant="ghost"
-                    className="h-5 w-5"
-                    onClick={() => {
-                      onCopyBlock(source.slice(block.at.start, block.at.end));
-                    }}
-                  >
-                    <Copy size={11} aria-hidden />
-                  </IconButton>
-                )}
-                {onEditBlock === undefined ? null : (
-                  <IconButton
-                    label={EDIT_LABEL}
-                    variant="ghost"
-                    className="h-5 w-5"
-                    onClick={() => {
-                      onEditBlock(block.at.start);
-                    }}
-                  >
-                    <Pencil size={11} aria-hidden />
-                  </IconButton>
-                )}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+      <LocalLinkContext.Provider value={onLocalLink ?? null}>
+        <div className={`text-xs leading-relaxed ${className}`.trim()} style={style}>
+          {parseMarkdown(source).map((block, at) => (
+            <div
+              key={at}
+              data-md-start={block.at.start}
+              data-md-end={block.at.end}
+              className={
+                onCopyBlock === undefined && onEditBlock === undefined
+                  ? undefined
+                  : "group relative"
+              }
+            >
+              <BlockView block={block} />
+              {onCopyBlock === undefined && onEditBlock === undefined ? null : (
+                // **Always there on a code block, on hover for everything else** — which is what
+                // documentation sites do, and the reference the maintainer named. A copy control you
+                // have to discover by waving the pointer over a fence is one nobody finds; a copy
+                // control on every paragraph at all times is noise. Focus reveals them too, or these
+                // would be controls only a mouse can reach.
+                <span
+                  className={`bg-deep/80 absolute top-0 right-0 flex gap-0.5 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${
+                    block.kind === "fence" ? "opacity-100" : "opacity-0"
+                  }`}
+                >
+                  {onCopyBlock === undefined ? null : (
+                    <IconButton
+                      label={COPY_LABEL}
+                      variant="ghost"
+                      className="h-5 w-5"
+                      onClick={() => {
+                        onCopyBlock(source.slice(block.at.start, block.at.end));
+                      }}
+                    >
+                      <Copy size={11} aria-hidden />
+                    </IconButton>
+                  )}
+                  {onEditBlock === undefined ? null : (
+                    <IconButton
+                      label={EDIT_LABEL}
+                      variant="ghost"
+                      className="h-5 w-5"
+                      onClick={() => {
+                        onEditBlock(block.at.start);
+                      }}
+                    >
+                      <Pencil size={11} aria-hidden />
+                    </IconButton>
+                  )}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </LocalLinkContext.Provider>
     </ImageContext.Provider>
   );
 }
@@ -305,6 +337,24 @@ function InlineView({ runs }: { runs: Inline[] }) {
  * or malformed URL is rejected.
  */
 function LinkView({ text, href }: { text: string; href: string }) {
+  const local = useContext(LocalLinkContext);
+
+  // A link INTO the document set never reaches the URL guard, because it is not a URL: it opens the
+  // thing it names, inside the app. Nothing leaves, so there is no boundary being widened here.
+  if (!isExternal(href) && local !== null) {
+    return (
+      <button
+        type="button"
+        className="text-cyan hover:text-glow-cyan cursor-pointer underline decoration-dotted underline-offset-2"
+        onClick={() => {
+          local(href);
+        }}
+      >
+        {text}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"

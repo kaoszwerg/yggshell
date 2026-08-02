@@ -23,7 +23,17 @@ export function NotesSettings() {
   const t = useT();
   const qc = useQueryClient();
   const status = useQuery({ queryKey: ["notes-status"], queryFn: notesApi.status });
-  const orphans = useQuery({ queryKey: ["notes-orphans"], queryFn: notesApi.orphans });
+  const orphans = useQuery({
+    queryKey: ["notes-orphans"],
+    queryFn: notesApi.orphans,
+    // **Only after a successful pull**, and that is a data-safety rule rather than a refresh policy:
+    // a note written on another machine and not yet pulled still refers to its image, and this
+    // machine cannot see that note. Offering to delete it would be offering to break somebody else's
+    // note (ADR-PROJ-004). Local-only is fine — there is no other machine to be behind.
+    enabled:
+      status.data?.last_error == null &&
+      (status.data?.last_sync != null || (status.data?.remote ?? "") === ""),
+  });
 
   // Seeded from what is STORED, and written back on every edit. They were local state saved only on
   // a successful connect, which left the fields looking empty after a failed attempt — with the text

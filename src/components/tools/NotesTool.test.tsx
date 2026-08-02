@@ -150,7 +150,12 @@ describe("managing what is in the list", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actions for first" }));
 
     expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Type into the terminal" })).toBeTruthy();
+    // Copy, NOT "type into the terminal": the notes hold prompts prepared to be sent later and todos
+    // to be ticked, and typing a checklist item into a shell is senseless. Handing something over is
+    // copying it and pasting it where it belongs — the maintainer's own description, and it reversed
+    // what the plan had called the reason this tool exists.
+    expect(screen.getByRole("menuitem", { name: "Copy" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /terminal/i })).toBeNull();
   });
 
   it("removes one entry and leaves its neighbours alone", async () => {

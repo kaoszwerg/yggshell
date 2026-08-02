@@ -13,11 +13,9 @@ import { useNoteProject } from "../../hooks/useNoteProject";
 import { useNotesSync } from "../../hooks/useNotesSync";
 import { useT } from "../../hooks/useT";
 import { useUiStore } from "../../store/ui";
-import { useTerminalStore } from "../../store/terminal";
 import { KebabMenu } from "../ui/KebabMenu";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { copyText } from "../../lib/clipboard";
-import { terminalApi } from "../../api/terminal";
 
 /**
  * The notes, as a list you can take in at a glance and tick things off.
@@ -43,9 +41,6 @@ export function NotesTool() {
   const setView = useUiStore((s) => s.setView);
   const openNote = useUiStore((s) => s.openNote);
   const setNotesProject = useUiStore((s) => s.setNotesProject);
-  const sessionId = useTerminalStore(
-    (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
-  );
 
   // Opening the notes IS the moment to fetch them — and the only moment, because the shell root
   // deliberately does not: syncing at startup put a Touch ID prompt in front of the app.
@@ -78,6 +73,24 @@ export function NotesTool() {
     queryKey: ["notes-projects"],
     queryFn: notesApi.projects,
   });
+
+  /**
+   * Every file in every project — the list "move to" is built from.
+   *
+   * Names only, never contents: this is a menu, and reading every note in the repository to fill one
+   * would make opening a menu the most expensive thing the tool does.
+   */
+  const allTopics = useQuery({
+    queryKey: ["notes-tree", allProjects.data ?? []],
+    enabled: allProjects.data !== undefined,
+    queryFn: async () => {
+      const out: { project: string; topic: string }[] = [];
+      for (const each of allProjects.data ?? []) {
+        for (const topic of await notesApi.topics(each)) out.push({ project: each, topic });
+      }
+      return out;
+    },
+  });
   const projects = everything ? (allProjects.data ?? []) : [project];
 
   const notes = useQuery({
@@ -101,6 +114,7 @@ export function NotesTool() {
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["notes-projects"] });
+    void qc.invalidateQueries({ queryKey: ["notes-tree"] });
     void qc.invalidateQueries({ queryKey: ["notes-content"] });
   };
 
@@ -238,14 +252,6 @@ export function NotesTool() {
     },
   });
 
-  const toTerminal = (text: string) => {
-    const id = sessionId;
-    if (id === null) return;
-    void terminalApi.write(id, text).catch((error: unknown) => {
-      console.warn("could not type the note into the terminal", error);
-    });
-  };
-
   const open = (inProject: string, topic: string) => {
     openNote(inProject, topic);
     setView("notes");
@@ -254,18 +260,20 @@ export function NotesTool() {
   /** What one entry offers. "Type into the terminal" first: it is the reason this tool exists. */
   const itemActions = (inProject: string, topic: string, item: Task) => [
     {
-      id: "terminal",
-      label: t("notes.toTerminal"),
-      disabled: sessionId === null,
-      onSelect: () => {
-        toTerminal(item.title);
-      },
-    },
-    {
+      // **No "type into the terminal" here**, and that reverses a plan decision on the maintainer's
+      // instruction: it was written down as the reason this tool exists. It is not. A checklist item
+      // is not a prompt, and typing one into a shell is senseless — "die Checklisten will ich garnicht
+      // ins Terminal einfügen". Handing something over is copying it and pasting it where it belongs,
+      // which is what the per-block copy control in the view is for.
       id: "copy",
       label: t("notes.copy"),
       onSelect: () => {
-        copyText(item.title, "clipboard.note");
+        // The whole entry, body and all, with the checkbox marker taken off — what gets pasted is the
+        // thought, not the list syntax around it.
+        void notesApi.read(inProject, topic).then((text) => {
+          const block = text.slice(item.offset, item.end).replace(/^\s*-\s*\[[ xX]\]\s*/, "");
+          copyText(block.trim(), "clipboard.note");
+        });
       },
     },
     {
@@ -302,10 +310,18 @@ export function NotesTool() {
     },
   ];
 
-  /** Every other note this entry could go to — the same project's topics first, then the rest. */
+  /**
+   * Every other note this entry could go to — this project's files first, then every other
+   * project's.
+   *
+   * Built from the WHOLE tree, not from what is on screen. Reading it off `sections` meant the list
+   * held only the current project's files, so "move to another project" was an entry that could not
+   * do what it said — reported as the menu partly not doing what it should.
+   */
   const moveTargets = (fromProject: string, fromTopic: string) =>
-    sections
+    (allTopics.data ?? [])
       .filter((s) => !(s.project === fromProject && s.topic === fromTopic))
+      .sort((a, b) => Number(b.project === fromProject) - Number(a.project === fromProject))
       .map((s) => ({
         project: s.project,
         topic: s.topic,

@@ -212,6 +212,7 @@ export const en = {
   "notes.toTerminal": "Type into the terminal",
   "notes.remoteImage": "Remote image — not loaded",
   "notes.openInBrowser": "Open in browser",
+  "notes.loadImage": "Load",
   "notes.sync.now": "Sync now",
   "notes.sync.never": "Not synced yet this session",
   "notes.sync.ok": "Synced",

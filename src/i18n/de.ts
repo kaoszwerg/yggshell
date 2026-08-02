@@ -204,6 +204,7 @@ export const de: Translations = {
   "notes.toTerminal": "Ins Terminal tippen",
   "notes.remoteImage": "Entferntes Bild — nicht geladen",
   "notes.openInBrowser": "Im Browser öffnen",
+  "notes.loadImage": "Laden",
   "notes.sync.now": "Jetzt synchronisieren",
   "notes.sync.never": "In dieser Sitzung noch nicht synchronisiert",
   "notes.sync.ok": "Synchronisiert",

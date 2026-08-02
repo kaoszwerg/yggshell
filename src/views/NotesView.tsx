@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, ExternalLink, Terminal } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { IconButton } from "../components/ui/IconButton";
 import { Markdown } from "../components/ui/Markdown";
 import { TextArea } from "../components/ui/TextArea";
 import { api } from "../api/commands";
 import { notesApi } from "../api/notes";
-import { terminalApi } from "../api/terminal";
 import { copyText } from "../lib/clipboard";
 import { useContentFontSize } from "../hooks/useContentFontSize";
 import { useT } from "../hooks/useT";
-import { useTerminalStore } from "../store/terminal";
 import { useUiStore } from "../store/ui";
 
 /** How long after the last keystroke the note is written. */
@@ -61,6 +59,21 @@ export function NotesView() {
   const content = useQuery({
     queryKey: ["notes-note", project, topic],
     queryFn: () => notesApi.read(project, topic),
+  });
+
+  /**
+   * Put a pasted image into the repository and give back the path to write in the markdown.
+   *
+   * The bytes go through the backend rather than the webview writing a file, for the same reason the
+   * reading side does: this application has no filesystem capability in the webview at all, and
+   * pasting a screenshot is not a reason to open one.
+   */
+  const addImage = useMutation({
+    mutationFn: async (file: File) => {
+      const bytes = [...new Uint8Array(await file.arrayBuffer())];
+      const name = file.name === "" ? "pasted.png" : file.name;
+      return notesApi.addImage(project, name, bytes);
+    },
   });
 
   const save = useMutation({
@@ -175,6 +188,24 @@ export function NotesView() {
           onKeyDown={(event) => {
             if (event.key === "Escape") stopWriting();
           }}
+          // **Paste an image and it becomes part of the note.** The clipboard is where a screenshot
+          // is, so this is where one arrives; the file is copied INTO the repository and the note
+          // refers to it relatively, because a note pointing at ~/Desktop is broken on the second
+          // machine and again the day the desktop is tidied (ADR-PROJ-004).
+          onPaste={(event) => {
+            const file = [...event.clipboardData.items]
+              .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+              .map((item) => item.getAsFile())
+              .find((f): f is File => f !== null);
+            if (file === undefined) return;
+            event.preventDefault();
+            const at = event.currentTarget.selectionStart;
+            void addImage.mutateAsync(file).then((rel) => {
+              const before = (draft ?? "").slice(0, at);
+              const after = (draft ?? "").slice(at);
+              setDraft(`${before}![](${rel})${after}`);
+            });
+          }}
           style={{ fontSize: `${fontSize}px` }}
           className="min-h-0 flex-1 rounded-none border-0 font-mono leading-relaxed"
         />
@@ -198,6 +229,15 @@ export function NotesView() {
               }}
               onEditBlock={(at) => {
                 startWriting(at);
+              }}
+              // `[see](tmux.md)` opens that note. It is not a URL and never was — sending it to
+              // `open_external` gets it refused for not being http(s), which is correct of that guard
+              // and useless to a reader. A target with a slash names another project's file.
+              onLocalLink={(target) => {
+                const clean = target.replace(/\.md$/, "");
+                const at = clean.lastIndexOf("/");
+                if (at === -1) openNote(project, clean);
+                else openNote(clean.slice(0, at), clean.slice(at + 1));
               }}
               // rule:content-size — a note reads like a terminal, and the size the user chose for
               // the terminal is the size they need for this. On the scroll region, once, rather than
@@ -223,20 +263,25 @@ export function NotesView() {
  * this app has no `assetProtocol` capability at all — showing a screenshot does not widen the
  * sandbox (ADR-PROJ-004).
  *
- * **From the network: not fetched.** Rendering `![](https://…)` would call a stranger's server the
- * moment the note is read, which is exactly what a tracking pixel counts on, and reading a note is
- * not consent to that. The placeholder opens it in the user's browser instead — where a remote image
- * already belongs, with a user agent they chose.
+ * **From the network: never on render, and only ever by the BACKEND.** Rendering `![](https://…)`
+ * would call a stranger's server the moment the note is read, which is exactly what a tracking pixel
+ * counts on, and reading a note is not consent to that. Pressing *load* fetches it once, in Rust,
+ * https-only with a timeout — so the webview still opens no connection of its own and the request
+ * carries neither a referrer nor a user agent anywhere (ADR-PROJ-004).
  */
 function NoteImage({ project, src, alt }: { project: string; src: string; alt: string }) {
   const t = useT();
   const remote = src.includes("://");
+  const [load, setLoad] = useState(false);
 
   const data = useQuery({
-    queryKey: ["note-image", project, src],
-    enabled: !remote,
+    queryKey: ["note-image", project, src, load],
+    // Local: read at once. Remote: only after the user has pressed — the whole point.
+    enabled: !remote || load,
     queryFn: async () => {
-      const bytes = await notesApi.readImage(project, src);
+      const bytes = remote
+        ? await notesApi.fetchImage(src)
+        : await notesApi.readImage(project, src);
       const binary = Uint8Array.from(bytes);
       let out = "";
       for (const byte of binary) out += String.fromCharCode(byte);
@@ -244,14 +289,27 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
     },
   });
 
-  if (remote) {
+  if (remote && data.data === undefined) {
     return (
       <span className="border-dim/30 my-1 inline-flex items-center gap-2 border px-2 py-1">
-        <span className="text-dim font-mono text-[10px]">{t("notes.remoteImage")}</span>
+        <span className="text-dim min-w-0 truncate font-mono text-[10px]">
+          {data.isError ? String(data.error) : t("notes.remoteImage")}
+        </span>
+        {/* Fetched by the BACKEND when this is pressed — the webview opens no connection either way. */}
+        <Button
+          variant="ghost"
+          className="shrink-0 px-1 py-0 text-[10px]"
+          disabled={data.isFetching}
+          onClick={() => {
+            setLoad(true);
+          }}
+        >
+          {t("notes.loadImage")}
+        </Button>
         <IconButton
           label={t("notes.openInBrowser")}
           variant="ghost"
-          className="h-4 w-4"
+          className="h-4 w-4 shrink-0"
           onClick={() => {
             void api.openExternal(src).catch((error: unknown) => {
               console.warn("could not open the image", error);
@@ -269,18 +327,18 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
 }
 
 /**
- * Copy the whole note, and hand it to the terminal.
+ * Copy the whole note.
  *
- * **"Type into the terminal" is the feature this tool exists for**: a note becomes a prompt without
- * touching the clipboard, through the same typed-not-run channel the file browser's `cd` uses. It
- * types; it never sends a newline, so nothing runs that the user did not press Enter on themselves
- * (ADR-PROJ-001 §5).
+ * **There is no "type into the terminal", anywhere**, and that reverses what the plan called the
+ * reason this tool exists. The maintainer's own description of what the notes are for is what
+ * settles it: they hold prompts and instructions prepared to be *sent later*, and todos to be
+ * ticked. Handing one over is copying a block and pasting it where it belongs — a decision made
+ * where the paste happens, by a person, not a channel that types into whichever shell is in front.
+ *
+ * The per-block controls above are the ones that matter; this is the whole-document case.
  */
 function BlockActions({ text }: { text: string }) {
   const t = useT();
-  const sessionId = useTerminalStore(
-    (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
-  );
 
   return (
     <footer className="border-cyan/15 flex shrink-0 items-center justify-end gap-2 border-t px-3 py-1">
@@ -292,20 +350,6 @@ function BlockActions({ text }: { text: string }) {
       >
         <Copy size={11} aria-hidden className="mr-1 inline" />
         {t("notes.copy")}
-      </Button>
-      <Button
-        variant="ghost"
-        accent="green"
-        disabled={sessionId === null}
-        onClick={() => {
-          if (sessionId === null) return;
-          void terminalApi.write(sessionId, text).catch((error: unknown) => {
-            console.warn("could not type the note into the terminal", error);
-          });
-        }}
-      >
-        <Terminal size={11} aria-hidden className="mr-1 inline" />
-        {t("notes.toTerminal")}
       </Button>
     </footer>
   );

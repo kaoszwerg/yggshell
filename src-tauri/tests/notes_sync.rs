@@ -21,11 +21,34 @@ use yggshell_lib::notes;
 /// The maintainer's own notes repository, created private for this feature.
 const REMOTE: &str = "git@github.com:kaoszwerg/notes.git";
 
+/// Where these tests write, and the only place they may.
+///
+/// A scratch project of their own, removed and pushed at the end of each run. The first version wrote
+/// straight into `github.com/kaoszwerg/yggshell/inbox.md` and left a marker there on every run — the
+/// maintainer found seven of them in their real notes and had to ask whether they were mine. A test
+/// that leaves litter in the thing it is testing is a defect, whatever it proves.
+const SCRATCH: &str = "_e2e";
+
 fn temp(tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("ygg-notes-e2e-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
     dir
+}
+
+/// Take the scratch project back out of the repository and push that too.
+///
+/// Called at the end of every test that wrote. Litter in the maintainer's real notes is not an
+/// acceptable price for a proof — the first version left seven markers there and they had to ask
+/// whether they were mine.
+fn tidy(clone: &Path) {
+    let root = notes::root(
+        clone
+            .parent()
+            .expect("the clone always has a parent — it is <data>/notes-repo"),
+    );
+    let _ = notes::delete_project(&root, SCRATCH);
+    let _ = notes::git::push(clone, "notes: remove the end-to-end scratch project");
 }
 
 /// Read one file out of a FRESH clone — never out of the clone that wrote it.
@@ -69,7 +92,7 @@ fn a_note_written_here_arrives_in_the_repository() {
         .expect("clock")
         .as_secs();
     let marker = format!("end-to-end proof {stamp}");
-    notes::capture(&root, "github.com/kaoszwerg/yggshell", &marker).expect("capture");
+    notes::capture(&root, SCRATCH, &marker).expect("capture");
 
     let sent = notes::git::push(&clone, &format!("notes: e2e {stamp}")).expect("push");
     assert!(
@@ -77,13 +100,14 @@ fn a_note_written_here_arrives_in_the_repository() {
         "there was nothing to push, which means nothing was written"
     );
 
-    let there = read_from_remote("notes/github.com/kaoszwerg/yggshell/inbox.md")
+    let there = read_from_remote(&format!("notes/{SCRATCH}/inbox.md"))
         .expect("the note is not in the repository");
     assert!(
         there.contains(&marker),
         "the note reached the repository without its text: {there}"
     );
 
+    tidy(&clone);
     let _ = std::fs::remove_dir_all(&data);
 }
 
@@ -118,7 +142,7 @@ fn notes_written_before_a_remote_was_named_are_adopted_rather_than_clobbered() {
         .expect("clock")
         .as_secs();
     let marker = format!("written before any remote {stamp}");
-    notes::capture(&root, "github.com/kaoszwerg/yggshell", &marker).expect("capture");
+    notes::capture(&root, SCRATCH, &marker).expect("capture");
     assert!(
         !notes::git::is_clone(&notes::clone_dir(&data)),
         "the fixture is not the situation being tested"
@@ -127,19 +151,20 @@ fn notes_written_before_a_remote_was_named_are_adopted_rather_than_clobbered() {
     notes::git::connect(&notes::clone_dir(&data), REMOTE, "main").expect("adopt");
 
     // Still here, untouched — this is the assertion the whole design turns on.
-    let local = notes::read(&root, "github.com/kaoszwerg/yggshell", "inbox").expect("read back");
+    let local = notes::read(&root, SCRATCH, "inbox").expect("read back");
     assert!(
         local.contains(&marker),
         "the local note did not survive: {local}"
     );
 
     notes::git::push(&notes::clone_dir(&data), &format!("notes: adopt {stamp}")).expect("push");
-    let there = read_from_remote("notes/github.com/kaoszwerg/yggshell/inbox.md")
+    let there = read_from_remote(&format!("notes/{SCRATCH}/inbox.md"))
         .expect("the note is not in the repository");
     assert!(
         there.contains(&marker),
         "the adopted note never reached the remote"
     );
 
+    tidy(&notes::clone_dir(&data));
     let _ = std::fs::remove_dir_all(&data);
 }
