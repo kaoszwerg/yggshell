@@ -27,6 +27,7 @@
 pub mod git;
 pub mod images;
 
+use crate::dto::NoteFile;
 use crate::error::{AppError, Result};
 use std::path::{Path, PathBuf};
 
@@ -356,6 +357,58 @@ pub fn topics(root: &Path, project: &str) -> Result<Vec<String>> {
         .collect();
     out.sort_by_key(|topic| (topic != INBOX, topic.clone()));
     Ok(out)
+}
+
+/// Every note of the given projects, contents and all, in one call.
+///
+/// **Why this exists rather than the frontend looping.** The tool used to ask for a project's topic
+/// list and then for each note's text separately — one IPC round trip each, and every one of them
+/// executing on Tauri's **main thread**, so they could not overlap with anything, including the
+/// window's own events. A handful of notes across two projects was a visible wait before the panel
+/// drew at all ("das laden des todo widgets dauert extrem lange"). One call, off the main thread, is
+/// the whole fix.
+///
+/// A project that cannot be read is **skipped**, not an error: it may have been renamed or deleted
+/// between the listing and this call, and one missing entry must not empty the panel.
+pub fn tree(root: &Path, projects: &[String]) -> Vec<NoteFile> {
+    let mut out = Vec::new();
+    for project in projects {
+        let Ok(topics) = topics(root, project) else {
+            continue;
+        };
+        for topic in topics {
+            let Ok(text) = read(root, project, &topic) else {
+                continue;
+            };
+            out.push(NoteFile {
+                project: project.clone(),
+                topic,
+                text,
+            });
+        }
+    }
+    out
+}
+
+/// Every file in the repository, **named but not read**.
+///
+/// What a "move to" menu needs. Reading every note to fill a menu would make opening it the most
+/// expensive thing the tool does, so `text` stays empty here — deliberately, and asserted by a test.
+pub fn index(root: &Path) -> Vec<NoteFile> {
+    let mut out = Vec::new();
+    for project in projects(root) {
+        let Ok(topics) = topics(root, &project) else {
+            continue;
+        };
+        for topic in topics {
+            out.push(NoteFile {
+                project: project.clone(),
+                topic,
+                text: String::new(),
+            });
+        }
+    }
+    out
 }
 
 /// One search hit: which note, and the line it was found on.

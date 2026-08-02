@@ -227,6 +227,19 @@ pub struct NotesStatus {
     pub dirty: bool,
 }
 
+/// One note file: where it lives and what is in it.
+///
+/// Delivered in bulk (`notes_tree`), because one round trip per file — each on Tauri's main thread —
+/// is what made opening the tool a visible wait.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct NoteFile {
+    pub project: String,
+    pub topic: String,
+    /// The note's markdown. **Empty by design** in `notes_index`, which names files for a menu.
+    pub text: String,
+}
+
 /// One search hit across the notes.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

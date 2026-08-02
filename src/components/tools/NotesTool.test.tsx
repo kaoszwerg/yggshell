@@ -15,6 +15,10 @@ vi.mock("../../api/notes", () => ({
     remove: vi.fn(() => Promise.resolve()),
     removeProject: vi.fn(() => Promise.resolve()),
     projects: vi.fn(() => Promise.resolve(["github.com/a/b"])),
+    // One call for the whole panel, instead of topics-then-read per file. The mock derives it from
+    // the same `topics`/`read` fixtures, so a test only has to describe the notes once.
+    tree: vi.fn(),
+    index: vi.fn(() => Promise.resolve([])),
     status: vi.fn(() =>
       Promise.resolve({
         connected: false,
@@ -39,6 +43,24 @@ vi.mock("../../api/notes", () => ({
 
 import { notesApi } from "../../api/notes";
 
+/**
+ * Point `tree` at the same fixtures a test already gave `topics` and `read`.
+ *
+ * The tool asks once for everything now; the tests still describe their notes file by file, which is
+ * how a reader understands them.
+ */
+function treeFromFixtures(project = "github.com/a/b") {
+  vi.mocked(notesApi.tree).mockImplementation(async (projects: string[]) => {
+    const out = [];
+    for (const each of projects.length > 0 ? projects : [project]) {
+      for (const topic of await vi.mocked(notesApi.topics)(each)) {
+        out.push({ project: each, topic, text: await vi.mocked(notesApi.read)(each, topic) });
+      }
+    }
+    return out;
+  });
+}
+
 function renderTool() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -60,6 +82,7 @@ describe("NotesTool", () => {
           : "- [ ] notarise\n",
       ),
     );
+    treeFromFixtures();
   });
 
   it("shows one line per task and never its body", async () => {
@@ -184,6 +207,7 @@ describe("managing what is in the list", () => {
     useUiStore.setState({ locale: "en", view: "terminal", note: null });
     vi.mocked(notesApi.topics).mockResolvedValue(["inbox"]);
     vi.mocked(notesApi.read).mockResolvedValue("- [ ] first\n- [ ] second\n");
+    treeFromFixtures();
   });
 
   it("offers the actions on a VISIBLE control, not only on right-click", async () => {
@@ -279,6 +303,7 @@ describe("managing what is in the list", () => {
     vi.mocked(notesApi.read).mockImplementation((_p: string, topic: string) =>
       Promise.resolve(topic === "inbox" ? "- [ ] first\n" : "Refactor the pty layer, keeping…\n"),
     );
+    treeFromFixtures();
     renderTool();
 
     fireEvent.click(await screen.findByRole("button", { name: "Open prompts" }));
@@ -296,6 +321,7 @@ describe("managing what is in the list", () => {
     // `Row` leaves a click that came out of a control to that control.
     vi.mocked(notesApi.topics).mockResolvedValue(["prompts"]);
     vi.mocked(notesApi.read).mockResolvedValue("just prose\n");
+    treeFromFixtures();
     renderTool();
 
     fireEvent.click(await screen.findByRole("button", { name: "Actions for prompts" }));
@@ -323,6 +349,7 @@ describe("managing what is in the list", () => {
     // Feld tippe?". The empty state and the line above the field are the only places that can answer
     // either, and neither said anything.
     vi.mocked(notesApi.topics).mockResolvedValue([]);
+    treeFromFixtures();
     renderTool();
 
     expect(await screen.findByText(/lands in this project's inbox/)).toBeTruthy();

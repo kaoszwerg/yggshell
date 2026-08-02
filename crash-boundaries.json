@@ -46,6 +46,10 @@
     "src-tauri/src/notes/git.rs": {
       "spawns": 1,
       "why": "Every git call the notes sync makes. `Command` has no timeout, so the child runs on a thread the caller waits on with a deadline (45s — longer than the auto-fetch's, because a first push may be a clone's worth of notes over a slow link). HOW IT DIES: it sends the process result down a channel and returns. If the deadline passes first the caller has already moved on and the receiver is gone; the send fails, the result is dropped, and the thread ends. Deliberate, and the same trade as git/fetch.rs: the child cannot be killed safely from here, so the thread finishes into nothing rather than being abandoned mid-write — and nothing is lost, because the caller has already recorded the timeout as the sync's last error, which the settings panel shows verbatim. A sync that fails is never fatal: the notes are written locally and stay readable either way (ADR-PROJ-004)."
+    },
+    "src-tauri/src/commands/notes.rs": {
+      "spawns": 1,
+      "why": "`off_thread`: the one `spawn_blocking` every notes command routes its filesystem and git work through, so none of it runs on Tauri's main thread (it froze the window for the length of a git call — measured at 3.4 s at startup). It dies with the work it was given: the closure returns, the JoinHandle resolves, and the command awaits it. A panic inside cannot vanish, because the JoinError is logged at error and turned into an AppError the caller receives — the command fails visibly instead of the panel silently never filling."
     }
   }
 }

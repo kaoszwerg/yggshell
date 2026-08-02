@@ -81,30 +81,16 @@ export function NotesTool() {
    * Names only, never contents: this is a menu, and reading every note in the repository to fill one
    * would make opening a menu the most expensive thing the tool does.
    */
-  const allTopics = useQuery({
-    queryKey: ["notes-tree", allProjects.data ?? []],
-    enabled: allProjects.data !== undefined,
-    queryFn: async () => {
-      const out: { project: string; topic: string }[] = [];
-      for (const each of allProjects.data ?? []) {
-        for (const topic of await notesApi.topics(each)) out.push({ project: each, topic });
-      }
-      return out;
-    },
-  });
+  const allTopics = useQuery({ queryKey: ["notes-tree"], queryFn: notesApi.index });
   const projects = everything ? (allProjects.data ?? []) : [project];
 
+  // **One call for the whole panel.** This was a loop: topics per project, then the text of every
+  // note, each its own round trip — and each executing on Tauri's main thread, so they could not
+  // even overlap. With a handful of notes that is a visible wait before anything is drawn, and it
+  // grows with how much the tool has been used.
   const notes = useQuery({
     queryKey: ["notes-content", projects],
-    queryFn: async () => {
-      const out: { project: string; topic: string; text: string }[] = [];
-      for (const each of projects) {
-        for (const topic of await notesApi.topics(each)) {
-          out.push({ project: each, topic, text: await notesApi.read(each, topic) });
-        }
-      }
-      return out;
-    },
+    queryFn: () => notesApi.tree(projects),
   });
 
   // Cheap and entirely local — `git status` and a `rev-list --count` against the ref origin already

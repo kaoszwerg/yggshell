@@ -45,6 +45,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The notes froze the whole application, including its startup.** Every notes command ran
+  synchronously, and a synchronous Tauri command executes on the **main thread** — so a sync held the
+  window and every other command for as long as git took. Measured in the maintainer's own log: 3.4 s
+  at startup, during which the first terminal could not open ("erst blitzt es auf, dann ist es weg,
+  nach guten 3 Sekunden kommt es wieder"), with a ceiling of git's 45 s timeout. All of it now runs
+  through `spawn_blocking`, which is what `rule:rust-conventions` has always required.
+
+- **And it syncing at startup at all was an accident**: a window is focused the moment it opens, so
+  "sync on focus" fired on launch — the very thing that rule was written to avoid. A focus counts
+  only once the window has lost it.
+
+- **Opening the tool asked for one note at a time.** Topics per project, then each note's text, each
+  its own round trip on that same main thread: the wait grew with the number of notes. One call now
+  returns the whole tree ("das laden des todo widgets dauert extrem lange").
+
+- **The showcase note's remote image pointed at a URL that never existed** (`example.com`), so a
+  working mechanism looked broken. It now points at an image that is really there; the app was
+  reporting "answered 404 Not Found" correctly the whole time.
+
 - **The buttons in the note view are named after what they do**: `Edit` while reading, `Save` while
   writing. They were named after the state they would land in — and "Read" hid the fact that leaving
   the editor is what commits the text, which it does.

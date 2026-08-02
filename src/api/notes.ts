@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { NoteFile } from "../bindings/NoteFile";
 import type { NoteHit } from "../bindings/NoteHit";
 import type { NoteOrphan } from "../bindings/NoteOrphan";
 import type { NotesStatus } from "../bindings/NotesStatus";
@@ -49,6 +50,19 @@ export const notesApi = {
   sync: () => invoke<NotesStatus>("notes_sync"),
 
   projects: () => invoke<string[]>("notes_projects"),
+
+  /**
+   * Every note of these projects, contents and all — **one call**.
+   *
+   * The tool used to ask for a project's topics and then for each note's text separately. Every one
+   * of those was a round trip, and every one of them ran on Tauri's main thread, so they could not
+   * overlap with each other or with anything else: opening the panel was a wait that grew with the
+   * number of notes ("das laden des todo widgets dauert extrem lange").
+   */
+  tree: (projects: string[]) => invoke<NoteFile[]>("notes_tree", { projects }),
+
+  /** Every file in the repository, named but not read — what a "move to" menu needs. */
+  index: () => invoke<NoteFile[]>("notes_index"),
 
   /** A project's topics, `inbox` first. */
   topics: (project: string) => invoke<string[]>("notes_topics", { project }),

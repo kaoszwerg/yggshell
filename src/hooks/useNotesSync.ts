@@ -71,15 +71,27 @@ export function useNotesSync({ now = false }: { now?: boolean } = {}): {
     force.current = () => {
       run(true);
     };
+
+    // **"On focus" means COMING BACK, not arriving.** A window is focused the moment it opens, so
+    // listening for focus alone made this a startup sync after all — which is the very thing it was
+    // written to avoid, and it showed: the app flashed up, vanished, and returned three seconds
+    // later while git ran. A focus only counts once the window has lost it at least once.
+    let left = false;
+    const onBlur = () => {
+      left = true;
+    };
     const onFocus = () => {
+      if (!left) return;
       run();
     };
+    window.addEventListener("blur", onBlur);
 
     // `now` only where a notes surface just opened. The shell root passes nothing, so opening the app
     // never touches the network — see the note above about the Touch ID prompt.
     if (now) run();
     window.addEventListener("focus", onFocus);
     return () => {
+      window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
     };
   }, [qc, now]);

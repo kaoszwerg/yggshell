@@ -278,3 +278,52 @@ fn cleaning_removes_only_what_was_named() {
     assert!(!dir.join("a.png").exists());
     assert!(dir.join("b.png").exists());
 }
+
+#[test]
+fn the_whole_tree_comes_back_in_one_call() {
+    // **One IPC call, not one per file.** Opening the tool used to ask for the topic list per
+    // project and then for each note's text separately — every one of them a round trip, and every
+    // one of them running on Tauri's MAIN thread, so they could not even overlap. With two projects
+    // and a handful of notes that is a visible wait before anything appears: "das laden des todo
+    // widgets dauert extrem lange".
+    let temp = Temp::new("tree");
+    write(temp.root(), "p", "inbox", "- [ ] one\n").unwrap();
+    write(temp.root(), "p", "later", "prose\n").unwrap();
+    write(temp.root(), "q", "inbox", "- [ ] two\n").unwrap();
+
+    let files = tree(temp.root(), &["p".to_string(), "q".to_string()]);
+
+    assert_eq!(files.len(), 3);
+    // Same order as `topics`: inbox first, and the projects in the order they were asked for.
+    assert_eq!(files[0].project, "p");
+    assert_eq!(files[0].topic, "inbox");
+    assert_eq!(files[0].text, "- [ ] one\n");
+    assert_eq!(files[2].project, "q");
+}
+
+#[test]
+fn a_project_that_is_gone_does_not_take_the_others_with_it() {
+    // A project can be renamed or deleted between the list and the read. One unreadable entry must
+    // not empty the whole panel.
+    let temp = Temp::new("tree2");
+    write(temp.root(), "p", "inbox", "- [ ] one\n").unwrap();
+
+    let files = tree(temp.root(), &["p".to_string(), "vanished".to_string()]);
+
+    assert_eq!(files.len(), 1);
+}
+
+#[test]
+fn the_index_names_every_file_without_reading_any() {
+    // What "move to" needs: names only. Reading every note in the repository to fill a menu would
+    // make opening that menu the most expensive thing the tool does.
+    let temp = Temp::new("index");
+    write(temp.root(), "p", "inbox", "- [ ] one\n").unwrap();
+    write(temp.root(), "q", "notes", "prose\n").unwrap();
+
+    let index = index(temp.root());
+
+    assert_eq!(index.len(), 2);
+    assert!(index.iter().any(|f| f.project == "q" && f.topic == "notes"));
+    assert!(index.iter().all(|f| f.text.is_empty()));
+}

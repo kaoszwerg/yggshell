@@ -5,7 +5,7 @@
 //! write into. Same principle as ADR-PROJ-001 §5: the frontend must not be able to choose what runs,
 //! or in this case what is written to.
 
-use crate::dto::{NoteHit, NoteOrphan, NotesStatus};
+use crate::dto::{NoteFile, NoteHit, NoteOrphan, NotesStatus};
 use crate::error::{AppError, Result};
 use crate::notes;
 use crate::state::AppState;
@@ -31,9 +31,33 @@ fn root(state: &AppState) -> PathBuf {
     notes::root(&state.data_dir)
 }
 
+/// Run work that touches git or the filesystem **off Tauri's main thread**.
+///
+/// A synchronous `#[tauri::command]` executes on the main thread, so anything slow in one freezes the
+/// window and every other command with it. Measured here, from the maintainer's own log: a
+/// `notes_sync` at startup held everything for 3.4 s — the terminal itself only opened once git had
+/// finished — and its ceiling is the 45 s git timeout. Reported as "das laden des todo widgets dauert
+/// extrem lange" (rule:rust-conventions; the same defect the Docker stats command already carries a
+/// note about).
+async fn off_thread<T, F>(work: F) -> Result<T>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, "a notes task failed");
+            AppError::Other(format!("the notes task failed: {error}"))
+        })
+}
+
 fn status_of(state: &AppState) -> NotesStatus {
-    let settings = state.settings.get();
-    let clone = notes::clone_dir(&state.data_dir);
+    status_from(&state.data_dir, &state.settings.get())
+}
+
+fn status_from(data_dir: &std::path::Path, settings: &crate::dto::SettingsDto) -> NotesStatus {
+    let clone = notes::clone_dir(data_dir);
     let (last_sync, last_error) = LAST.lock().map(|g| g.clone()).unwrap_or((None, None));
     let connected = notes::git::is_clone(&clone);
     // Only where there is a clone to ask: on a local-only setup "nothing is pushed" is not a state
@@ -57,10 +81,16 @@ fn status_of(state: &AppState) -> NotesStatus {
     }
 }
 
-/// Where the notes are kept and what the last sync said.
+/// Where the notes are kept, what the last sync said, and what has not left this machine.
+///
+/// `async`, because it asks git two questions (rule:rust-conventions). Both are local — a
+/// `status --porcelain` and a `rev-list --count` against the ref already here — so it costs no
+/// network, but "cheap" is not "instant" and the main thread is not the place to find out.
 #[tauri::command]
-pub fn notes_status(state: State<'_, AppState>) -> NotesStatus {
-    status_of(&state)
+pub async fn notes_status(state: State<'_, AppState>) -> Result<NotesStatus> {
+    let data_dir = state.data_dir.clone();
+    let settings = state.settings.get();
+    off_thread(move || status_from(&data_dir, &settings)).await
 }
 
 /// Save what is configured, without connecting to anything.
@@ -113,7 +143,7 @@ pub fn notes_reset(state: State<'_, AppState>) -> Result<NotesStatus> {
 /// is silent and permanent (ADR-PROJ-004). A remote it cannot reach comes back with git's own words,
 /// which is what the settings field shows.
 #[tauri::command]
-pub fn notes_connect(
+pub async fn notes_connect(
     state: State<'_, AppState>,
     remote: String,
     branch: String,
@@ -126,13 +156,19 @@ pub fn notes_connect(
         notes_branch: Some(branch.clone()),
         ..Default::default()
     })?;
-    let clone = notes::clone_dir(&state.data_dir);
-    notes::git::connect(&clone, &remote, &branch)?;
-    if let Ok(mut last) = LAST.lock() {
-        *last = (Some(now()), None);
-    }
-    tracing::info!("notes_connect ok");
-    Ok(status_of(&state))
+    // Off the main thread: connecting CLONES or fetches, over the network.
+    let data_dir = state.data_dir.clone();
+    let settings = state.settings.get();
+    off_thread(move || {
+        let clone = notes::clone_dir(&data_dir);
+        notes::git::connect(&clone, &remote, &branch)?;
+        if let Ok(mut last) = LAST.lock() {
+            *last = (Some(now()), None);
+        }
+        tracing::info!("notes_connect ok");
+        Ok(status_from(&data_dir, &settings))
+    })
+    .await?
 }
 
 /// Stop syncing and keep every local note.
@@ -150,37 +186,72 @@ pub fn notes_disconnect(state: State<'_, AppState>) -> Result<NotesStatus> {
 ///
 /// Offline is the normal case, not the error case: a failure is recorded and reported, and the notes
 /// stay readable and writable regardless.
+/// **`async` + off the main thread, and this one is not stylistic.** It talks to a network with a 45 s
+/// ceiling. As a synchronous command it froze the window and every other command for as long as git
+/// ran — measured at 3.4 s on a *failing* sync at startup, during which the first terminal could not
+/// open.
 #[tauri::command]
-pub fn notes_sync(state: State<'_, AppState>) -> Result<NotesStatus> {
+pub async fn notes_sync(state: State<'_, AppState>) -> Result<NotesStatus> {
+    let data_dir = state.data_dir.clone();
     let settings = state.settings.get();
-    if settings.notes_remote.trim().is_empty() || !settings.notes_sync {
-        tracing::debug!("notes_sync skipped — local only");
-        return Ok(status_of(&state));
-    }
-    let clone = notes::clone_dir(&state.data_dir);
-    tracing::info!("notes_sync");
-    let outcome = notes::git::pull(&clone)
-        .and_then(|()| notes::git::push(&clone, &format!("notes: {}", now())));
-    if let Ok(mut last) = LAST.lock() {
-        match &outcome {
-            Ok(sent) => {
-                tracing::info!(sent, "notes_sync ok");
-                *last = (Some(now()), None);
-            }
-            Err(error) => {
-                // Recorded, not swallowed: this is the message the user acts on (rule:logging).
-                tracing::info!(%error, "notes_sync failed");
-                *last = (last.0, Some(error.to_string()));
+    off_thread(move || {
+        if settings.notes_remote.trim().is_empty() || !settings.notes_sync {
+            tracing::debug!("notes_sync skipped — local only");
+            return status_from(&data_dir, &settings);
+        }
+        let clone = notes::clone_dir(&data_dir);
+        tracing::info!("notes_sync");
+        let outcome = notes::git::pull(&clone)
+            .and_then(|()| notes::git::push(&clone, &format!("notes: {}", now())));
+        if let Ok(mut last) = LAST.lock() {
+            match &outcome {
+                Ok(sent) => {
+                    tracing::info!(sent, "notes_sync ok");
+                    *last = (Some(now()), None);
+                }
+                Err(error) => {
+                    // Recorded, not swallowed: this is the message the user acts on (rule:logging).
+                    tracing::info!(%error, "notes_sync failed");
+                    *last = (last.0, Some(error.to_string()));
+                }
             }
         }
-    }
-    Ok(status_of(&state))
+        status_from(&data_dir, &settings)
+    })
+    .await
 }
 
 /// Every project that has notes.
 #[tauri::command]
-pub fn notes_projects(state: State<'_, AppState>) -> Vec<String> {
-    notes::projects(&root(&state))
+pub async fn notes_projects(state: State<'_, AppState>) -> Result<Vec<String>> {
+    let root = root(&state);
+    off_thread(move || notes::projects(&root)).await
+}
+
+/// Every note of the given projects, contents and all — **one call, not one per file**.
+///
+/// The tool used to ask for a project's topics and then for each note's text separately. Every one of
+/// those was a round trip on the main thread, so they could not even overlap: opening the panel was a
+/// visible wait that grew with the number of notes.
+#[tauri::command]
+pub async fn notes_tree(
+    state: State<'_, AppState>,
+    projects: Vec<String>,
+) -> Result<Vec<NoteFile>> {
+    let root = root(&state);
+    off_thread(move || {
+        let files = notes::tree(&root, &projects);
+        tracing::debug!(count = files.len(), "notes_tree");
+        files
+    })
+    .await
+}
+
+/// Every file in the repository, named but **not read** — what a "move to" menu needs.
+#[tauri::command]
+pub async fn notes_index(state: State<'_, AppState>) -> Result<Vec<NoteFile>> {
+    let root = root(&state);
+    off_thread(move || notes::index(&root)).await
 }
 
 /// The topics in one project, `inbox` first.
@@ -257,17 +328,23 @@ pub fn notes_delete_project(state: State<'_, AppState>, project: String) -> Resu
 }
 
 /// Plain-text search across every project.
+///
+/// Off the main thread: it reads **every** note in the repository, and it runs on each keystroke.
 #[tauri::command]
-pub fn notes_search(state: State<'_, AppState>, query: String) -> Vec<NoteHit> {
-    notes::search(&root(&state), &query)
-        .into_iter()
-        .map(|hit| NoteHit {
-            project: hit.project,
-            topic: hit.topic,
-            line: hit.line,
-            offset: u32::try_from(hit.offset).unwrap_or(u32::MAX),
-        })
-        .collect()
+pub async fn notes_search(state: State<'_, AppState>, query: String) -> Result<Vec<NoteHit>> {
+    let root = root(&state);
+    off_thread(move || {
+        notes::search(&root, &query)
+            .into_iter()
+            .map(|hit| NoteHit {
+                project: hit.project,
+                topic: hit.topic,
+                line: hit.line,
+                offset: u32::try_from(hit.offset).unwrap_or(u32::MAX),
+            })
+            .collect()
+    })
+    .await
 }
 
 /// Copy an image into a project's assets and return the note-relative path to write in the markdown.
@@ -308,15 +385,21 @@ pub async fn notes_image_fetch(url: String) -> Result<Vec<u8>> {
 }
 
 /// Every image no note refers to, with its size. Deletes nothing.
+///
+/// Off the main thread: it reads every note and stats every asset in the repository.
 #[tauri::command]
-pub fn notes_orphans(state: State<'_, AppState>) -> Vec<NoteOrphan> {
-    notes::images::orphans(&root(&state))
-        .into_iter()
-        .map(|(key, bytes)| NoteOrphan {
-            key,
-            bytes: u32::try_from(bytes).unwrap_or(u32::MAX),
-        })
-        .collect()
+pub async fn notes_orphans(state: State<'_, AppState>) -> Result<Vec<NoteOrphan>> {
+    let root = root(&state);
+    off_thread(move || {
+        notes::images::orphans(&root)
+            .into_iter()
+            .map(|(key, bytes)| NoteOrphan {
+                key,
+                bytes: u32::try_from(bytes).unwrap_or(u32::MAX),
+            })
+            .collect()
+    })
+    .await
 }
 
 /// Delete the orphaned images the user picked.

@@ -71,6 +71,8 @@ pub fn run() {
             commands::notes::notes_disconnect,
             commands::notes::notes_sync,
             commands::notes::notes_projects,
+            commands::notes::notes_tree,
+            commands::notes::notes_index,
             commands::notes::notes_topics,
             commands::notes::notes_read,
             commands::notes::notes_write,
