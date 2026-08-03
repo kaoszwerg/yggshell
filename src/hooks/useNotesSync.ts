@@ -6,6 +6,36 @@ import { notesApi } from "../api/notes";
 const THROTTLE_MS = 30_000;
 
 /**
+ * When the last automatic sync ran — **shared by every instance of this hook, not one per instance.**
+ *
+ * There are two callers: the shell root, and the notes tool when it opens. Held in a `useRef` this
+ * was a throttle *per hook instance*, so one focus event started two syncs 121 µs apart — measured in
+ * the maintainer's log. Both then ran `git fetch` into the same clone, which rewrites the single
+ * `FETCH_HEAD`, and `git pull --rebase` refused the second with *"Cannot rebase onto multiple
+ * branches"*: an error with nothing wrong behind it, shown on the badge as a sync that keeps failing.
+ *
+ * A module-level value is the honest shape of "the last time this application synced" — the thing
+ * being throttled is the repository, and there is one of those however many components ask. The
+ * backend holds a lock of its own (`commands/notes.rs`), because a throttle is an optimisation and
+ * that lock is the guarantee.
+ */
+let lastRun = 0;
+
+/**
+ * Forget when the last sync ran.
+ *
+ * **Exists because the throttle is module state, and module state outlives a test.** A shared value
+ * is the correct shape here — there is one repository however many components ask — but it makes one
+ * test's sync the reason the next test's does not happen, which is how it first showed up: two
+ * `NotesTool` tests that mount and expect a sync went red the moment the throttle stopped being
+ * per-instance. A reset is the honest answer; the alternative is tests that depend on their order
+ * (rule:testing).
+ */
+export function resetSyncThrottle(): void {
+  lastRun = 0;
+}
+
+/**
  * Keep the notes in step, without anybody pressing anything.
  *
  * **The visible "last synced" is the honest half of "automatic"** — and until this hook existed there
@@ -42,15 +72,14 @@ export function useNotesSync({ now = false }: { now?: boolean } = {}): {
   syncNow: () => void;
 } {
   const qc = useQueryClient();
-  const last = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const force = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const run = (forced = false) => {
-      const now = Date.now();
-      if (!forced && now - last.current < THROTTLE_MS) return;
-      last.current = now;
+      const at = Date.now();
+      if (!forced && at - lastRun < THROTTLE_MS) return;
+      lastRun = at;
       void notesApi
         .sync()
         .then(() => {

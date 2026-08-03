@@ -37,11 +37,15 @@ const term = {
   }),
 };
 
+/** The options each `new Terminal(…)` was given — the only place a construction-time flag is visible. */
+const constructed: Record<string, unknown>[] = [];
+
 // Classes, not `vi.fn(() => …)`: every one of these is called with `new`, and an arrow function is
 // not a constructor. A constructor returning an object hands that object back instead of `this`.
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
-    constructor() {
+    constructor(options: Record<string, unknown>) {
+      constructed.push(options);
       return term;
     }
   },
@@ -65,8 +69,12 @@ vi.mock("../../lib/fonts", () => ({
   fontStack: () => "monospace",
   waitForFont: () => Promise.resolve(),
 }));
+// The helper is covered by its own tests; what is unproven here is whether this surface ever REACHES
+// it — which is exactly the class of defect this file exists for.
+vi.mock("../../lib/clipboard", () => ({ copyText: vi.fn() }));
 
 const { TerminalSurface } = await import("./TerminalSurface");
+const { copyText } = await import("../../lib/clipboard");
 
 /** A keydown as xterm hands it over. */
 function keydown(over: Partial<KeyboardEvent> = {}) {
@@ -155,5 +163,128 @@ describe("TerminalSurface key handling", () => {
 
     expect(onData).not.toHaveBeenCalled();
     expect(handled).toBe(true);
+  });
+});
+
+/**
+ * Copy-on-select — the setting whose whole job is to be invisible, and which therefore had no test.
+ *
+ * It reached a release doing nothing at all: the copy ran through `navigator.clipboard.writeText()`,
+ * which WebKit gates on a user gesture, and there is none left by the `mouseup` that copies (xterm
+ * calls `preventDefault()` on `mousedown`). WebKit refused it without settling the promise, so
+ * nothing was copied and not even the failure toast appeared. Copying from a note went on working,
+ * because a button click IS a gesture — which is what made it look like a terminal defect.
+ *
+ * jsdom has no such gating, so these tests pin the half that CAN be pinned here: that the gesture is
+ * wired to the copy at all, and that it respects the setting. The webview API being out of the path
+ * is pinned in `lib/clipboard.test.ts`.
+ */
+describe("TerminalSurface copy-on-select", () => {
+  /** The element xterm was mounted into — the one the listeners are attached to. */
+  function host() {
+    const mounted = term.open.mock.calls.at(-1)?.[0] as HTMLElement | undefined;
+    if (mounted === undefined) throw new Error("the emulator was never opened");
+    return mounted;
+  }
+
+  function mount(copyOnSelect: boolean, selection: string) {
+    term.getSelection.mockReturnValue(selection);
+    render(
+      <TerminalSurface
+        onData={vi.fn()}
+        onResize={vi.fn()}
+        onLink={vi.fn()}
+        fontSize={13}
+        theme={null}
+        copyOnSelect={copyOnSelect}
+      />,
+    );
+  }
+
+  beforeEach(() => {
+    vi.mocked(copyText).mockClear();
+    term.open.mockClear();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    term.getSelection.mockReturnValue("");
+  });
+
+  it("copies the selection when the mouse comes up", () => {
+    mount(true, "a selected line");
+
+    host().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    expect(copyText).toHaveBeenCalledWith("a selected line", "clipboard.selection");
+  });
+
+  it("copies a selection made with the keyboard too", () => {
+    // Shift+arrows select without the mouse ever being involved.
+    mount(true, "shift-selected");
+
+    host().dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+
+    expect(copyText).toHaveBeenCalledWith("shift-selected", "clipboard.selection");
+  });
+
+  it("does nothing while the setting is off", () => {
+    mount(false, "a selected line");
+
+    host().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    expect(copyText).not.toHaveBeenCalled();
+  });
+
+  it("does not copy an empty selection, which every click would otherwise produce", () => {
+    mount(true, "");
+
+    host().dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    expect(copyText).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Selecting with the mouse while a program owns it — the option without which macOS cannot select
+ * at all.
+ *
+ * tmux with `set -g mouse on` turns on mouse reporting, and this app starts tmux by default. xterm
+ * then hands the drag to the program: `SelectionService.handleMouseDown` returns early unless
+ * `shouldForceSelection` agrees, and that reads `isMac ? altKey && macOptionClickForcesSelection :
+ * shiftKey`. Windows and Linux get Shift for free; macOS gets nothing unless the option below is on.
+ *
+ * Measured against a built bundle before the fix: `getSelection()` was `""` on every mouseup inside
+ * tmux and 30 characters outside it — same build, same gesture. Copy-on-select and Ctrl+Shift+C were
+ * both unreachable on the platform this is developed on.
+ */
+describe("TerminalSurface selection while a program owns the mouse", () => {
+  it("lets Option+drag force a selection, which is macOS' only way in", () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    render(
+      <TerminalSurface
+        onData={vi.fn()}
+        onResize={vi.fn()}
+        onLink={vi.fn()}
+        fontSize={13}
+        theme={null}
+      />,
+    );
+
+    expect(constructed.at(-1)?.macOptionClickForcesSelection).toBe(true);
+    vi.unstubAllGlobals();
   });
 });

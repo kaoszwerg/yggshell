@@ -3,6 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NotesTool } from "./NotesTool";
 import { useUiStore } from "../../store/ui";
+// The sync throttle is shared across the application on purpose (one repository, many callers), so
+// it also outlives a test — a mount here syncs only if the previous test's mount did not just do it.
+import { resetSyncThrottle } from "../../hooks/useNotesSync";
 
 vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../../hooks/useNoteProject", () => ({ useNoteProject: () => "github.com/a/b" }));
@@ -73,6 +76,7 @@ function renderTool() {
 describe("NotesTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSyncThrottle();
     useUiStore.setState({ locale: "en", view: "terminal", note: null });
     vi.mocked(notesApi.topics).mockResolvedValue(["inbox", "release"]);
     vi.mocked(notesApi.read).mockImplementation((_p: string, topic: string) =>
@@ -204,6 +208,7 @@ describe("NotesTool", () => {
 describe("managing what is in the list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSyncThrottle();
     useUiStore.setState({ locale: "en", view: "terminal", note: null });
     vi.mocked(notesApi.topics).mockResolvedValue(["inbox"]);
     vi.mocked(notesApi.read).mockResolvedValue("- [ ] first\n- [ ] second\n");

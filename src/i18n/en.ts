@@ -372,6 +372,8 @@ export const en = {
   "settings.selection.copy": "Copy to clipboard",
   "settings.selection.hint":
     "Off by default because it replaces whatever you had copied, without saying so. A middle-click always pastes the last selection either way, as on X11.",
+  "settings.selection.mouseOwned":
+    "While a program is using the mouse itself — tmux with mouse mode, vim, htop — a plain drag belongs to that program. Hold Option (macOS) or Shift to select anyway.",
 
   "settings.tmux.title": "tmux",
   "settings.tmux.description": "Whether a terminal joins a multiplexer session, and which one.",

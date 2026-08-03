@@ -30,6 +30,12 @@ tester.run("floating-panel-position", floatingPanelPosition, {
     { code: 'const a = <div className="my-hud-panel absolute" />;' },
     // Not a className at all.
     { code: 'const a = <div data-x="hud-panel absolute" />;' },
+    // `hud-popover` with a position of its own — every legitimate use has one.
+    { code: 'const a = <div className="hud-popover hud-clip-sm relative px-3" />;' },
+    { code: 'const a = <div className="hud-popover hud-accent-cyan fixed z-30" />;' },
+    { code: 'const a = <div className="hud-popover sticky top-0" />;' },
+    // A class that merely contains the word.
+    { code: 'const a = <div className="hud-popover-x" />;' },
   ],
   invalid: [
     {
@@ -50,6 +56,17 @@ tester.run("floating-panel-position", floatingPanelPosition, {
     {
       code: "const a = <div className={`hud-panel ${extra} absolute inset-0`} />;",
       errors: [{ messageId: "pinned" }],
+    },
+    // The defect as it actually shipped: a popover that centres in flow, so nobody thought to give
+    // it a position, and its `::before` anchored to the full-width row above instead.
+    {
+      code: 'const a = <div className="hud-popover hud-clip-sm px-3 py-1" />;',
+      errors: [{ messageId: "unpositioned" }],
+    },
+    // …and written the way the toast writes it, with the accent interpolated in.
+    {
+      code: "const a = <div className={`hud-popover hud-clip-sm ${accent} px-3 py-1`} />;",
+      errors: [{ messageId: "unpositioned" }],
     },
   ],
 });

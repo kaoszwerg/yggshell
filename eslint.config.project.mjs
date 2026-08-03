@@ -47,11 +47,20 @@ export default [
     // open, which `rule:logging` calls a swallowed error however carefully it was caught. The helper
     // shows a confirmation and shows the failure; a raw call would quietly do neither.
     //
+    // **And `lib/clipboard.ts` is no longer exempt, which is the point of this being a gate at all.**
+    // The helper itself used to be allowed the raw call, and that exemption is where the defect lived:
+    // WebKit gates `writeText` on a user gesture, and the terminal's copy-on-select has none — xterm
+    // calls `preventDefault()` on `mousedown`, so the activation is gone by the `mouseup` that copies.
+    // WebKit then refused the write WITHOUT settling the promise, so nothing was copied and not even
+    // the failure toast appeared (0.47.1). Copying from a note kept working, because a button click IS
+    // a gesture. The write now goes through the backend like the read, so there is no call site left
+    // that legitimately needs this API and the ban can be absolute.
+    //
     // Its own entry rather than an addition to the base config's `no-restricted-syntax`: flat config
     // REPLACES a rule's options instead of merging them, so extending that entry here would silently
     // switch off its bans on native <button>, <input> and the `title` tooltip (verified by trying it).
     files: ["src/**/*.ts", "src/**/*.tsx"],
-    ignores: ["src/lib/clipboard.ts", "src/**/*.test.ts", "src/**/*.test.tsx"],
+    ignores: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     rules: {
       "no-restricted-properties": [
         "error",
@@ -63,7 +72,7 @@ export default [
           // this app touches, so the property on its own is precise enough.
           property: "writeText",
           message:
-            "Use copyText() from lib/clipboard — it confirms the copy on screen and reports a failure the user can see.",
+            "Use copyText() from lib/clipboard, which writes through the backend (terminalApi.writeClipboard). navigator.clipboard.writeText is gated on a user gesture in WebKit and fails SILENTLY without one — it never settles, so not even the failure is reported.",
         },
       ],
     },

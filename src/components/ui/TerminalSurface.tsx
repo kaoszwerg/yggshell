@@ -290,6 +290,24 @@ export function TerminalSurface({
       fontSize: handlers.current.fontSize,
       lineHeight: 1.25,
       scrollback: 10_000,
+      // **⌥+drag selects even while a program owns the mouse — and without this, macOS has no way
+      // to select at all.** tmux with `set -g mouse on` (and vim, and htop) turns on mouse
+      // reporting, and xterm then hands the drag to the program instead of selecting:
+      // `SelectionService.handleMouseDown` returns early unless `shouldForceSelection` agrees, and
+      // that method reads
+      //
+      //   isMac ? event.altKey && macOptionClickForcesSelection : event.shiftKey
+      //
+      // Windows and Linux therefore get their escape hatch for free via Shift; macOS gets **none**
+      // unless this option is on. Since this app starts tmux by default, that made selecting with
+      // the mouse — and with it copy-on-select, and Ctrl+Shift+C — silently impossible on the one
+      // platform it is developed on. Measured: `getSelection()` was `""` on every mouseup inside
+      // tmux and 30 characters outside it, same build, same gesture.
+      //
+      // ⌥ is the macOS convention for exactly this (iTerm2 and Terminal.app both use it), and it
+      // costs nothing elsewhere: this affects the MOUSE only, so ⌥ as Meta for the keyboard is
+      // untouched.
+      macOptionClickForcesSelection: true,
       // Ctrl+C must stay SIGINT, so copy is never bound to it. The selection is still cleared on
       // input, which is what makes select-then-type behave like every other terminal.
       // Read through the ref for the same reason as `fontSize`: depending on the prop here would

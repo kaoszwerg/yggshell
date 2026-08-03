@@ -315,6 +315,12 @@ function SelectionChoice() {
         </Button>
       </div>
       <span className="text-dim text-xs">{t("settings.selection.hint")}</span>
+      {/* **Without this the setting reads as broken**, and it did: this app starts tmux by default,
+          tmux is usually configured with `mouse on`, and a program that owns the mouse gets the drag
+          instead of the emulator — so "copy to clipboard" copied nothing and said nothing. The
+          modifier is the way in (xterm's `shouldForceSelection`), and a control that only works with
+          one has to say which. */}
+      <span className="text-dim text-xs">{t("settings.selection.mouseOwned")}</span>
     </div>
   );
 }

@@ -294,3 +294,36 @@ pub fn clipboard_text(app: tauri::AppHandle) -> Result<String> {
     tracing::debug!(chars = text.chars().count(), "clipboard_text");
     Ok(text)
 }
+
+/// Put text on the clipboard, written in the **backend**.
+///
+/// **The counterpart to [`clipboard_text`], and it exists for the same reason — found the hard way,
+/// one call site later.** `navigator.clipboard.writeText()` is gated on a *user gesture* in WebKit,
+/// and the terminal is the one surface that cannot supply one: xterm's SelectionService calls
+/// `preventDefault()` on `mousedown` (the same behaviour that already killed the middle-click
+/// `auxclick` handler, `TerminalSurface.tsx`), so by the time copy-on-select runs on `mouseup` the
+/// activation WebKit demands is gone. The write was refused, and refused *silently* — the promise
+/// never settled, so not even the failure toast appeared. Copying from a note worked the whole time,
+/// because a `<button>` click is a gesture; copying from the terminal never did.
+///
+/// A pasteboard write asks nobody's permission, so doing it here is not a workaround for the gate —
+/// it is the side of the boundary that owns the clipboard on this stack. The read has been here
+/// since 0.39.6; this is the half that was left behind.
+///
+/// Fails if the platform clipboard refuses the write, which the caller surfaces on screen — a copy
+/// that quietly did nothing is indistinguishable from one that worked (rule:logging).
+#[tauri::command]
+pub fn clipboard_write(app: tauri::AppHandle, text: String) -> Result<()> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    // Sync for the same reason as the read above: it writes a pasteboard, starts no child process,
+    // and sits on the path of a gesture the user just made.
+    let chars = text.chars().count();
+    // No `tracing::error!` here on purpose: `Serialize for AppError` is the one chokepoint that logs
+    // every error crossing IPC, and logging it twice makes the log read like two failures
+    // (rule:logging).
+    app.clipboard()
+        .write_text(text)
+        .map_err(|error| AppError::Other(format!("could not write the clipboard: {error}")))?;
+    tracing::debug!(chars, "clipboard_write");
+    Ok(())
+}

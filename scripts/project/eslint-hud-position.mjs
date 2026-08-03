@@ -25,6 +25,9 @@
 
 const FLOATING = /(^|\s)(absolute|fixed)(\s|$)/;
 const PANEL = /(^|\s)hud-panel(\s|$)/;
+const POPOVER = /(^|\s)hud-popover(\s|$)/;
+/** Anything that makes an element a containing block for its own absolutely-positioned children. */
+const POSITIONED = /(^|\s)(absolute|fixed|relative|sticky)(\s|$)/;
 
 /** Every static string inside a className attribute value, whatever syntax it was written in. */
 function staticText(value) {
@@ -53,6 +56,8 @@ export const floatingPanelPosition = {
     messages: {
       pinned:
         "`hud-panel` pins `position: relative` and silently beats `absolute`/`fixed` — the surface stays in the flow and its scroll container never bounds. Use `hud-popover` plus a `hud-accent-*` class (ADR-APP-026).",
+      unpositioned:
+        "`hud-popover` draws its interior with an `::before` at `inset: 1px` and sets NO position of its own, so without one here that interior resolves against the nearest positioned ancestor and spills across it. Add `relative` (or the `absolute`/`fixed` the surface floats with).",
     },
   },
   create(context) {
@@ -65,6 +70,14 @@ export const floatingPanelPosition = {
         const text = parts.join(" ");
         if (PANEL.test(text) && FLOATING.test(text)) {
           context.report({ node, messageId: "pinned" });
+        }
+        // The mirror image of the same defect, and the half that shipped: `hud-popover` leaves
+        // `position` to the caller, so a caller that gives none has an interior anchored to whatever
+        // is positioned above it. Every floating caller got this right by accident — they carry
+        // `absolute`/`fixed` anyway. The one that centres in flow (the toast) did not, and its dark
+        // fill ran the whole width of the row on both sides of the message.
+        if (POPOVER.test(text) && !POSITIONED.test(text)) {
+          context.report({ node, messageId: "unpositioned" });
         }
       },
     };

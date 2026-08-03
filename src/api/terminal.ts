@@ -96,6 +96,18 @@ export const terminalApi = {
    */
   clipboardText: () => invoke<string>("clipboard_text"),
 
+  /**
+   * Put text on the clipboard, written in the backend.
+   *
+   * **Never `navigator.clipboard.writeText()`** — the counterpart of the rule above, and the half
+   * that was missed. WebKit gates the write on a *user gesture*, and copy-on-select in the terminal
+   * has none: xterm calls `preventDefault()` on `mousedown`, so by the `mouseup` that copies, the
+   * activation is gone. WebKit then refuses **silently** — the promise never settles, so nothing was
+   * copied and not even the failure toast appeared. Copying from a note kept working the whole time,
+   * because a button click is a gesture; that is what made this look like a terminal-only defect.
+   */
+  writeClipboard: (text: string) => invoke<void>("clipboard_write", { text }),
+
   /** Send input — keystrokes, a paste, a control sequence. */
   write: (id: SessionId, data: string) => invoke<void>("terminal_write", { id, data }),
 

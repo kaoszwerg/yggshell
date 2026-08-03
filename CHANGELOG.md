@@ -45,6 +45,43 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The notes reported "Cannot rebase onto multiple branches" on and off, with nothing wrong.** Two
+  syncs ran at the same time: the shell root and the notes tool each hold an instance of the sync
+  hook, and each held its **own** throttle — so one focus event started two, 121 µs apart in the
+  maintainer's log. Both `git fetch` into the same clone, `FETCH_HEAD` is one file, and
+  `git pull --rebase` refuses outright when it finds more than one merge head. Pressing *Sync now*
+  cleared it because the manual one usually runs alone, and then it came back. Fixed on both levels:
+  the throttle is now one value for the application (there is one repository, however many components
+  ask), and the backend takes a lock for the whole of a sync — a second one stands down instead of
+  queueing, since it has nothing to add. A poisoned lock counts as free, or a single panic would end
+  syncing until the app restarted.
+
+- **Selecting with the mouse was impossible on macOS whenever a program was using the mouse — so
+  copy-on-select copied nothing, silently.** This app starts tmux by default, and tmux is commonly
+  configured with `set -g mouse on`; the program then owns the mouse and xterm hands it the drag
+  rather than selecting. Its escape hatch is `shouldForceSelection`, which reads
+  `isMac ? altKey && macOptionClickForcesSelection : shiftKey` — so Windows and Linux get Shift for
+  free and **macOS gets nothing at all** unless that option is enabled, which it was not. Measured
+  against a built bundle: `getSelection()` was `""` on every mouseup inside tmux and 30 characters
+  outside it, same build, same gesture. `macOptionClickForcesSelection` is now on, so ⌥+drag selects
+  the way iTerm2 and Terminal.app do it — the mouse only, so ⌥ as Meta on the keyboard is untouched.
+  The Selection setting now says so too: a control that needs a modifier has to name it.
+
+- **The toast was drawn with its interior spilling out to both sides** — reported as it being
+  "blurred at the sides". `.hud-popover` paints its opaque interior with an `::before` at
+  `inset: 1px` and deliberately sets no `position`, leaving that to the caller; every other caller
+  floats and carries `absolute`/`fixed` anyway, but the toast centres in flow and had none. Its
+  interior therefore resolved against the full-width row above it. The lint rule that already guards
+  the mirror-image mistake (`hud-panel` *with* a position) now rejects this one too.
+
+- **Every copy now goes through the backend** (`clipboard_write`), exactly as the clipboard *read*
+  has since 0.39.6. Not the cause of the above — stated plainly, because the first diagnosis said it
+  was: `navigator.clipboard.writeText()` is gated on a user gesture in WebKit, which is a real trap
+  and was not this one, since the copy never got as far as the clipboard at all. It is the right side
+  of the boundary regardless, and it is what made the actual defect visible: a copy that reaches the
+  backend leaves a log line, and the absence of that line is what located the fault. Copy-on-select
+  had no test until now either.
+
 - **The notes froze the whole application, including its startup.** Every notes command ran
   synchronously, and a synchronous Tauri command executes on the **main thread** — so a sync held the
   window and every other command for as long as git took. Measured in the maintainer's own log: 3.4 s

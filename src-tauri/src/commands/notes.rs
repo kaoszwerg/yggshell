@@ -20,6 +20,49 @@ use tauri::State;
 /// different session, and the honest answer after a restart is "not yet this run".
 static LAST: Mutex<(Option<u64>, Option<String>)> = Mutex::new((None, None));
 
+/// Held for the whole of one sync, so two of them can never run git against the clone at once.
+///
+/// **The defect this exists for, measured in the maintainer's own log:**
+///
+/// ```text
+/// 23:49:03.286065  notes_sync          ← two calls,
+/// 23:49:03.286186  notes_sync          ← 121 µs apart
+/// 23:49:06.300049  notes_sync failed   "Cannot rebase onto multiple branches."
+/// 23:52:04.633577  notes_sync          ← and where only ONE ran,
+/// 23:52:09.036753  notes_sync ok       ← it went through
+/// ```
+///
+/// Both runs `git fetch` into the same clone, and `FETCH_HEAD` is a single file that each one
+/// rewrites. `git pull --rebase` then finds more than one merge head and refuses outright — an error
+/// with nothing wrong behind it, shown to the user as a sync that is not working, on and off, for as
+/// long as two callers happen to line up. The user's own words: *"wenn ich auf sync now klicke geht
+/// das weg kommt aber später wieder"* — the manual one usually runs alone.
+///
+/// The lock lives **here rather than in the frontend** for the reason `rule:knowledge-handover`
+/// gives: whoever adds the next caller cannot forget it. The frontend has at least two — the tool
+/// mounting and the window regaining focus — and de-duplicating them there would leave the next one
+/// to rediscover this.
+static SYNC: Mutex<()> = Mutex::new(());
+
+/// Take the sync lock, or `None` if a sync is already running.
+///
+/// **A poisoned lock counts as free.** Poisoning means an earlier holder panicked, not that the lock
+/// is held — and treating it as "busy" would turn one panic into notes that never sync again, in
+/// silence, until the app is restarted. That is precisely the class of failure `rule:crash-handling`
+/// forbids: the process survived, so the feature has to survive with it, or say so.
+fn acquire_sync() -> Option<std::sync::MutexGuard<'static, ()>> {
+    match SYNC.try_lock() {
+        Ok(guard) => Some(guard),
+        Err(std::sync::TryLockError::Poisoned(poisoned)) => {
+            tracing::warn!(
+                "the notes sync lock was poisoned by an earlier panic — taking it anyway"
+            );
+            Some(poisoned.into_inner())
+        }
+        Err(std::sync::TryLockError::WouldBlock) => None,
+    }
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -199,6 +242,17 @@ pub async fn notes_sync(state: State<'_, AppState>) -> Result<NotesStatus> {
             tracing::debug!("notes_sync skipped — local only");
             return status_from(&data_dir, &settings);
         }
+        // **A second sync while one is running has nothing to add, so it does not wait for its
+        // turn — it stands down.** Both callers wanted "sync now", and the run already in flight is
+        // that. Queueing instead would fetch and push a second time for no new information, and
+        // would keep the pile-up that `refetchInterval` plus a focus event can produce.
+        //
+        // Not an error, and deliberately not recorded as one: nothing failed, and writing it into
+        // `LAST` would put a message on the badge about the app's own scheduling.
+        let Some(_running) = acquire_sync() else {
+            tracing::debug!("notes_sync skipped — one is already running");
+            return status_from(&data_dir, &settings);
+        };
         let clone = notes::clone_dir(&data_dir);
         tracing::info!("notes_sync");
         let outcome = notes::git::pull(&clone)
@@ -407,4 +461,47 @@ pub async fn notes_orphans(state: State<'_, AppState>) -> Result<Vec<NoteOrphan>
 pub fn notes_clean(state: State<'_, AppState>, keys: Vec<String>) -> Result<u32> {
     let removed = notes::images::remove(&root(&state), &keys)?;
     u32::try_from(removed).map_err(|_| AppError::Other("too many files".into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::acquire_sync;
+
+    /// **One test, not two, and that is forced by the thing under test.** `SYNC` is a `static`, so
+    /// every test in this binary shares it and cargo runs them on parallel threads — two tests each
+    /// taking the lock would fail each other at random. The order below is also load-bearing: the
+    /// poisoning case leaves the lock poisoned behind it.
+    #[test]
+    fn one_sync_at_a_time_and_a_panic_does_not_end_syncing() {
+        // Two syncs at once is the whole defect: both `git fetch` into the same clone, both rewrite
+        // `FETCH_HEAD`, and `git pull --rebase` then refuses with "Cannot rebase onto multiple
+        // branches". Measured 121 µs apart in the maintainer's log.
+        let first = acquire_sync().expect("the lock starts free");
+        assert!(
+            acquire_sync().is_none(),
+            "a second sync must not run git against the clone at the same time"
+        );
+        drop(first);
+        assert!(
+            acquire_sync().is_some(),
+            "and it must be free again afterwards, or the notes stop syncing for good"
+        );
+
+        // A panic inside a sync must not cost every later one. Treating a poisoned lock as "busy"
+        // would turn one crash into notes that never sync again, silently, until a restart.
+        // `catch_unwind`, NOT a spawned thread: `check-crash-boundaries.mjs` counts every `spawn` in
+        // this file as a background task that owes an answer to "how does this one die?" (ADR-CORE-037),
+        // and a test thread is not one. Unwinding past the guard poisons the lock either way, which
+        // is the whole point of the exercise.
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _held = acquire_sync().expect("the lock is free");
+            panic!("a sync panicked while holding the lock");
+        }));
+        assert!(panicked.is_err(), "the closure should panic");
+
+        assert!(
+            acquire_sync().is_some(),
+            "a poisoned lock means an earlier holder panicked, not that the lock is held"
+        );
+    }
 }

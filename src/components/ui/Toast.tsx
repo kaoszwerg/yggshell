@@ -54,7 +54,14 @@ export function Toast() {
     >
       <span
         key={toast.id}
-        className={`hud-popover hud-clip-sm hud-toast ${accent} ${label} px-3 py-1 font-mono text-[11px] tracking-wide`}
+        // `relative` is load-bearing, not decoration. `.hud-popover` draws its opaque interior with
+        // an `::before` at `position: absolute; inset: 1px` and sets no `position` of its own — so
+        // without one here that interior resolves against the nearest positioned ancestor, which is
+        // the `inset-x-0` row above. The dark fill then ran the full width of the window on both
+        // sides of the message, clipped by the inherited chamfer: reported as the toast being
+        // "blurred at the sides". Every other caller of `hud-popover` carries `absolute` or `fixed`
+        // and got this for free; this one centres in flow and had nothing.
+        className={`hud-popover hud-clip-sm hud-toast ${accent} ${label} relative px-3 py-1 font-mono text-[11px] tracking-wide`}
       >
         {t(toast.key)}
       </span>

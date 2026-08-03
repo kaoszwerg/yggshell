@@ -137,13 +137,27 @@ Unit tests cover the parsing and the file writing, but the wiring — does the O
 event — is only provable against a **built bundle**:
 
 ```bash
-npx tauri build --config src-tauri/tauri.dev.conf.json --bundles app   # separate identity, safe to run
-open -a "…/YggShell Dev.app" /some/dir                                  # cold start, then again while running
+npx tauri build --config src-tauri/tauri.dev.conf.json --bundles app --debug   # separate identity, safe to run
+open -a "…/YggShell Dev.app" /some/dir                                         # cold start, then again while running
 grep -E "queued launch requests|outside the app" <app-data>/logs/app.log.*
 ```
 
 Both lines must appear across the two runs — one per route. Never test this against the app the
 maintainer is using (rule:live-app).
+
+**`--debug` is not optional here, and leaving it off is a build error.** `tauri dev --config` exports
+its merged configuration as `TAURI_CONFIG`, and any shell that has run it — an agent's shell,
+routinely — still carries the variable. `src-tauri/build.rs` refuses a **release** profile compiled
+against the dev identifier outright (rule:live-app: it cost two installations and two diagnosis
+sessions), so the same command without `--debug` panics instead of building. The guard is right and
+this command is the one that has to move: a verification bundle wants the debug profile anyway — it
+builds in a fraction of the time, and nothing here is measuring optimised code. The output then lands
+under `target/debug/bundle/macos/`, not `target/release/…`.
+
+The bundle it produces is a **real** bundle — a custom-protocol webview, not `tauri dev`'s
+`http://localhost`. That difference is load-bearing for anything the webview is only permitted to do
+in a secure context, so a feature that works under `app:dev` and nowhere else is exactly what this
+step exists to catch.
 
 For the Finder halves, ask the OS rather than reading the source:
 

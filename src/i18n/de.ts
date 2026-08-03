@@ -362,6 +362,8 @@ export const de: Translations = {
   "settings.selection.copy": "In die Zwischenablage",
   "settings.selection.hint":
     "Standardmäßig aus, weil es kommentarlos ersetzt, was du zuletzt kopiert hattest. Ein Klick mit der mittleren Maustaste fügt die letzte Auswahl ohnehin immer ein, wie unter X11.",
+  "settings.selection.mouseOwned":
+    "Solange ein Programm die Maus selbst benutzt — tmux mit Mausmodus, vim, htop — gehört ein einfaches Ziehen diesem Programm. Mit gedrückter Wahltaste (macOS) oder Umschalttaste wählst du trotzdem aus.",
 
   "settings.tmux.title": "tmux",
   "settings.tmux.description": "Ob ein Terminal einer Multiplexer-Session beitritt, und welcher.",

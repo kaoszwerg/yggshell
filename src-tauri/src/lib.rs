@@ -134,6 +134,7 @@ pub fn run() {
             commands::terminal::agent_session,
             commands::terminal::agent_usage,
             commands::terminal::clipboard_text,
+            commands::terminal::clipboard_write,
             commands::terminal::tmux_sessions,
             commands::terminal::tmux_kill_session,
             commands::terminal::tmux_rename_session,
