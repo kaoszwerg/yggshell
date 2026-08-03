@@ -357,10 +357,23 @@ describe("SettingsView", () => {
       render(<SettingsView />);
       openTerminalSection();
 
-      for (const name of ["Shell", "Font", "Theme", "Selection", "tmux", "Profiles"]) {
+      for (const name of ["Shell", "Font", "Selection", "tmux", "Profiles"]) {
         expect(named(name)).toBeInTheDocument();
       }
       expect(screen.getAllByRole("group").length).toBeGreaterThan(3);
+    });
+
+    it("keeps colour schemes under Appearance, not Terminal", () => {
+      // They started under Terminal, when the panel configured one surface. It now configures four —
+      // terminal, diff, commit, note — and three of them are not terminals.
+      mockSettings();
+      render(<SettingsView />);
+      openTerminalSection();
+
+      expect(screen.queryByRole("group", { name: "Theme" })).toBeNull();
+
+      render(<SettingsView />);
+      expect(named("Theme")).toBeInTheDocument();
     });
 
     it("puts every block's heading above its controls, so the heading names what follows", () => {

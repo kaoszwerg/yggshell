@@ -142,13 +142,22 @@ export function ThemeControls() {
   }, [importTheme]);
 
   return (
-    <div className="flex flex-col gap-3">
+    // Five stacked card grids with nothing between them read as one enormous list — reported exactly
+    // that way. The seams are the same hairline the Font panel puts between its two controls, and
+    // they sit in the MIDDLE of the gap rather than against the next block: a `divide-y` would draw
+    // the line on each child's top edge, leaving the whole gap above it and none below.
+    <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5" role="group" aria-label={t("scheme.terminal")}>
-        <span className="text-dim text-xs">{t("scheme.label")}</span>
+        <span className="text-fg text-xs font-medium tracking-wide">{t("scheme.label")}</span>
         {/* Cards, not names: the point of a scheme is how it looks, and eleven names make somebody
             try each one in turn to find that out. Yggdrasil is a card too — it is a scheme like any
             other here, even though choosing it means storing nothing. */}
-        <div className="flex flex-wrap gap-2">
+        {/* A GRID, not `flex-wrap`. Wrapping packs cards from the left and starts a new row wherever
+            the last one happened to end, so with the panel at an arbitrary width the columns do not
+            line up between rows — reported as looking restless. Fixed tracks put every card in the
+            same place in every row, and `1fr` makes them share the leftover width instead of leaving
+            a ragged gap at the right. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
           <BuiltinCard
             selected={chosen === ""}
             onChoose={() => update.mutate({ terminalTheme: "" })}
@@ -165,23 +174,57 @@ export function ThemeControls() {
         <span className="text-dim text-xs">{t("scheme.appliesToAll")}</span>
       </div>
 
+      <Seam />
+
+      {/* These four were English literals until the notes pair was added beside them — the i18n lint
+          does not reach a `label` prop on a component of our own, so they had slipped past it
+          (rule:i18n). Fixed on sight rather than matched. */}
       <SchemeChoice
-        label="Diffs"
+        label={t("scheme.diffs")}
         chosen={settings.data?.diff_theme ?? ""}
         themes={themes.data ?? []}
-        followsLabel="Same as the terminal"
+        followsLabel={t("scheme.followsTerminal")}
         onChoose={(id) => update.mutate({ diffTheme: id })}
-        hint="Left empty, a diff is drawn in whatever scheme its own tab's terminal uses."
+        hint={t("scheme.hint.diffs")}
       />
 
+      <Seam />
+
       <SchemeChoice
-        label="Commits"
+        label={t("scheme.commits")}
         chosen={settings.data?.commit_theme ?? ""}
         themes={themes.data ?? []}
-        followsLabel="Same as diffs"
+        followsLabel={t("scheme.followsDiffs")}
         onChoose={(id) => update.mutate({ commitTheme: id })}
-        hint="Left empty, a commit follows the diff setting — and through it, the terminal."
+        hint={t("scheme.hint.commits")}
       />
+
+      <Seam />
+
+      {/* A note gets its own scheme for the reason `rule:content-size` gives about its font size: it
+          is monospace content read like terminal output, not app chrome. Reading and writing are
+          separate settings because they are separate activities — the same split as commit/diff. */}
+      <SchemeChoice
+        label={t("scheme.notes")}
+        chosen={settings.data?.notes_theme ?? ""}
+        themes={themes.data ?? []}
+        followsLabel={t("scheme.followsTerminal")}
+        onChoose={(id) => update.mutate({ notesTheme: id })}
+        hint={t("scheme.hint.notes")}
+      />
+
+      <Seam />
+
+      <SchemeChoice
+        label={t("scheme.notesEdit")}
+        chosen={settings.data?.notes_edit_theme ?? ""}
+        themes={themes.data ?? []}
+        followsLabel={t("scheme.followsNotes")}
+        onChoose={(id) => update.mutate({ notesEditTheme: id })}
+        hint={t("scheme.hint.notesEdit")}
+      />
+
+      <Seam />
 
       <div
         // The drop target is the whole window (Tauri reports drops there), so this is a hint rather
@@ -242,6 +285,17 @@ export function ThemeControls() {
  * a chain nobody can see is a chain nobody can predict, and "same as the terminal" is the answer most
  * people want to leave in place.
  */
+/**
+ * The hairline between two scheme blocks.
+ *
+ * Its own component rather than a repeated `<div>`: there are five seams here, and five copies of a
+ * class list is five chances for one of them to be a shade off. `aria-hidden` because it separates
+ * nothing a screen reader needs — each block is already a named `group`.
+ */
+function Seam() {
+  return <div className="bg-cyan/15 h-px shrink-0" aria-hidden />;
+}
+
 function SchemeChoice({
   label,
   chosen,
@@ -261,11 +315,17 @@ function SchemeChoice({
     // A named group so each of these is a place rather than a run of buttons — three sets of the same
     // scheme names side by side are ambiguous to anyone not looking at the headings.
     <div className="flex flex-col gap-1.5" role="group" aria-label={`${label} colour scheme`}>
-      <span className="text-dim text-xs">{label}</span>
+      {/* Brighter than the hint below it: it names the block, and drawn in the same dim as its own
+          explanatory line it read as one more sentence rather than a heading. */}
+      <span className="text-fg text-xs font-medium tracking-wide">{label}</span>
       {/* Cards rather than a row of names: the point of a scheme is how it looks, and eleven names
           make somebody try each one in turn to find that out. "Follow the settings" stays a plain
           button — it has no colours of its own to show, and drawing it as a card would invent some. */}
-      <div className="flex flex-wrap gap-2">
+      {/* The same grid as the terminal's own list above, and it has to be: the cards are `w-full` so
+          they fill a track, and `w-full` inside a `flex-wrap` means one card per row. `items-start`
+          keeps the "follow the settings" button at its own height instead of stretching it to card
+          height — it is a button, not a swatch. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] items-start gap-2">
         <Button aria-pressed={chosen === ""} active={chosen === ""} onClick={() => onChoose("")}>
           {followsLabel}
         </Button>
@@ -356,7 +416,10 @@ function SchemeCardBody({
       selectedLabel={t("scheme.inUse")}
       background={c.background}
       onChoose={onChoose}
-      className="w-40"
+      // `w-full`, so the card fills its grid track: the track decides the width now, and every card
+      // in every row is therefore identical. A fixed `w-40` inside a `1fr` column would leave the
+      // cards adrift in tracks wider than themselves.
+      className="w-full"
     >
       <span className="truncate font-mono text-[11px]" style={{ color: c.foreground }}>
         {name}

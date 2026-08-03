@@ -8,6 +8,38 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Notes have their own colour schemes — two of them.** A note is monospace text read like terminal
+  output, so it is drawn in a scheme like the terminal, the diff and the commit already were; it was
+  the one content surface still nailed to the HUD palette while following the terminal's *font size*.
+  Reading a note and writing its source are separate settings, because they are separate activities —
+  the same split that lets a commit differ from a diff. Both live in Settings › Theme; left empty,
+  the editor follows the reader and the reader follows the terminal. The note and diff families never
+  cross: setting a diff scheme says nothing about your notes.
+
+- **The note editor highlights its markdown**, and a fenced code block is coloured by the language it
+  names — ` ```bash ` and ` ```python ` are two different things to read, and the parser had carried
+  the tag all along while the renderer dropped it. The grammars are the ones already bundled for
+  diffs: shell, python, html, css, json, yaml, toml, rust, go, sql, the TS/JS family and markdown. A
+  tag with no grammar (`perl`) renders uncoloured rather than not at all. The editor is a real
+  textarea under a coloured copy of itself, so every key, shortcut and paste behaves exactly as
+  before — and the text is on screen before the colouring is, never after.
+
+- **The colour scheme cards sit in a grid.** They were wrapped, so the columns did not line up
+  between rows and the list looked restless at any window width. Fixed tracks that reflow as the
+  window narrows: same size, same positions, however many fit.
+
+- **A markdown palette beside the editor.** Writing a note now has a floating toolbar on the right
+  with one control per element this app can actually render, grouped by what the thing is: text
+  (heading, bold, italic, strikethrough), lists (bulleted, numbered, task), code (inline and block,
+  side by side), references (link, image), and the larger structures (quote, table, divider).
+  Each one inserts at the caret; a selection is wrapped rather than replaced, and several selected
+  lines each get their marker (a numbered list counts, and a blank line between paragraphs is left
+  alone). Nothing inserts placeholder words: an empty `**|**` with the caret between the markers
+  costs nothing to type over, where `**text**` has to be deleted first and would be a word in one
+  language or the other. The buttons refuse focus, or the caret they insert at would be gone by the
+  time the click arrives. `html` deliberately has no button — it is the parser's escape hatch, not an
+  element anyone means to insert.
+
 - **A sync badge above the notes, answering the only question that matters**: is what I just wrote
   anywhere but on this machine? It shows git's own state — commits `origin` does not have, and edits
   not yet committed — because "last synced 14:02" says when *something* worked, not whether *this*

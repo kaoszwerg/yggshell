@@ -8,10 +8,10 @@ import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
 import { useUiStore, type PaneDetail } from "../../store/ui";
-import { useSettings, useTerminalThemes } from "../../hooks/useSettings";
-import { detailThemeId, resolveTheme, themeById } from "../../lib/terminalTheme";
+import { useSettings } from "../../hooks/useSettings";
+import { useDetailScheme } from "../../hooks/useDetailScheme";
 import { surfaceStyle } from "../../lib/schemeSurface";
-import { languageFor, tokenize, type SyntaxScheme } from "../../lib/highlight";
+import { languageFor, tokenize } from "../../lib/highlight";
 import { filesApi } from "../../api/files";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitFileStat } from "../../bindings/GitFileStat";
@@ -41,18 +41,8 @@ function useDetailFontSize(): number {
   return settings.data?.terminal_font_size ?? 13;
 }
 
-/** The scheme a detail view of `kind` is drawn in for this tab. See `detailThemeId` for the chain. */
-function useDetailScheme(paneKey: string, kind: "diff" | "commit"): SyntaxScheme | null {
-  const settings = useSettings();
-  const themes = useTerminalThemes();
-  const paneThemeId = useTerminalStore(
-    (s) => s.panes.find((p) => p.key === paneKey)?.themeId ?? null,
-  );
-  const id = detailThemeId(kind, settings.data, paneThemeId);
-  const theme = themeById(themes.data, id);
-  if (theme === null) return null;
-  return { id: theme.id, colours: resolveTheme(theme) };
-}
+// `useDetailScheme` moved to `hooks/useDetailScheme` when the notes view became its third and fourth
+// caller: one chain, one answer to "which scheme wins" (ADR-CORE-005).
 
 export function GitDetailPanel({ paneKey }: { paneKey: string }) {
   const t = useT();

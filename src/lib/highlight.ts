@@ -145,6 +145,23 @@ const BY_NAME = new Map<string, string>([
 ]);
 
 /**
+ * The grammar for a fenced code block's tag — the `python` in ` ```python `.
+ *
+ * **Not the same lookup as a path**, which is why it exists. A fence is labelled with a language
+ * name, a file with an extension, and only some of them coincide: `py` is in the extension table and
+ * `python` is not, because no file is called `x.python`. So this asks the extension table first (it
+ * covers `sh`, `rs`, `md`, `yml`, …) and then the grammars themselves by name.
+ *
+ * `null` for a tag we have no grammar for — `perl`, or an empty fence. That is a normal answer: the
+ * block still renders, in the foreground colour, which is what it did for every language before this.
+ */
+export function languageForTag(tag: string): string | null {
+  const name = tag.trim().toLowerCase();
+  if (name === "") return null;
+  return BY_EXTENSION.get(name) ?? (LOADERS.has(name) ? name : null);
+}
+
+/**
  * The grammar for a path, or `null` when we have none.
  *
  * `null` is a normal answer, not a failure: the file still renders, in the foreground colour, and a

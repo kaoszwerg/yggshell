@@ -1,8 +1,16 @@
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Copy, Pencil } from "lucide-react";
 import { IconButton } from "./IconButton";
 import { api } from "../../api/commands";
 import { parseMarkdown, type Block, type Inline } from "../../lib/markdown";
+import { languageForTag, tokenize, type SyntaxScheme, type Token } from "../../lib/highlight";
 
 /**
  * How an image in the document should be drawn, if the caller can draw one at all.
@@ -30,6 +38,15 @@ const ImageContext = createContext<ImageRenderer | null>(null);
 export type LocalLinkHandler = (target: string) => void;
 
 const LocalLinkContext = createContext<LocalLinkHandler | null>(null);
+
+/**
+ * The colour scheme fenced code is highlighted in.
+ *
+ * A context rather than a prop threaded through `BlockView`: a fence can sit inside a list inside a
+ * quote, and every level between here and there would otherwise have to carry a value it has no use
+ * for. `null` means the HUD's own colours, which is what every caller that never sets one gets.
+ */
+const SchemeContext = createContext<SyntaxScheme | null>(null);
 
 /** Whether a link target is a URL at all, or a path inside whatever is being rendered. */
 function isExternal(href: string): boolean {
@@ -65,12 +82,15 @@ export function Markdown({
   className = "",
   style,
   image = null,
+  scheme = null,
   onCopyBlock,
   onEditBlock,
   onLocalLink,
 }: {
   source: string;
   className?: string;
+  /** The colour scheme fenced code is highlighted in. Absent, it is drawn in the HUD's own. */
+  scheme?: SyntaxScheme | null;
   /** Forwarded to the container — the notes view puts the terminal's text size here
    *  (rule:content-size), once, rather than on every block. */
   style?: CSSProperties;
@@ -97,61 +117,63 @@ export function Markdown({
 }) {
   return (
     <ImageContext.Provider value={image}>
-      <LocalLinkContext.Provider value={onLocalLink ?? null}>
-        <div className={`text-xs leading-relaxed ${className}`.trim()} style={style}>
-          {parseMarkdown(source).map((block, at) => (
-            <div
-              key={at}
-              data-md-start={block.at.start}
-              data-md-end={block.at.end}
-              className={
-                onCopyBlock === undefined && onEditBlock === undefined
-                  ? undefined
-                  : "group relative"
-              }
-            >
-              <BlockView block={block} />
-              {onCopyBlock === undefined && onEditBlock === undefined ? null : (
-                // **Always there on a code block, on hover for everything else** — which is what
-                // documentation sites do, and the reference the maintainer named. A copy control you
-                // have to discover by waving the pointer over a fence is one nobody finds; a copy
-                // control on every paragraph at all times is noise. Focus reveals them too, or these
-                // would be controls only a mouse can reach.
-                <span
-                  className={`bg-deep/80 absolute top-0 right-0 flex gap-0.5 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${
-                    block.kind === "fence" ? "opacity-100" : "opacity-0"
-                  }`}
-                >
-                  {onCopyBlock === undefined ? null : (
-                    <IconButton
-                      label={COPY_LABEL}
-                      variant="ghost"
-                      className="h-5 w-5"
-                      onClick={() => {
-                        onCopyBlock(source.slice(block.at.start, block.at.end));
-                      }}
-                    >
-                      <Copy size={11} aria-hidden />
-                    </IconButton>
-                  )}
-                  {onEditBlock === undefined ? null : (
-                    <IconButton
-                      label={EDIT_LABEL}
-                      variant="ghost"
-                      className="h-5 w-5"
-                      onClick={() => {
-                        onEditBlock(block.at.start);
-                      }}
-                    >
-                      <Pencil size={11} aria-hidden />
-                    </IconButton>
-                  )}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      </LocalLinkContext.Provider>
+      <SchemeContext.Provider value={scheme}>
+        <LocalLinkContext.Provider value={onLocalLink ?? null}>
+          <div className={`text-xs leading-relaxed ${className}`.trim()} style={style}>
+            {parseMarkdown(source).map((block, at) => (
+              <div
+                key={at}
+                data-md-start={block.at.start}
+                data-md-end={block.at.end}
+                className={
+                  onCopyBlock === undefined && onEditBlock === undefined
+                    ? undefined
+                    : "group relative"
+                }
+              >
+                <BlockView block={block} />
+                {onCopyBlock === undefined && onEditBlock === undefined ? null : (
+                  // **Always there on a code block, on hover for everything else** — which is what
+                  // documentation sites do, and the reference the maintainer named. A copy control you
+                  // have to discover by waving the pointer over a fence is one nobody finds; a copy
+                  // control on every paragraph at all times is noise. Focus reveals them too, or these
+                  // would be controls only a mouse can reach.
+                  <span
+                    className={`bg-deep/80 absolute top-0 right-0 flex gap-0.5 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 ${
+                      block.kind === "fence" ? "opacity-100" : "opacity-0"
+                    }`}
+                  >
+                    {onCopyBlock === undefined ? null : (
+                      <IconButton
+                        label={COPY_LABEL}
+                        variant="ghost"
+                        className="h-5 w-5"
+                        onClick={() => {
+                          onCopyBlock(source.slice(block.at.start, block.at.end));
+                        }}
+                      >
+                        <Copy size={11} aria-hidden />
+                      </IconButton>
+                    )}
+                    {onEditBlock === undefined ? null : (
+                      <IconButton
+                        label={EDIT_LABEL}
+                        variant="ghost"
+                        className="h-5 w-5"
+                        onClick={() => {
+                          onEditBlock(block.at.start);
+                        }}
+                      >
+                        <Pencil size={11} aria-hidden />
+                      </IconButton>
+                    )}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </LocalLinkContext.Provider>
+      </SchemeContext.Provider>
     </ImageContext.Provider>
   );
 }
@@ -165,7 +187,8 @@ export function Markdown({
  */
 function ImageView({ src, alt }: { src: string; alt: string }) {
   const render = useContext(ImageContext);
-  if (render === null) return <span className="text-dim/70">{alt === "" ? src : alt}</span>;
+  if (render === null)
+    return <span className="scheme-dim opacity-80">{alt === "" ? src : alt}</span>;
   return <>{render(src, alt)}</>;
 }
 
@@ -175,10 +198,10 @@ function BlockView({ block }: { block: Block }) {
   if (block.kind === "heading") {
     const size =
       block.level <= 1
-        ? "text-cyan mt-4 mb-2 font-mono text-sm"
+        ? "scheme-accent mt-4 mb-2 font-mono text-sm"
         : block.level === 2
-          ? "text-cyan mt-4 mb-1.5 font-mono text-[13px]"
-          : "text-green mt-3 mb-1 font-mono text-[11px] tracking-wide";
+          ? "scheme-accent mt-4 mb-1.5 font-mono text-[13px]"
+          : "scheme-ok mt-3 mb-1 font-mono text-[11px] tracking-wide";
     // The level is data, so the element has to be chosen rather than interpolated — a heading tag
     // built from a variable is exactly what React refuses to type.
     const content = <InlineView runs={block.content} />;
@@ -194,14 +217,14 @@ function BlockView({ block }: { block: Block }) {
         {block.items.map((item, at) => (
           <li
             key={at}
-            className={item.done === null ? "text-dim pl-3 -indent-3" : "text-dim flex gap-1.5"}
+            className={item.done === null ? "scheme-dim pl-3 -indent-3" : "scheme-dim flex gap-1.5"}
           >
             {item.done === null ? (block.ordered ? `${String(at + 1)}. ` : "• ") : null}
             {item.done === null ? null : (
               // Drawn, not a native checkbox — ADR-APP-026, and it is not interactive here either:
               // this component renders a document. Ticking writes to the file and belongs to whoever
               // owns it, which is why it is not wired in the renderer.
-              <span aria-hidden className={item.done ? "text-green" : "text-dim/60"}>
+              <span aria-hidden className={item.done ? "scheme-ok" : "scheme-dim opacity-60"}>
                 {item.done ? "\u2611" : "\u2610"}
               </span>
             )}
@@ -217,16 +240,12 @@ function BlockView({ block }: { block: Block }) {
   }
 
   if (block.kind === "fence") {
-    return (
-      <pre className="bg-elevated mb-2 overflow-x-auto p-2 font-mono text-[11px]">
-        <code className="text-fg">{block.code}</code>
-      </pre>
-    );
+    return <Fence lang={block.lang} code={block.code} />;
   }
 
   if (block.kind === "quote") {
     return (
-      <blockquote className="border-cyan/25 mb-2 border-l-2 pl-2">
+      <blockquote className="scheme-border mb-2 border-l-2 pl-2">
         {block.blocks.map((child, at) => (
           <BlockView key={at} block={child} />
         ))}
@@ -237,7 +256,9 @@ function BlockView({ block }: { block: Block }) {
   if (block.kind === "html") {
     // As TEXT. The one line in this file that decides there is no sanitiser to get wrong.
     return (
-      <pre className="text-dim/70 mb-2 font-mono text-[11px] whitespace-pre-wrap">{block.text}</pre>
+      <pre className="scheme-dim mb-2 font-mono text-[11px] whitespace-pre-wrap opacity-80">
+        {block.text}
+      </pre>
     );
   }
 
@@ -252,7 +273,7 @@ function BlockView({ block }: { block: Block }) {
               {block.head.map((cell, at) => (
                 <th
                   key={at}
-                  className="border-cyan/20 text-fg border-b px-2 py-1 font-mono text-[11px] font-normal"
+                  className="scheme-border border-b px-2 py-1 font-mono text-[11px] font-normal"
                 >
                   <InlineView runs={cell} />
                 </th>
@@ -263,7 +284,10 @@ function BlockView({ block }: { block: Block }) {
             {block.rows.map((row, at) => (
               <tr key={at}>
                 {row.map((cell, cellAt) => (
-                  <td key={cellAt} className="border-cyan/10 text-dim border-b px-2 py-1 align-top">
+                  <td
+                    key={cellAt}
+                    className="scheme-border scheme-dim border-b px-2 py-1 align-top"
+                  >
                     <InlineView runs={cell} />
                   </td>
                 ))}
@@ -276,9 +300,68 @@ function BlockView({ block }: { block: Block }) {
   }
 
   return (
-    <p className="text-dim mb-2">
+    <p className="scheme-dim mb-2">
       <InlineView runs={block.content} />
     </p>
+  );
+}
+
+/**
+ * A fenced code block, coloured by the language it names.
+ *
+ * ` ```bash ` and ` ```python ` are two different things to read, and until now they rendered
+ * identically: the parser had the tag all along and the renderer dropped it. The grammars available
+ * are the ones `lib/highlight` bundles — shell, python, html, css, json, yaml, toml, rust, go, sql,
+ * the TS/JS family and markdown. A tag with no grammar (`perl`) or no tag at all renders in the
+ * foreground colour, which is what every fence did before.
+ *
+ * **Colouring is asynchronous and the code is shown immediately** — the grammar is fetched on demand,
+ * and a block that stayed blank until it arrived would be worse than one that is never coloured.
+ */
+function Fence({ lang, code }: { lang: string; code: string }) {
+  const scheme = useContext(SchemeContext);
+  const [coloured, setColoured] = useState<{ source: string; lines: Token[][] } | null>(null);
+  const language = languageForTag(lang);
+
+  useEffect(() => {
+    // No grammar: nothing to fetch and nothing to reset either. Whether the stored colouring applies
+    // is decided when rendering, below — clearing it here would be a `setState` in an effect body,
+    // which renders once in the wrong state and then corrects itself (and the lint rejects it).
+    if (language === null) return;
+    let dropped = false;
+    void tokenize(code, language, scheme).then((lines) => {
+      if (!dropped) setColoured({ source: code, lines });
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [language, code, scheme]);
+
+  const lines = language !== null && coloured?.source === code ? coloured.lines : null;
+
+  return (
+    <pre className="scheme-inset mb-2 overflow-x-auto p-2 font-mono text-[11px]">
+      {/* No colour of its own where there is no grammar: it inherits the scheme's foreground from the
+          surface. Naming one here is what made a light scheme show pale grey on near-white
+          (`lib/schemeSurface`). */}
+      <code>
+        {lines === null
+          ? code
+          : lines.map((line, at) => (
+              <span key={at}>
+                {line.map((token, tokenAt) => (
+                  <span
+                    key={tokenAt}
+                    style={token.color === undefined ? undefined : { color: token.color }}
+                  >
+                    {token.content}
+                  </span>
+                ))}
+                {at === lines.length - 1 ? "" : "\n"}
+              </span>
+            ))}
+      </code>
+    </pre>
   );
 }
 
@@ -290,7 +373,7 @@ function InlineView({ runs }: { runs: Inline[] }) {
           return (
             <code
               key={at}
-              className="bg-elevated text-fg rounded px-1 py-0.5 font-mono text-[11px]"
+              className="scheme-inset scheme-fg rounded px-1 py-0.5 font-mono text-[11px]"
             >
               {run.text}
             </code>
@@ -298,14 +381,14 @@ function InlineView({ runs }: { runs: Inline[] }) {
         }
         if (run.kind === "strong") {
           return (
-            <strong key={at} className="text-fg font-semibold">
+            <strong key={at} className="scheme-fg font-semibold">
               {run.text}
             </strong>
           );
         }
         if (run.kind === "emphasis") {
           return (
-            <em key={at} className="text-fg/90">
+            <em key={at} className="scheme-fg opacity-90">
               {run.text}
             </em>
           );
@@ -345,7 +428,7 @@ function LinkView({ text, href }: { text: string; href: string }) {
     return (
       <button
         type="button"
-        className="text-cyan hover:text-glow-cyan cursor-pointer underline decoration-dotted underline-offset-2"
+        className="scheme-accent hover:text-glow-cyan cursor-pointer underline decoration-dotted underline-offset-2"
         onClick={() => {
           local(href);
         }}
@@ -358,7 +441,7 @@ function LinkView({ text, href }: { text: string; href: string }) {
   return (
     <button
       type="button"
-      className="text-cyan hover:text-glow-cyan cursor-pointer underline decoration-dotted underline-offset-2"
+      className="scheme-accent hover:text-glow-cyan cursor-pointer underline decoration-dotted underline-offset-2"
       onClick={() => {
         // try/catch AND .catch: an IPC call can fail either way — synchronously when the bridge is
         // not there, asynchronously when the backend refuses the URL — and only one of the two is

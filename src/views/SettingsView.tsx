@@ -102,11 +102,26 @@ export function SettingsView() {
   );
 }
 
+/**
+ * How the application looks: its scale, its colours, its language, its status bar.
+ *
+ * **Colour schemes live here rather than under Terminal**, which is where they started and where they
+ * stopped belonging. That panel configured one surface when it was written; it now configures four —
+ * the terminal, a diff, a commit and a note — and only one of them is a terminal. Filed under
+ * Terminal it was a setting three of its own controls had nothing to do with.
+ */
 function AppearanceSection() {
   const t = useT();
   return (
     <>
       <InterfaceScale />
+      <HudPanel
+        accent="cyan"
+        label={t("settings.theme.title")}
+        description={t("settings.theme.description")}
+      >
+        <ThemeControls />
+      </HudPanel>
       <HudPanel
         accent="cyan"
         label={t("settings.language.title")}
@@ -224,14 +239,6 @@ function TerminalSection() {
         <FontChoice />
         <div className="bg-cyan/15 my-4 h-px" aria-hidden />
         <TextSizeChoice />
-      </HudPanel>
-
-      <HudPanel
-        accent="cyan"
-        label={t("settings.theme.title")}
-        description={t("settings.theme.description")}
-      >
-        <ThemeControls />
       </HudPanel>
 
       <HudPanel

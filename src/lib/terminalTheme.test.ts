@@ -181,6 +181,38 @@ describe("detailThemeId", () => {
     expect(detailThemeId("diff", settings({ commit_theme: "ayu" }), "nord")).toBe("nord");
   });
 
+  it("gives a note its own scheme, and the editor follows it unless it has one", () => {
+    // A note is monospace content read like terminal output, which is why it has a scheme at all.
+    // Reading it and writing its source are two activities, so the editor can differ — the same
+    // shape as a commit differing from a diff.
+    expect(detailThemeId("notes", settings({ notes_theme: "dracula" }), "nord")).toBe("dracula");
+    expect(detailThemeId("notesEdit", settings({ notes_theme: "dracula" }), "nord")).toBe(
+      "dracula",
+    );
+    expect(
+      detailThemeId(
+        "notesEdit",
+        settings({ notes_theme: "dracula", notes_edit_theme: "ayu" }),
+        "nord",
+      ),
+    ).toBe("ayu");
+  });
+
+  it("keeps the note and diff families apart", () => {
+    // Someone who set a diff scheme has said nothing about their notes, and the reverse. Crossing
+    // them would make one setting silently repaint a view it never named.
+    expect(detailThemeId("notes", settings({ diff_theme: "solarized-light" }), "nord")).toBe(
+      "nord",
+    );
+    expect(detailThemeId("diff", settings({ notes_theme: "dracula" }), "nord")).toBe("nord");
+    expect(detailThemeId("notes", settings({ notes_edit_theme: "ayu" }), "nord")).toBe("nord");
+  });
+
+  it("falls back to the terminal for notes exactly as for a diff", () => {
+    expect(detailThemeId("notes", settings(), "nord")).toBe("nord");
+    expect(detailThemeId("notesEdit", settings({ terminal_theme: "ayu" }), null)).toBe("ayu");
+  });
+
   it("answers the HUD palette when nothing anywhere is set", () => {
     expect(detailThemeId("diff", settings(), null)).toBe("");
     expect(detailThemeId("commit", null, null)).toBe("");

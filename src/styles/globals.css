@@ -848,6 +848,36 @@ input[type="range"]:disabled::-webkit-slider-thumb,
     color: var(--scheme-alt);
   }
 
+  /* ── Rendered markdown in a scheme ──────────────────────────────────────────────────────────
+     A note is content, so it is drawn in the scheme the user chose rather than the HUD's palette.
+     The classes below are what let the renderer say "a link", "a done box", "an inset block"
+     without naming a colour — the same trick the diff uses, applied to prose.
+
+     They resolve to the HUD palette when nothing is configured, because `surfaceStyle` sets these
+     properties either way. That is what makes them safe to use unconditionally. */
+
+  /* A link, and anything else the reader should recognise as an accent. */
+  .scheme-accent {
+    color: var(--scheme-meta);
+  }
+
+  /* A ticked checkbox — "done" reads as green in every scheme that has an opinion about green. */
+  .scheme-ok {
+    color: var(--scheme-add);
+  }
+
+  /* An inset surface: inline code, a fence, a table header. Mixed against the scheme's OWN
+     background, so it darkens on a dark scheme and lightens on a light one — a fixed rgba would
+     either vanish or glare depending on which was chosen. */
+  .scheme-inset {
+    background: color-mix(in srgb, var(--scheme-fg) 8%, var(--scheme-bg));
+  }
+
+  /* The rule between blocks, and a table's cell borders. */
+  .scheme-border {
+    border-color: color-mix(in srgb, var(--scheme-fg) 18%, transparent);
+  }
+
   .scheme-mark-warn {
     color: var(--scheme-warn);
   }

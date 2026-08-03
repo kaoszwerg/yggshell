@@ -207,6 +207,21 @@ export const en = {
   "notes.save": "Save",
   "notes.editor": "Note text",
   "notes.editHint": "Click a block to write at that spot · Escape returns",
+  "notes.insert.toolbar": "Insert markdown",
+  "notes.insert.heading": "Heading",
+  "notes.insert.bold": "Bold",
+  "notes.insert.italic": "Italic",
+  "notes.insert.strike": "Strikethrough",
+  "notes.insert.code": "Inline code",
+  "notes.insert.bullet": "Bulleted list",
+  "notes.insert.ordered": "Numbered list",
+  "notes.insert.task": "Task",
+  "notes.insert.quote": "Quote",
+  "notes.insert.fence": "Code block",
+  "notes.insert.table": "Table",
+  "notes.insert.rule": "Divider",
+  "notes.insert.link": "Link",
+  "notes.insert.image": "Image",
   "notes.newTopic": "New topic",
   "notes.openFile": "Open {name}",
   "notes.syncFailed": "Not syncing: {reason}",
@@ -363,7 +378,7 @@ export const en = {
     "How much output fits on screen. The UI scale under Appearance sizes the chrome around it.",
 
   "settings.theme.title": "Theme",
-  "settings.theme.description": "The colours a terminal, a diff and a commit are drawn in.",
+  "settings.theme.description": "The colours a terminal, a diff, a commit and a note are drawn in.",
 
   "settings.selection.title": "Selection",
   "settings.selection.description": "What happens when you drag across output.",
@@ -558,6 +573,21 @@ export const en = {
   "scheme.label": "Colour scheme",
   "scheme.appliesToAll":
     "Applies to every open terminal at once — the emulator is repainted live, so nothing has to be restarted.",
+  "scheme.diffs": "Diffs",
+  "scheme.commits": "Commits",
+  "scheme.notes": "Notes",
+  "scheme.notesEdit": "Note editor",
+  "scheme.followsTerminal": "Same as the terminal",
+  "scheme.followsDiffs": "Same as diffs",
+  "scheme.followsNotes": "Same as notes",
+  "scheme.hint.diffs":
+    "Left empty, a diff is drawn in whatever scheme its own tab's terminal uses.",
+  "scheme.hint.commits":
+    "Left empty, a commit follows the diff setting — and through it, the terminal.",
+  "scheme.hint.notes":
+    "A note is monospace text you read like terminal output, so it gets a scheme of its own. Left empty, it follows the terminal.",
+  "scheme.hint.notesEdit":
+    "Writing markdown source is not the same as reading it rendered. Left empty, the editor follows the scheme notes are read in.",
   "scheme.inUse": "in use",
   "scheme.new": "New scheme",
   "scheme.edit": "Edit “{name}”",

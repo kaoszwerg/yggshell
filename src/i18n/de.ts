@@ -197,6 +197,21 @@ export const de: Translations = {
   "notes.save": "Speichern",
   "notes.editor": "Notiztext",
   "notes.editHint": "Block anklicken schreibt an dieser Stelle · Escape zurück",
+  "notes.insert.toolbar": "Markdown einfügen",
+  "notes.insert.heading": "Überschrift",
+  "notes.insert.bold": "Fett",
+  "notes.insert.italic": "Kursiv",
+  "notes.insert.strike": "Durchgestrichen",
+  "notes.insert.code": "Code im Text",
+  "notes.insert.bullet": "Aufzählung",
+  "notes.insert.ordered": "Nummerierte Liste",
+  "notes.insert.task": "Aufgabe",
+  "notes.insert.quote": "Zitat",
+  "notes.insert.fence": "Codeblock",
+  "notes.insert.table": "Tabelle",
+  "notes.insert.rule": "Trennlinie",
+  "notes.insert.link": "Link",
+  "notes.insert.image": "Bild",
   "notes.newTopic": "Neues Topic",
   "notes.openFile": "{name} öffnen",
   "notes.syncFailed": "Kein Sync: {reason}",
@@ -353,7 +368,8 @@ export const de: Translations = {
     "Wie viel Ausgabe auf den Bildschirm passt. Die Skalierung unter „Darstellung“ bestimmt den Rahmen darum herum.",
 
   "settings.theme.title": "Farbschema",
-  "settings.theme.description": "Die Farben, in denen Terminal, Diff und Commit gezeichnet werden.",
+  "settings.theme.description":
+    "Die Farben, in denen Terminal, Diff, Commit und Notizen gezeichnet werden.",
 
   "settings.selection.title": "Auswahl",
   "settings.selection.description": "Was passiert, wenn du über die Ausgabe ziehst.",
@@ -548,6 +564,21 @@ export const de: Translations = {
   "scheme.label": "Farbschema",
   "scheme.appliesToAll":
     "Gilt sofort für alle offenen Terminals — der Emulator wird live neu gezeichnet, es muss nichts neu gestartet werden.",
+  "scheme.diffs": "Diffs",
+  "scheme.commits": "Commits",
+  "scheme.notes": "Notizen",
+  "scheme.notesEdit": "Notiz-Editor",
+  "scheme.followsTerminal": "Wie das Terminal",
+  "scheme.followsDiffs": "Wie Diffs",
+  "scheme.followsNotes": "Wie Notizen",
+  "scheme.hint.diffs":
+    "Leer gelassen wird ein Diff in dem Schema gezeichnet, das das Terminal seines Tabs benutzt.",
+  "scheme.hint.commits":
+    "Leer gelassen folgt ein Commit der Diff-Einstellung — und darüber dem Terminal.",
+  "scheme.hint.notes":
+    "Eine Notiz ist Monospace-Text, den du wie Terminalausgabe liest, also bekommt sie ein eigenes Schema. Leer gelassen folgt sie dem Terminal.",
+  "scheme.hint.notesEdit":
+    "Markdown-Quelltext zu schreiben ist nicht dasselbe wie ihn gerendert zu lesen. Leer gelassen folgt der Editor dem Schema, in dem Notizen gelesen werden.",
   "scheme.inUse": "aktiv",
   "scheme.new": "Neues Schema",
   "scheme.edit": "„{name}“ bearbeiten",

@@ -73,3 +73,67 @@ describe("NotesView", () => {
     expect(blocks.length).toBeGreaterThan(1);
   });
 });
+
+/**
+ * The markdown palette — end to end, from the click to the text.
+ *
+ * `lib/markdownInsert` pins what each construct does to a string, and `MarkdownToolbar` pins that
+ * every element has a control. Neither can see the part that actually breaks: whether the view hands
+ * the *editor's* selection to the logic and writes the result back. That wiring is the defect class
+ * this whole file exists for.
+ */
+describe("NotesView markdown toolbar", () => {
+  beforeEach(() => {
+    useUiStore.setState({ locale: "en", note: { project: "p", topic: "inbox", at: null } });
+    vi.mocked(notesApi.read).mockResolvedValue("hello\n");
+  });
+
+  /** Go to the editor and put the caret where the test wants it. */
+  async function write(selection: { start: number; end: number }) {
+    renderView();
+    await screen.findByText("hello");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const area = await screen.findByLabelText<HTMLTextAreaElement>("Note text");
+    area.setSelectionRange(selection.start, selection.end);
+    return area;
+  }
+
+  it("shows the palette only while writing", async () => {
+    renderView();
+    await screen.findByText("hello");
+
+    expect(screen.queryByRole("toolbar", { name: "Insert markdown" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.getByRole("toolbar", { name: "Insert markdown" })).toBeTruthy();
+  });
+
+  it("inserts at the caret, not at the end of the note", async () => {
+    const area = await write({ start: 0, end: 0 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Task" }));
+
+    expect(area.value).toBe("- [ ] hello\n");
+  });
+
+  it("wraps what the user selected", async () => {
+    const area = await write({ start: 0, end: 5 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Bold" }));
+
+    expect(area.value).toBe("**hello**\n");
+  });
+
+  it("leaves the caret ready to type, in the editor", async () => {
+    // The reason `mousedown` is prevented on every button: if the toolbar takes focus, the user has
+    // to click back into the text before typing — which makes "insert at the cursor" a lie.
+    const area = await write({ start: 5, end: 5 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Inline code" }));
+
+    expect(area.value).toBe("hello``\n");
+    expect(document.activeElement).toBe(area);
+    expect(area.selectionStart).toBe(6);
+  });
+});

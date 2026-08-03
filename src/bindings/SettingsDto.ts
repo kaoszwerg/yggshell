@@ -35,6 +35,20 @@ diff_theme: string,
  */
 commit_theme: string, 
 /**
+ * The scheme a NOTE is drawn in while reading it. Empty means "whatever the tab's terminal
+ * uses" — a note is monospace content read like terminal output, which is why it gets a scheme
+ * at all rather than the HUD palette.
+ */
+notes_theme: string, 
+/**
+ * The scheme the note EDITOR is drawn in. Empty means "the same as reading a note".
+ *
+ * Separate from `notes_theme` on purpose: reading rendered markdown and writing its source are
+ * two different activities, and somebody may well want more contrast for one than the other —
+ * exactly the reason a commit can differ from a diff.
+ */
+notes_edit_theme: string, 
+/**
  * The font family a terminal renders in. Empty means the app's own default stack.
  *
  * Stored as a NAME rather than a validated choice: a WebView cannot enumerate system fonts, so

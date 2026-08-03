@@ -4,7 +4,11 @@ import { ArrowLeft, Copy, ExternalLink } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { IconButton } from "../components/ui/IconButton";
 import { Markdown } from "../components/ui/Markdown";
-import { TextArea } from "../components/ui/TextArea";
+import { MarkdownEditor } from "../components/ui/MarkdownEditor";
+import { MarkdownToolbar } from "../components/notes/MarkdownToolbar";
+import { applyConstruct, type Construct } from "../lib/markdownInsert";
+import { useDetailScheme } from "../hooks/useDetailScheme";
+import { surfaceStyle } from "../lib/schemeSurface";
 import { api } from "../api/commands";
 import { notesApi } from "../api/notes";
 import { copyText } from "../lib/clipboard";
@@ -45,6 +49,25 @@ export function NotesView() {
   const [draft, setDraft] = useState<string | null>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const caret = useRef<number | null>(null);
+
+  /**
+   * The colour schemes this view is drawn in — one for reading, one for writing.
+   *
+   * **A note is content, not chrome**, and it gets a scheme for the same reason it already got the
+   * terminal's font size (`rule:content-size`): it is monospace text read like terminal output, and
+   * drawing it in the HUD palette while the terminal beside it is Solarized is the app deciding it
+   * knows better. Diffs and commits have had this since they were built; notes were the gap.
+   *
+   * **Two, because reading and writing are two activities.** Rendered markdown and its source are not
+   * the same thing to look at, and somebody may well want more contrast for one — the same split that
+   * lets a commit differ from a diff. Configured in Settings › Theme; either left empty follows the
+   * next step of the chain (`detailThemeId`).
+   *
+   * `null` for the pane: this view replaces the page rather than sitting over one terminal, so there
+   * is no tab whose scheme it should borrow.
+   */
+  const readScheme = useDetailScheme(null, "notes");
+  const editScheme = useDetailScheme(null, "notesEdit");
 
   /**
    * Whether the editor is showing.
@@ -125,7 +148,42 @@ export function NotesView() {
     area.setSelectionRange(at, at);
   }, [writing, note?.at]);
 
+  /**
+   * The selection to restore once an insert has re-rendered the editor.
+   *
+   * **A controlled `<textarea>` loses the caret on every render**, so a button that changes the text
+   * has to put the caret back — and it can only do that after the new value is on screen. Separate
+   * from the effect above on purpose: that one answers *where writing begins*, which happens once
+   * when the editor opens; this one runs after each insert, and there is no set of dependencies that
+   * means both without one of them firing when it should not.
+   */
+  const afterInsert = useRef<{ start: number; end: number } | null>(null);
+
+  useEffect(() => {
+    const at = afterInsert.current;
+    if (at === null) return;
+    afterInsert.current = null;
+    const area = editor.current;
+    if (area === null) return;
+    area.focus();
+    area.setSelectionRange(at.start, at.end);
+  });
+
   const text = draft ?? content.data ?? "";
+
+  /**
+   * Put a markdown construct in at the caret.
+   *
+   * The editor is the source of the selection, not React state: the textarea knows where the caret
+   * is between renders and a mirrored copy would be one keystroke behind.
+   */
+  const insert = (construct: Construct) => {
+    const area = editor.current;
+    if (area === null) return;
+    const out = applyConstruct(text, area.selectionStart, area.selectionEnd, construct);
+    afterInsert.current = { start: out.start, end: out.end };
+    setDraft(out.value);
+  };
 
   const startWriting = (at: number | null) => {
     setDraft(text);
@@ -181,49 +239,64 @@ export function NotesView() {
       </header>
 
       {writing ? (
-        <TextArea
-          ref={editor}
-          aria-label={t("notes.editor")}
-          value={draft ?? ""}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") stopWriting();
-          }}
-          // **Paste an image and it becomes part of the note.** The clipboard is where a screenshot
-          // is, so this is where one arrives; the file is copied INTO the repository and the note
-          // refers to it relatively, because a note pointing at ~/Desktop is broken on the second
-          // machine and again the day the desktop is tidied (ADR-PROJ-004).
-          onPaste={(event) => {
-            const file = [...event.clipboardData.items]
-              .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-              .map((item) => item.getAsFile())
-              .find((f): f is File => f !== null);
-            if (file === undefined) return;
-            event.preventDefault();
-            const at = event.currentTarget.selectionStart;
-            void addImage.mutateAsync(file).then((rel) => {
-              const before = (draft ?? "").slice(0, at);
-              const after = (draft ?? "").slice(at);
-              setDraft(`${before}![](${rel})${after}`);
-            });
-          }}
-          style={{ fontSize: `${fontSize}px` }}
-          className="min-h-0 flex-1 rounded-none border-0 font-mono leading-relaxed"
-        />
+        // `relative`, because the toolbar floats INSIDE this area: it anchors to the editor rather
+        // than to the page, so it stays put while the text scrolls under it.
+        //
+        // `scheme-surface` is what APPLIES the variables `surfaceStyle` sets — without it the nine
+        // custom properties are declared and nothing reads them, which looks exactly like no theme.
+        <div
+          className="scheme-surface relative flex min-h-0 flex-1"
+          style={surfaceStyle(editScheme, fontSize)}
+        >
+          <MarkdownEditor
+            ref={editor}
+            label={t("notes.editor")}
+            value={draft ?? ""}
+            onChange={setDraft}
+            scheme={editScheme}
+            fontSize={fontSize}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") stopWriting();
+            }}
+            // **Paste an image and it becomes part of the note.** The clipboard is where a screenshot
+            // is, so this is where one arrives; the file is copied INTO the repository and the note
+            // refers to it relatively, because a note pointing at ~/Desktop is broken on the second
+            // machine and again the day the desktop is tidied (ADR-PROJ-004).
+            onPaste={(event) => {
+              const file = [...event.clipboardData.items]
+                .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+                .map((item) => item.getAsFile())
+                .find((f): f is File => f !== null);
+              if (file === undefined) return;
+              event.preventDefault();
+              const at = event.currentTarget.selectionStart;
+              void addImage.mutateAsync(file).then((rel) => {
+                const before = (draft ?? "").slice(0, at);
+                const after = (draft ?? "").slice(at);
+                setDraft(`${before}![](${rel})${after}`);
+              });
+            }}
+          />
+          <MarkdownToolbar onPick={insert} />
+        </div>
       ) : (
         // **Reading is reading.** The first version turned the whole surface into a click target that
         // switched to writing, and it fought everything the text contains — a link, a checkbox, the
         // copy control, selecting a sentence. Reported, and the maintainer is right: an explicit
         // affordance says what it does and takes nothing away. Each block carries its own "edit here"
         // beside its copy control, and the header carries the state toggle.
-        <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
+        <div
+          className="scheme-surface min-h-0 flex-1 overflow-auto px-3 py-2"
+          style={surfaceStyle(readScheme, fontSize)}
+        >
           {text.trim() === "" ? (
             <p className="text-dim font-mono text-[11px]">{t("notes.none")}</p>
           ) : (
             <Markdown
               source={text}
+              // A fenced block is coloured by the language it names — ```bash and ```python are two
+              // different things to read, and the parser had the tag all along.
+              scheme={readScheme}
               // A copy control per block, the way documentation sites do it. The point of the tool is
               // handing something over; "select the code fence with the mouse without catching the
               // line above it" is the friction that decides whether it gets used.

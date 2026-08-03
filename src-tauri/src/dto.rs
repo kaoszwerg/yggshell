@@ -51,6 +51,18 @@ pub struct SettingsDto {
     /// The scheme a COMMIT is drawn in. Empty means "the same as a diff".
     #[serde(default)]
     pub commit_theme: String,
+    /// The scheme a NOTE is drawn in while reading it. Empty means "whatever the tab's terminal
+    /// uses" — a note is monospace content read like terminal output, which is why it gets a scheme
+    /// at all rather than the HUD palette.
+    #[serde(default)]
+    pub notes_theme: String,
+    /// The scheme the note EDITOR is drawn in. Empty means "the same as reading a note".
+    ///
+    /// Separate from `notes_theme` on purpose: reading rendered markdown and writing its source are
+    /// two different activities, and somebody may well want more contrast for one than the other —
+    /// exactly the reason a commit can differ from a diff.
+    #[serde(default)]
+    pub notes_edit_theme: String,
     /// The font family a terminal renders in. Empty means the app's own default stack.
     ///
     /// Stored as a NAME rather than a validated choice: a WebView cannot enumerate system fonts, so
@@ -636,6 +648,8 @@ impl Default for SettingsDto {
             terminal_theme: String::new(),
             diff_theme: String::new(),
             commit_theme: String::new(),
+            notes_theme: String::new(),
+            notes_edit_theme: String::new(),
             terminal_font: String::new(),
             git_auto_fetch: default_auto_fetch(),
             notes_remote: String::new(),
@@ -692,6 +706,8 @@ mod tests {
             terminal_theme: String::new(),
             diff_theme: String::new(),
             commit_theme: String::new(),
+            notes_theme: String::new(),
+            notes_edit_theme: String::new(),
             terminal_font: "MesloLGS NF".into(),
             git_auto_fetch: true,
             language: "de".into(),

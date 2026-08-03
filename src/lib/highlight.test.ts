@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { languageFor, tokenize } from "./highlight";
+import { languageFor, languageForTag, tokenize } from "./highlight";
 import { PALETTE, TERMINAL_ANSI } from "../styles/palette";
 
 describe("languageFor", () => {
@@ -82,5 +82,37 @@ describe("tokenize", () => {
     const json = await tokenize('{"a": 1}', "json");
     expect(rust.flat().some((t) => t.color)).toBe(true);
     expect(json.flat().some((t) => t.color)).toBe(true);
+  });
+});
+
+describe("languageForTag", () => {
+  it("takes the language NAME a fence is labelled with", () => {
+    // The whole reason this is separate from `languageFor`: a fence says ```python, and no file is
+    // ever called `x.python`, so the extension table alone answers null for the commonest tags.
+    expect(languageForTag("python")).toBe("python");
+    expect(languageForTag("markdown")).toBe("markdown");
+    expect(languageForTag("shellscript")).toBe("shellscript");
+  });
+
+  it("still takes the short forms people actually type", () => {
+    expect(languageForTag("py")).toBe("python");
+    expect(languageForTag("sh")).toBe("shellscript");
+    expect(languageForTag("bash")).toBe("shellscript");
+    expect(languageForTag("zsh")).toBe("shellscript");
+    expect(languageForTag("rs")).toBe("rust");
+    expect(languageForTag("yml")).toBe("yaml");
+    expect(languageForTag("html")).toBe("html");
+  });
+
+  it("ignores case and stray spacing, which a fence tag collects", () => {
+    expect(languageForTag(" Bash ")).toBe("shellscript");
+    expect(languageForTag("HTML")).toBe("html");
+  });
+
+  it("answers null for a language we have no grammar for, and for a bare fence", () => {
+    // Not an error: the block renders in the foreground colour, exactly as every fence did before.
+    expect(languageForTag("perl")).toBeNull();
+    expect(languageForTag("")).toBeNull();
+    expect(languageForTag("   ")).toBeNull();
   });
 });

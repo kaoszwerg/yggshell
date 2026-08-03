@@ -223,34 +223,45 @@ export function themeById(
  *
  * The chain, most specific first — and every step exists because somebody would reasonably want it:
  *
- * 1. the setting for **this kind of view** (`diff_theme`, `commit_theme`), for reading diffs in
- *    something other than what you type in;
- * 2. for a commit, the **diff** setting, so configuring one covers both unless you say otherwise;
+ * 1. the setting for **this kind of view** (`diff_theme`, `commit_theme`, `notes_theme`,
+ *    `notes_edit_theme`), for reading diffs in something other than what you type in;
+ * 2. the one it **falls back to within its own family** — a commit follows the diff setting, the note
+ *    editor follows the note reader — so configuring one covers both unless you say otherwise;
  * 3. this **tab's** own terminal scheme, so a detail panel matches the terminal it sits over;
  * 4. the **default** terminal scheme.
  *
  * An empty string at any step means "not set here, ask the next one" — which is what makes the common
  * case, configuring nothing at all, look right.
+ *
+ * **The families do not cross.** A commit falls back to a diff and a note editor to a note, never
+ * between the two: a diff and a note are different kinds of reading, and someone who set a diff
+ * scheme has said nothing about their notes.
  */
 export function detailThemeId(
-  kind: "diff" | "commit",
+  kind: "diff" | "commit" | "notes" | "notesEdit",
   settings:
     | {
         diff_theme?: string;
         commit_theme?: string;
+        notes_theme?: string;
+        notes_edit_theme?: string;
         terminal_theme?: string;
       }
     | null
     | undefined,
   paneThemeId: string | null,
 ): string {
-  const own = kind === "commit" ? (settings?.commit_theme ?? "") : "";
-  const diff = settings?.diff_theme ?? "";
-  return own !== ""
-    ? own
-    : diff !== ""
-      ? diff
-      : (paneThemeId ?? "") !== ""
-        ? (paneThemeId ?? "")
-        : (settings?.terminal_theme ?? "");
+  /** This kind's own setting, then the one it defers to inside its family. */
+  const family =
+    kind === "commit"
+      ? [settings?.commit_theme, settings?.diff_theme]
+      : kind === "diff"
+        ? [settings?.diff_theme]
+        : kind === "notesEdit"
+          ? [settings?.notes_edit_theme, settings?.notes_theme]
+          : [settings?.notes_theme];
+
+  const chosen = family.find((id) => (id ?? "") !== "");
+  if (chosen !== undefined) return chosen;
+  return (paneThemeId ?? "") !== "" ? (paneThemeId ?? "") : (settings?.terminal_theme ?? "");
 }

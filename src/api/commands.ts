@@ -80,6 +80,8 @@ export const api = {
     terminalTheme?: string;
     diffTheme?: string;
     commitTheme?: string;
+    notesTheme?: string;
+    notesEditTheme?: string;
     terminalFont?: string;
     gitAutoFetch?: boolean;
     language?: string;
@@ -95,6 +97,8 @@ export const api = {
       terminalTheme: opts.terminalTheme ?? null,
       diffTheme: opts.diffTheme ?? null,
       commitTheme: opts.commitTheme ?? null,
+      notesTheme: opts.notesTheme ?? null,
+      notesEditTheme: opts.notesEditTheme ?? null,
       terminalFont: opts.terminalFont ?? null,
       gitAutoFetch: opts.gitAutoFetch ?? null,
       language: opts.language ?? null,

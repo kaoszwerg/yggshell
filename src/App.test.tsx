@@ -39,7 +39,13 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 vi.mock("@tauri-apps/api/webview", () => ({
-  getCurrentWebview: () => ({ setZoom: vi.fn().mockResolvedValue(undefined) }),
+  // `onDragDropEvent` is here because Settings' Appearance section — the one that renders by
+  // default — carries the theme import drop target. It was reached only from the Terminal section
+  // until colour schemes moved, so this mock did not need it before.
+  getCurrentWebview: () => ({
+    setZoom: vi.fn().mockResolvedValue(undefined),
+    onDragDropEvent: vi.fn().mockResolvedValue(() => undefined),
+  }),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({

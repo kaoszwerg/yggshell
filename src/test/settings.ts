@@ -16,6 +16,8 @@ export function settings(over: Partial<SettingsDto> = {}): SettingsDto {
     terminal_theme: "",
     diff_theme: "",
     commit_theme: "",
+    notes_theme: "",
+    notes_edit_theme: "",
     terminal_font: "",
     git_auto_fetch: true,
     language: "",

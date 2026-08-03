@@ -30,6 +30,8 @@ pub struct SettingsPatch {
     pub terminal_theme: Option<String>,
     pub diff_theme: Option<String>,
     pub commit_theme: Option<String>,
+    pub notes_theme: Option<String>,
+    pub notes_edit_theme: Option<String>,
     pub terminal_font: Option<String>,
     pub git_auto_fetch: Option<bool>,
     pub language: Option<String>,
@@ -125,6 +127,12 @@ impl SettingsStore {
             }
             if let Some(theme) = patch.commit_theme {
                 guard.commit_theme = theme.trim().to_string();
+            }
+            if let Some(theme) = patch.notes_theme {
+                guard.notes_theme = theme.trim().to_string();
+            }
+            if let Some(theme) = patch.notes_edit_theme {
+                guard.notes_edit_theme = theme.trim().to_string();
             }
             if let Some(theme) = patch.terminal_theme {
                 // Stored as given: an id naming a theme that has since been deleted is handled where

@@ -68,6 +68,8 @@ export function useUpdateSettings() {
       terminalTheme?: string;
       diffTheme?: string;
       commitTheme?: string;
+      notesTheme?: string;
+      notesEditTheme?: string;
       terminalFont?: string;
       gitAutoFetch?: boolean;
       language?: string;
