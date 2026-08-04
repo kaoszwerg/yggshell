@@ -43,6 +43,7 @@ export function NotesTool() {
   const project = useNoteProject();
   const setView = useUiStore((s) => s.setView);
   const openNote = useUiStore((s) => s.openNote);
+  const editNote = useUiStore((s) => s.editNote);
   const setNotesProject = useUiStore((s) => s.setNotesProject);
 
   // Opening the notes IS the moment to fetch them — and the only moment, because the shell root
@@ -270,8 +271,15 @@ export function NotesTool() {
     },
   });
 
-  const open = (inProject: string, topic: string) => {
-    openNote(inProject, topic);
+  /**
+   * Show a note in the view — **at the place that was pressed, when there is one.**
+   *
+   * `at` is optional because a topic heading has no position; an entry and a search hit both do, and
+   * both used to drop it. The note then opened at the top and the line you had just pointed at had to
+   * be found again by reading the markdown — which is the one thing pressing it was supposed to save.
+   */
+  const open = (inProject: string, topic: string, at?: number) => {
+    openNote(inProject, topic, at);
     setView("notes");
   };
 
@@ -308,7 +316,9 @@ export function NotesTool() {
       id: "edit",
       label: t("notes.editItem"),
       onSelect: () => {
-        openNote(inProject, topic, item.offset);
+        // `editNote`, not `openNote`: this entry is the one that asks for the caret. Pressing the
+        // row itself only asks to be shown the place.
+        editNote(inProject, topic, item.offset);
         setView("notes");
       },
     },
@@ -667,8 +677,9 @@ export function NotesTool() {
                 key={`${hit.project}:${hit.topic}:${String(hit.offset)}`}
                 label={hit.line}
                 onActivate={() => {
-                  openNote(hit.project, hit.topic);
-                  setView("notes");
+                  // The hit's own offset, which was thrown away here — a search that finds a line
+                  // and then opens the file at the top has done half its job.
+                  open(hit.project, hit.topic, hit.offset);
                 }}
                 className="gap-2 px-2 font-mono"
               >
@@ -730,7 +741,7 @@ export function NotesTool() {
                       });
                     }}
                     onOpen={() => {
-                      open(section.project, section.topic);
+                      open(section.project, section.topic, item.offset);
                     }}
                     actions={itemActions(section.project, section.topic, item)}
                   />
@@ -768,7 +779,7 @@ export function NotesTool() {
                           });
                         }}
                         onOpen={() => {
-                          open(section.project, section.topic);
+                          open(section.project, section.topic, item.offset);
                         }}
                         actions={itemActions(section.project, section.topic, item)}
                       />

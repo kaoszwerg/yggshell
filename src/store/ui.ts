@@ -157,16 +157,32 @@ export interface UiState {
   aboutOpen: boolean;
 
   setView: (v: ViewId) => void;
-  /** Which note the Notes view is showing. The tool sets it; the view reads it. */
-  note: { project: string; topic: string; at: number | null } | null;
   /**
-   * `at` is where WRITING starts — the tool's "edit this entry" passes the item's own position, and a
-   * search hit passes the line's.
+   * Which note the Notes view is showing, and where in it.
+   *
+   * `edit` separates the two things an offset can mean. **Both were one thing and it was wrong**: any
+   * offset forced the editor open, so "show me this entry" could not be answered without also putting
+   * the user in a text field they had not asked for.
+   */
+  note: { project: string; topic: string; at: number | null; edit: boolean } | null;
+  /**
+   * Show a note, scrolled to `at` if one is given.
+   *
+   * **Every caller that knows a position must pass it.** A todo in the list, a search hit — each one
+   * has the exact offset in hand, and all of them threw it away: the note opened at the top and the
+   * line you pressed had to be found again by reading. That is the whole value of pressing it.
    *
    * In **UTF-16 code units**, which is what `setSelectionRange` receives it as. The backend speaks the
    * same unit at this boundary and converts to bytes on its side (`notes::offsets`).
    */
   openNote: (project: string, topic: string, at?: number) => void;
+  /**
+   * The same, and put the caret there — "edit this entry" rather than "show me this entry".
+   *
+   * Separate from {@link openNote} because an offset used to mean both, so looking at an entry
+   * dropped you into a text field you had not asked for.
+   */
+  editNote: (project: string, topic: string, at: number) => void;
   /**
    * Which project the notes tool is filing into and showing.
    *
@@ -247,7 +263,9 @@ export const useUiStore = create<UiState>()(
 
       setView: (view) => set({ view }),
       note: null,
-      openNote: (project, topic, at) => set({ note: { project, topic, at: at ?? null } }),
+      openNote: (project, topic, at) =>
+        set({ note: { project, topic, at: at ?? null, edit: false } }),
+      editNote: (project, topic, at) => set({ note: { project, topic, at, edit: true } }),
       notesProject: null,
       setNotesProject: (notesProject) => set({ notesProject }),
       // Reading is what opening a note is for; the split is one press away and remembered once taken.

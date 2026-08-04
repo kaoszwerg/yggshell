@@ -140,6 +140,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Opening an entry from the list now goes to it.** Pressing a todo, or a search hit, opened the
+  note at the top and left the line you had just pointed at to be found again by reading the
+  markdown — which is the one thing pressing it was meant to save. Three places knew the exact
+  position and threw it away, and the one that passed it on scrolled nothing, because setting a text
+  caret does not move a text field. The rendering scrolls by the source range every block already
+  carries; the editor by the line positions its mirror already measures. Both stop a little short of
+  the top edge, so the line keeps the heading that says what it belongs to.
+
+  An offset also used to mean two things at once — "show me this" and "put me in the editor here" —
+  so looking at an entry dropped you into a text field you had not asked for. Those are separate
+  requests now, and only *Edit in the view* asks for the caret.
+
 - **A task below a German word could not be ticked.** The offsets the interface works in are UTF-16
   code units — the markdown parser reports them that way and the text caret counts them that way,
   and neither can be made to do anything else — while the backend read the same number as a byte

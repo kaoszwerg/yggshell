@@ -153,7 +153,7 @@ describe("NotesTool", () => {
   it("searches across every project and opens the hit in the view", async () => {
     // Search IS navigation, which is why it lives in the tool rather than the page.
     vi.mocked(notesApi.search).mockResolvedValue([
-      { project: "github.com/x/y", topic: "release", line: "notarise", offset: 0 },
+      { project: "github.com/x/y", topic: "release", line: "notarise", offset: 42 },
     ]);
     renderTool();
 
@@ -170,8 +170,12 @@ describe("NotesTool", () => {
     expect(useUiStore.getState().note).toEqual({
       project: "github.com/x/y",
       topic: "release",
-      // No offset: opening a hit is "show me this note", not "put me in the editor at this byte".
-      at: null,
+      // **The hit's own offset travels with it.** It used to be dropped here, deliberately, because
+      // an offset meant "put me in the editor" — so carrying it would have answered a search by
+      // opening a text field. Now `edit` says that separately, and a search that finds a line and
+      // then opens the file at the top has done half its job.
+      at: 42,
+      edit: false,
     });
   });
 
@@ -320,7 +324,9 @@ describe("managing what is in the list", () => {
     expect(useUiStore.getState().note).toEqual({
       project: "github.com/a/b",
       topic: "prompts",
+      // A topic heading has no position in the file, so there is nothing to scroll to.
       at: null,
+      edit: false,
     });
   });
 
@@ -362,6 +368,32 @@ describe("managing what is in the list", () => {
 
     expect(await screen.findByText(/lands in this project's inbox/)).toBeTruthy();
     expect(screen.getByText(/files into github.com\/a\/b/)).toBeTruthy();
+  });
+
+  it("carries the entry's own position into the view", async () => {
+    // The defect: every caller here KNEW the position and threw it away, so the note opened at the
+    // top and the line just pressed had to be found again by reading the markdown — which is the one
+    // thing pressing it was supposed to save. Reported as "sonst muss ich den punkt ja im markdown
+    // suchen gehen".
+    renderTool();
+    await screen.findByText("second");
+
+    fireEvent.click(screen.getByText("second"));
+
+    const note = useUiStore.getState().note;
+    expect(note?.at).toBeGreaterThan(0);
+    // Shown, not edited: pressing a todo asks to be taken to it, not to be put in a text field.
+    expect(note?.edit).toBe(false);
+  });
+
+  it("asks for the caret only where the caret was asked for", async () => {
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for first" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit in the view" }));
+
+    expect(useUiStore.getState().note?.edit).toBe(true);
   });
 
   it("imports into the project it is showing, and names no path", async () => {

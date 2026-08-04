@@ -36,7 +36,7 @@ describe("NotesView", () => {
     vi.clearAllMocks();
     useUiStore.setState({
       locale: "en",
-      note: { project: "p", topic: "inbox", at: null },
+      note: { project: "p", topic: "inbox", at: null, edit: false },
       notesLens: "read",
       notesFollow: true,
     });
@@ -151,6 +151,65 @@ describe("NotesView", () => {
     expect(await screen.findByRole("button", { name: "Open this image" })).toBeTruthy();
   });
 
+  it("scrolls the rendering to the place the tool sent it to", async () => {
+    // The missing half of "open this entry": the offset arrived and the caret was set, but nothing
+    // moved — so pressing a todo opened the note at the top and left the line to be found by
+    // reading the markdown, which is the work pressing it was meant to save.
+    //
+    // jsdom lays nothing out, so every block is given a position BEFORE the render: a block whose
+    // source starts at X is drawn at 10X. Defined on the prototype because the effect measures the
+    // elements as it renders — setting them afterwards would assert against a run that had already
+    // read zeroes.
+    Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return Number(this.dataset.mdStart ?? "0") * 10;
+      },
+    });
+    try {
+      const source = "# Heading\n\nfirst paragraph\n\n- [ ] the entry\n";
+      const at = source.indexOf("- [ ] the entry");
+      vi.mocked(notesApi.read).mockResolvedValue(source);
+      useUiStore.setState({ note: { project: "p", topic: "inbox", at, edit: false } });
+      const { container } = renderView();
+      await screen.findByText("the entry");
+
+      const scroller = container.querySelector<HTMLElement>(".overflow-auto");
+      // The list block starts at 28, so it was drawn at 280 — less the margin that keeps the line
+      // off the very top edge.
+      await waitFor(() => {
+        expect(scroller?.scrollTop).toBe(at * 10 - 48);
+      });
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+        configurable: true,
+        get: () => 0,
+      });
+    }
+  });
+
+  it("shows the entry without dragging the user into the editor", async () => {
+    // An offset used to mean two things at once, so looking at a todo put you in a text field you
+    // had not asked for. Only "edit this entry" asks for the caret.
+    vi.mocked(notesApi.read).mockResolvedValue("- [ ] the entry\n");
+    useUiStore.setState({ note: { project: "p", topic: "inbox", at: 0, edit: false } });
+    renderView();
+    await screen.findByText("the entry");
+
+    expect(screen.queryByLabelText("Note text")).toBeNull();
+  });
+
+  it("opens the editor when the caret was what was asked for", async () => {
+    vi.mocked(notesApi.read).mockResolvedValue("- [ ] the entry\n");
+    useUiStore.setState({ note: { project: "p", topic: "inbox", at: 6, edit: true } });
+    renderView();
+
+    const area = await screen.findByLabelText<HTMLTextAreaElement>("Note text");
+    await waitFor(() => {
+      expect(area.selectionStart).toBe(6);
+    });
+  });
+
   it("does not ask the backend to read an image that names no file", async () => {
     // `![]()` is exactly what the toolbar's Image button writes, so a half-finished note is the
     // ordinary case. Asking for `""` resolves to the project DIRECTORY in the backend: found in a
@@ -205,7 +264,7 @@ describe("NotesView markdown toolbar", () => {
   beforeEach(() => {
     useUiStore.setState({
       locale: "en",
-      note: { project: "p", topic: "inbox", at: null },
+      note: { project: "p", topic: "inbox", at: null, edit: false },
       notesLens: "read",
     });
     vi.mocked(notesApi.read).mockResolvedValue("hello\n");

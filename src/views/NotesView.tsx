@@ -11,6 +11,7 @@ import { MarkdownToolbar } from "../components/notes/MarkdownToolbar";
 import { applyConstruct, type Construct } from "../lib/markdownInsert";
 import { useDetailScheme } from "../hooks/useDetailScheme";
 import { useFollowScroll } from "../hooks/useFollowScroll";
+import { lineIndexAt, lineStarts } from "../lib/followScroll";
 import { surfaceStyle } from "../lib/schemeSurface";
 import { api } from "../api/commands";
 import { notesApi } from "../api/notes";
@@ -28,6 +29,14 @@ const SAVE_MS = 600;
  * quietly rendered as something else.
  */
 const SPLIT_MIN_WIDTH = 560;
+
+/**
+ * How much is left above a place the tool sent us to.
+ *
+ * Not flush with the top edge: a line pinned to the very top has lost the heading or the sentence
+ * that told you what it belongs to, and finding *that* again is the same hunt in the other direction.
+ */
+const MARGIN = 48;
 
 /**
  * One note, in full — the detail half of the tool beside it.
@@ -126,16 +135,20 @@ function NoteDocument({ project, topic }: { project: string; topic: string }) {
   /**
    * The lens actually drawn.
    *
-   * **Derived, not set from an effect.** The tool's "edit this entry" opens the note WITH an offset,
-   * and an offset needs an editor to put a caret in — so a stored `read` yields to it for as long as
-   * the offset stands. Turning that into `setLens("write")` inside an effect is the
-   * `set-state-in-effect` pattern the lint rejects, rightly: it renders once in the wrong state and
-   * then corrects itself. Reading the offset as the state means the first frame is already right.
+   * **Derived, not set from an effect.** The tool's "edit this entry" opens the note asking for the
+   * caret, and a caret needs an editor to sit in — so a stored `read` yields to it for as long as
+   * that stands. Turning it into `setLens("write")` inside an effect is the `set-state-in-effect`
+   * pattern the lint rejects, rightly: it renders once in the wrong state and then corrects itself.
+   * Reading the request as the state means the first frame is already right.
+   *
+   * **Only `edit` does that, not any offset.** Pressing a todo in the list asks to be *shown* the
+   * place; it used to force the editor open as well, because an offset meant both things at once —
+   * so looking at an entry put you in a text field you had not asked for.
    *
    * A narrow window collapses `split` to the editor rather than to reading: the user asked to write.
    */
   const lens: NotesLens =
-    storedLens === "read" && note?.at != null
+    storedLens === "read" && note?.edit === true
       ? "write"
       : storedLens === "split" && !wide
         ? "write"
@@ -252,7 +265,7 @@ function NoteDocument({ project, topic }: { project: string; topic: string }) {
   // here" they pressed, or the entry the tool sent them in on.
   useEffect(() => {
     if (!editing) return;
-    const at = caret.current ?? note?.at ?? null;
+    const at = caret.current;
     if (at === null) return;
     caret.current = null;
     const area = editor.current;
@@ -263,7 +276,66 @@ function NoteDocument({ project, topic }: { project: string; topic: string }) {
     // `follow` is rebuilt every render and holds no state of its own; including it would re-run this
     // on every keystroke and drag the caret back to where writing started.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, note?.at]);
+  }, [editing]);
+
+  /**
+   * Bring the place the tool sent us to into view — **in whichever panes are showing**.
+   *
+   * The missing half of "open this entry". The offset arrived, the caret was set, and nothing moved:
+   * `setSelectionRange` does not scroll a textarea, and the rendered side was never told at all. So
+   * pressing a todo opened the note at the top and left the line to be found by reading — which is
+   * exactly the work pressing it was meant to save.
+   *
+   * Done **once per request**, not on every render: after this the scroll position is the user's, and
+   * a note that jumped back to the entry on every keystroke would be unusable. The guard is the
+   * request itself — project, topic and offset — so opening the same note at a different place works,
+   * and opening the same place twice does not fight a scroll made in between.
+   */
+  const arrivedAt = useRef<string | null>(null);
+  useEffect(() => {
+    const at = note?.at ?? null;
+    if (at === null || text === "") return;
+    const request = `${project}/${topic}/${String(at)}`;
+    if (arrivedAt.current === request) return;
+    arrivedAt.current = request;
+
+    // The caret, when the caret is what was asked for. **Here rather than in its own effect**,
+    // because it has to wait for the same thing: the note arrives over IPC, and a `setSelectionRange`
+    // issued while the field is still empty is clamped to nothing — then the text lands, the
+    // controlled value changes, and the caret ends up at the end of the document instead.
+    if (note?.edit === true) {
+      const area = editor.current;
+      if (area !== null) {
+        area.focus();
+        area.setSelectionRange(at, at);
+      }
+    }
+
+    // The rendered side: every block carries its source range, so the one holding the offset is the
+    // one to bring up. `lineIndexAt` is the same "last start at or before" search the follow uses.
+    const view = preview.current;
+    if (view !== null) {
+      const blocks = [...view.querySelectorAll<HTMLElement>("[data-md-start]")];
+      const found = blocks.at(
+        lineIndexAt(
+          at,
+          blocks.map((node) => Number(node.dataset.mdStart)),
+        ),
+      );
+      // A little above the top edge, so the line is not flush against it with its context cut off.
+      if (found !== undefined) view.scrollTop = Math.max(0, found.offsetTop - MARGIN);
+    }
+
+    // The editor: the mirror knows where each line was drawn, which is the only pixel-accurate
+    // source position there is here (`lib/followScroll`).
+    const area = editor.current;
+    const pre = mirror.current;
+    if (area !== null && pre !== null) {
+      const line = lineIndexAt(at, lineStarts(text));
+      const span = [...pre.querySelectorAll<HTMLElement>("[data-md-line]")].at(line);
+      if (span !== undefined) area.scrollTop = Math.max(0, span.offsetTop - MARGIN);
+    }
+  }, [project, topic, note?.at, note?.edit, text, lens]);
 
   /**
    * The selection to restore once an insert has re-rendered the editor.
