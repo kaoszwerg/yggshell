@@ -1,54 +1,106 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Copy, ExternalLink } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, Link2, Link2Off } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { IconButton } from "../components/ui/IconButton";
 import { Markdown } from "../components/ui/Markdown";
 import { MarkdownEditor } from "../components/ui/MarkdownEditor";
+import { Splitter } from "../components/ui/Splitter";
 import { MarkdownToolbar } from "../components/notes/MarkdownToolbar";
 import { applyConstruct, type Construct } from "../lib/markdownInsert";
 import { useDetailScheme } from "../hooks/useDetailScheme";
+import { useFollowScroll } from "../hooks/useFollowScroll";
 import { surfaceStyle } from "../lib/schemeSurface";
 import { api } from "../api/commands";
 import { notesApi } from "../api/notes";
 import { copyText } from "../lib/clipboard";
 import { useContentFontSize } from "../hooks/useContentFontSize";
 import { useT } from "../hooks/useT";
-import { useUiStore } from "../store/ui";
+import { useToastStore } from "../store/toast";
+import { NOTES_SPLIT_MAX, NOTES_SPLIT_MIN, useUiStore, type NotesLens } from "../store/ui";
 
 /** How long after the last keystroke the note is written. */
 const SAVE_MS = 600;
 
 /**
+ * Narrower than this and two panes are two slivers, so the split is offered and refused rather than
+ * quietly rendered as something else.
+ */
+const SPLIT_MIN_WIDTH = 560;
+
+/**
  * One note, in full — the detail half of the tool beside it.
  *
- * **Two states, and you are always in exactly one.** LESEN is rendered markdown and is never
- * accidentally editable; SCHREIBEN is the whole file as raw text, which is how markdown is actually
- * written. Clicking a block while reading is not a third state: it switches to writing with the caret
- * at that block's source, which is what the parser's byte ranges are for.
+ * **Three lenses, and you are always in exactly one.** READ is rendered markdown and is never
+ * accidentally editable; WRITE is the whole file as raw text, which is how markdown is actually
+ * written; SPLIT is both at once, source on the left, rendering on the right, tied together so they
+ * point at the same place.
  *
- * The alternative — editing each block in place — was built first and rejected by the maintainer, and
- * the objection was right: it is neither of the two things, leaving the page looking rendered while
- * parts of it are not, and fighting you the moment you actually sit down to write.
+ * **A pane is always wholly one thing**, and that is the line the earlier design crossed. Editing
+ * each block in place was built first and rejected by the maintainer, rightly: it left the page
+ * looking rendered while parts of it were not, and fought you the moment you sat down to write. A
+ * split is the opposite — neither half pretends to be the other. Clicking a block while reading is
+ * still not a third state: it opens an editor with the caret at that block's source, which is what
+ * the parser's offsets are for.
  *
- * **There is no save.** Writing persists debounced, like every other setting in this app, so switching
- * back costs nothing and there is nothing to lose. A save button would make two states feel like a
- * commitment; they are a lens.
+ * **There is no save.** Writing persists debounced, like every other setting in this app, so
+ * switching lens costs nothing and there is nothing to lose. Leaving the editor commits immediately,
+ * and so does leaving the note.
  */
 export function NotesView() {
+  const note = useUiStore((s) => s.note);
+  const project = note?.project ?? "_inbox";
+  const topic = note?.topic ?? "inbox";
+
+  // **A different note is a different document.** Keyed, so opening one drops the previous one's
+  // component state outright — rather than an effect that clears the draft when the topic changes,
+  // which is the `set-state-in-effect` pattern the lint rejects and which renders one frame showing
+  // the wrong note's text before correcting itself.
+  return <NoteDocument key={`${project}/${topic}`} project={project} topic={topic} />;
+}
+
+function NoteDocument({ project, topic }: { project: string; topic: string }) {
   const t = useT();
   const fontSize = useContentFontSize();
   const qc = useQueryClient();
   const note = useUiStore((s) => s.note);
   const setView = useUiStore((s) => s.setView);
   const openNote = useUiStore((s) => s.openNote);
-  const project = note?.project ?? "_inbox";
-  const topic = note?.topic ?? "inbox";
+  const storedLens = useUiStore((s) => s.notesLens);
+  const setLens = useUiStore((s) => s.setNotesLens);
+  const share = useUiStore((s) => s.notesSplit);
+  const setShare = useUiStore((s) => s.setNotesSplit);
+  const following = useUiStore((s) => s.notesFollow);
+  const setFollowing = useUiStore((s) => s.setNotesFollow);
 
-  const [writingHere, setWritingHere] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
+  const mirror = useRef<HTMLPreElement>(null);
+  const preview = useRef<HTMLDivElement>(null);
+  const panes = useRef<HTMLDivElement>(null);
   const caret = useRef<number | null>(null);
+
+  /**
+   * Whether there is room for two panes.
+   *
+   * Measured rather than assumed: this view fills the window, and the window is the user's. Offering
+   * a split that cannot be used is worse than not offering it — the control would appear to do
+   * nothing.
+   */
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const box = panes.current;
+    if (box === null) return;
+    const measure = () => {
+      setWide(box.clientWidth >= SPLIT_MIN_WIDTH);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   /**
    * The colour schemes this view is drawn in — one for reading, one for writing.
@@ -60,8 +112,9 @@ export function NotesView() {
    *
    * **Two, because reading and writing are two activities.** Rendered markdown and its source are not
    * the same thing to look at, and somebody may well want more contrast for one — the same split that
-   * lets a commit differ from a diff. Configured in Settings › Theme; either left empty follows the
-   * next step of the chain (`detailThemeId`).
+   * lets a commit differ from a diff. The split lens is the first place both are on screen together,
+   * which is the case they were built for. Configured in Settings › Theme; either left empty follows
+   * the next step of the chain (`detailThemeId`).
    *
    * `null` for the pane: this view replaces the page rather than sitting over one terminal, so there
    * is no tab whose scheme it should borrow.
@@ -70,19 +123,31 @@ export function NotesView() {
   const editScheme = useDetailScheme(null, "notesEdit");
 
   /**
-   * Whether the editor is showing.
+   * The lens actually drawn.
    *
    * **Derived, not set from an effect.** The tool's "edit this entry" opens the note WITH an offset,
-   * and turning that into `setWriting(true)` inside an effect is the `set-state-in-effect` pattern the
-   * lint rejects — rightly: it renders once in the wrong state and then corrects itself. Reading the
-   * offset as the state means the first frame is already right.
+   * and an offset needs an editor to put a caret in — so a stored `read` yields to it for as long as
+   * the offset stands. Turning that into `setLens("write")` inside an effect is the
+   * `set-state-in-effect` pattern the lint rejects, rightly: it renders once in the wrong state and
+   * then corrects itself. Reading the offset as the state means the first frame is already right.
+   *
+   * A narrow window collapses `split` to the editor rather than to reading: the user asked to write.
    */
-  const writing = writingHere || note?.at != null;
+  const lens: NotesLens =
+    storedLens === "read" && note?.at != null
+      ? "write"
+      : storedLens === "split" && !wide
+        ? "write"
+        : storedLens;
+  const editing = lens !== "read";
+  const rendering = lens !== "write";
 
   const content = useQuery({
     queryKey: ["notes-note", project, topic],
     queryFn: () => notesApi.read(project, topic),
   });
+
+  const text = draft ?? content.data ?? "";
 
   /**
    * Put a pasted image into the repository and give back the path to write in the markdown.
@@ -97,18 +162,29 @@ export function NotesView() {
       const name = file.name === "" ? "pasted.png" : file.name;
       return notesApi.addImage(project, name, bytes);
     },
+    onError: (error: unknown) => {
+      console.warn("could not add the image to the note", error);
+      useToastStore.getState().notify("notes.imageFailed", "error");
+    },
   });
 
   const save = useMutation({
-    mutationFn: (text: string) => notesApi.write(project, topic, text),
+    mutationFn: (next: string) => notesApi.write(project, topic, next),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["notes-content"] });
       void qc.invalidateQueries({ queryKey: ["notes-note"] });
     },
+    // A write that failed used to go nowhere at all. A note is the one thing in this app that cannot
+    // be regenerated, so "it looked like it saved" is the worst possible failure mode
+    // (`rule:logging`: every caught error is logged AND surfaced).
+    onError: (error: unknown) => {
+      console.warn("could not save the note", error);
+      useToastStore.getState().notify("notes.saveFailed", "error");
+    },
   });
 
-  // Debounced, and only while writing: a save on every keystroke would be a commit per character once
-  // the sync is on.
+  // Debounced, and only once something has been typed: a save on every keystroke would be a commit
+  // per character once the sync is on.
   useEffect(() => {
     if (draft === null) return;
     const timer = setTimeout(() => {
@@ -121,24 +197,60 @@ export function NotesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
 
-  // Escape leaves — the writing state first, then the view. Two presses at most from anywhere in
-  // here, and neither of them is something to know in advance.
+  /**
+   * The last text typed, for the way out.
+   *
+   * Leaving the note — another note, another view, the window closing — can happen inside the 600 ms
+   * the debounce is still counting, and the component is gone before its timer fires. A ref, because
+   * the cleanup below runs once and would otherwise close over the draft as it was on mount.
+   */
+  const pending = useRef<string | null>(null);
+  useEffect(() => {
+    pending.current = draft;
+  }, [draft]);
+  useEffect(
+    () => () => {
+      const last = pending.current;
+      if (last === null) return;
+      notesApi.write(project, topic, last).then(
+        () => {
+          void qc.invalidateQueries({ queryKey: ["notes-content"] });
+        },
+        (error: unknown) => {
+          console.warn("could not save the note on the way out", error);
+          useToastStore.getState().notify("notes.saveFailed", "error");
+        },
+      );
+    },
+    [project, topic, qc],
+  );
+
+  const follow = useFollowScroll({
+    enabled: following && lens === "split",
+    source: text,
+    editor,
+    mirror,
+    preview,
+  });
+
+  // Escape leaves — the editor first, then the view. Two presses at most from anywhere in here, and
+  // neither of them is something to know in advance.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (writing) return; // the editor handles its own Escape, which returns to reading
+      if (editing) return; // the editor handles its own Escape, which returns to reading
       setView("terminal");
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, [writing, setView]);
+  }, [editing, setView]);
 
   // Put the caret where the user pointed, once the editor exists — either the block whose "edit
   // here" they pressed, or the entry the tool sent them in on.
   useEffect(() => {
-    if (!writing) return;
+    if (!editing) return;
     const at = caret.current ?? note?.at ?? null;
     if (at === null) return;
     caret.current = null;
@@ -146,7 +258,11 @@ export function NotesView() {
     if (area === null) return;
     area.focus();
     area.setSelectionRange(at, at);
-  }, [writing, note?.at]);
+    follow.followCaret();
+    // `follow` is rebuilt every render and holds no state of its own; including it would re-run this
+    // on every keystroke and drag the caret back to where writing started.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, note?.at]);
 
   /**
    * The selection to restore once an insert has re-rendered the editor.
@@ -169,8 +285,6 @@ export function NotesView() {
     area.setSelectionRange(at.start, at.end);
   });
 
-  const text = draft ?? content.data ?? "";
-
   /**
    * Put a markdown construct in at the caret.
    *
@@ -185,19 +299,42 @@ export function NotesView() {
     setDraft(out.value);
   };
 
-  const startWriting = (at: number | null) => {
-    setDraft(text);
-    caret.current = at;
-    setWritingHere(true);
+  /**
+   * Change lens.
+   *
+   * Leaving the editor commits at once rather than waiting out the debounce — the one thing the old
+   * two-state toggle got right and had to be named after ("save"). A segmented control does not need
+   * that name: three options that each say which lens you land in, with the current one filled, is
+   * unambiguous in a way a single button labelled with its own opposite never was.
+   */
+  const pick = (next: NotesLens) => {
+    if (next === "read" && draft !== null) save.mutate(draft);
+    // Clears the offset the tool sent, or `lens` would stay derived away from what was picked and
+    // reading would be unreachable — the state has one source and this is where it is put back.
+    if (note !== null && note.at !== null) openNote(note.project, note.topic);
+    setLens(next);
   };
 
-  const stopWriting = () => {
-    if (draft !== null) save.mutate(draft);
-    setWritingHere(false);
-    setDraft(null);
-    // Clears the offset the tool sent, or `writing` would stay derived-true and reading would be
-    // unreachable — the state has one source and this is where it is put back.
-    if (note !== null && note.at !== null) openNote(note.project, note.topic);
+  /** Open an editor at a block the reader pointed at. */
+  const writeAt = (at: number) => {
+    caret.current = at;
+    // From the split, the editor is already there and only the caret moves. From reading, the whole
+    // page becomes the editor — the same jump this control has always made.
+    if (lens === "read") setLens("write");
+    else {
+      const area = editor.current;
+      if (area !== null) {
+        area.focus();
+        area.setSelectionRange(at, at);
+        follow.followCaret();
+      }
+    }
+  };
+
+  const toShare = (clientX: number) => {
+    const box = panes.current?.getBoundingClientRect();
+    if (box === undefined || box.width === 0) return share;
+    return ((clientX - box.left) / box.width) * 100;
   };
 
   return (
@@ -221,112 +358,158 @@ export function NotesView() {
           {project} · {topic}
         </span>
         <span className="text-dim/60 hidden font-mono text-[10px] sm:inline">
-          {writing ? t("notes.editHint") : ""}
+          {editing ? t("notes.editHint") : ""}
         </span>
-        <Button
-          variant="ghost"
-          accent={writing ? "cyan" : "green"}
-          onClick={() => {
-            if (writing) stopWriting();
-            else startWriting(null);
-          }}
-        >
-          {/* Named after what pressing it DOES. "Read" while writing described the state you would
-              land in and hid the thing that actually happens on the way there: leaving the editor
-              is what commits the text. */}
-          {writing ? t("notes.save") : t("notes.edit")}
-        </Button>
+
+        {/* The follow switch belongs to the split and appears with it: a control that is on screen
+            while it can do nothing is a control the user tries once and stops believing. */}
+        {lens === "split" ? (
+          <IconButton
+            label={t("notes.follow")}
+            variant="ghost"
+            accent={following ? "green" : "cyan"}
+            active={following}
+            className="h-5 w-5 shrink-0"
+            aria-pressed={following}
+            onClick={() => {
+              setFollowing(!following);
+            }}
+          >
+            {following ? <Link2 size={12} aria-hidden /> : <Link2Off size={12} aria-hidden />}
+          </IconButton>
+        ) : null}
+
+        <div role="group" aria-label={t("notes.lens.label")} className="flex shrink-0 gap-px">
+          {(["read", "split", "write"] as const).map((option) => (
+            <Button
+              key={option}
+              variant="ghost"
+              accent={option === lens ? "green" : "cyan"}
+              active={option === lens}
+              aria-pressed={option === lens}
+              disabled={option === "split" && !wide}
+              tooltip={option === "split" && !wide ? t("notes.lens.tooNarrow") : undefined}
+              onClick={() => {
+                pick(option);
+              }}
+            >
+              {t(`notes.lens.${option}`)}
+            </Button>
+          ))}
+        </div>
       </header>
 
-      {writing ? (
-        // `relative`, because the toolbar floats INSIDE this area: it anchors to the editor rather
-        // than to the page, so it stays put while the text scrolls under it.
-        //
-        // `scheme-surface` is what APPLIES the variables `surfaceStyle` sets — without it the nine
-        // custom properties are declared and nothing reads them, which looks exactly like no theme.
-        <div
-          className="scheme-surface relative flex min-h-0 flex-1"
-          style={surfaceStyle(editScheme, fontSize)}
-        >
-          <MarkdownEditor
-            ref={editor}
-            label={t("notes.editor")}
-            value={draft ?? ""}
-            onChange={setDraft}
-            scheme={editScheme}
-            fontSize={fontSize}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") stopWriting();
+      <div ref={panes} className="flex min-h-0 flex-1">
+        {editing ? (
+          // `relative`, because the toolbar floats INSIDE this area: it anchors to the editor rather
+          // than to the page, so it stays put while the text scrolls under it.
+          //
+          // `scheme-surface` is what APPLIES the variables `surfaceStyle` sets — without it the nine
+          // custom properties are declared and nothing reads them, which looks exactly like no theme.
+          <div
+            className="scheme-surface relative flex min-h-0 min-w-0"
+            style={{
+              ...surfaceStyle(editScheme, fontSize),
+              width: rendering ? `${String(share)}%` : "100%",
             }}
-            // **Paste an image and it becomes part of the note.** The clipboard is where a screenshot
-            // is, so this is where one arrives; the file is copied INTO the repository and the note
-            // refers to it relatively, because a note pointing at ~/Desktop is broken on the second
-            // machine and again the day the desktop is tidied (ADR-PROJ-004).
-            onPaste={(event) => {
-              const file = [...event.clipboardData.items]
-                .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-                .map((item) => item.getAsFile())
-                .find((f): f is File => f !== null);
-              if (file === undefined) return;
-              event.preventDefault();
-              const at = event.currentTarget.selectionStart;
-              void addImage.mutateAsync(file).then((rel) => {
-                const before = (draft ?? "").slice(0, at);
-                const after = (draft ?? "").slice(at);
-                setDraft(`${before}![](${rel})${after}`);
-              });
-            }}
-          />
-          <MarkdownToolbar onPick={insert} />
-        </div>
-      ) : (
-        // **Reading is reading.** The first version turned the whole surface into a click target that
-        // switched to writing, and it fought everything the text contains — a link, a checkbox, the
-        // copy control, selecting a sentence. Reported, and the maintainer is right: an explicit
-        // affordance says what it does and takes nothing away. Each block carries its own "edit here"
-        // beside its copy control, and the header carries the state toggle.
-        <div
-          className="scheme-surface min-h-0 flex-1 overflow-auto px-3 py-2"
-          style={surfaceStyle(readScheme, fontSize)}
-        >
-          {text.trim() === "" ? (
-            <p className="text-dim font-mono text-[11px]">{t("notes.none")}</p>
-          ) : (
-            <Markdown
-              source={text}
-              // A fenced block is coloured by the language it names — ```bash and ```python are two
-              // different things to read, and the parser had the tag all along.
-              scheme={readScheme}
-              // A copy control per block, the way documentation sites do it. The point of the tool is
-              // handing something over; "select the code fence with the mouse without catching the
-              // line above it" is the friction that decides whether it gets used.
-              onCopyBlock={(block) => {
-                copyText(block, "clipboard.note");
+          >
+            <MarkdownEditor
+              ref={editor}
+              onMirror={(node) => {
+                mirror.current = node;
               }}
-              onEditBlock={(at) => {
-                startWriting(at);
+              label={t("notes.editor")}
+              value={text}
+              onChange={setDraft}
+              scheme={editScheme}
+              fontSize={fontSize}
+              onScroll={follow.onEditorScroll}
+              onKeyUp={follow.followCaret}
+              onClick={follow.followCaret}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") pick("read");
               }}
-              // `[see](tmux.md)` opens that note. It is not a URL and never was — sending it to
-              // `open_external` gets it refused for not being http(s), which is correct of that guard
-              // and useless to a reader. A target with a slash names another project's file.
-              onLocalLink={(target) => {
-                const clean = target.replace(/\.md$/, "");
-                const at = clean.lastIndexOf("/");
-                if (at === -1) openNote(project, clean);
-                else openNote(clean.slice(0, at), clean.slice(at + 1));
+              // **Paste an image and it becomes part of the note.** The clipboard is where a screenshot
+              // is, so this is where one arrives; the file is copied INTO the repository and the note
+              // refers to it relatively, because a note pointing at ~/Desktop is broken on the second
+              // machine and again the day the desktop is tidied (ADR-PROJ-004).
+              onPaste={(event) => {
+                const file = [...event.clipboardData.items]
+                  .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+                  .map((item) => item.getAsFile())
+                  .find((f): f is File => f !== null);
+                if (file === undefined) return;
+                event.preventDefault();
+                const at = event.currentTarget.selectionStart;
+                void addImage.mutateAsync(file).then((rel) => {
+                  setDraft(`${text.slice(0, at)}![](${rel})${text.slice(at)}`);
+                });
               }}
-              // rule:content-size — a note reads like a terminal, and the size the user chose for
-              // the terminal is the size they need for this. On the scroll region, once, rather than
-              // on every block: a size repeated per element is one that gets forgotten on the sixth.
-              style={{ fontSize: `${fontSize}px` }}
-              className="max-w-3xl"
-              image={(src, alt) => <NoteImage project={project} src={src} alt={alt} />}
             />
-          )}
-        </div>
-      )}
+            <MarkdownToolbar onPick={insert} />
+          </div>
+        ) : null}
 
-      {writing ? null : <BlockActions text={text} />}
+        {editing && rendering ? (
+          <Splitter
+            label={t("notes.splitter")}
+            value={share}
+            min={NOTES_SPLIT_MIN}
+            max={NOTES_SPLIT_MAX}
+            onChange={setShare}
+            toValue={toShare}
+          />
+        ) : null}
+
+        {rendering ? (
+          // **Reading is reading.** The first version turned the whole surface into a click target that
+          // switched to writing, and it fought everything the text contains — a link, a checkbox, the
+          // copy control, selecting a sentence. Reported, and the maintainer is right: an explicit
+          // affordance says what it does and takes nothing away. Each block carries its own "edit here"
+          // beside its copy control, and the header carries the lens.
+          <div
+            ref={preview}
+            onScroll={follow.onPreviewScroll}
+            className="scheme-surface min-h-0 min-w-0 flex-1 overflow-auto px-3 py-2"
+            style={surfaceStyle(readScheme, fontSize)}
+          >
+            {text.trim() === "" ? (
+              <p className="text-dim font-mono text-[11px]">{t("notes.none")}</p>
+            ) : (
+              <Markdown
+                source={text}
+                // A fenced block is coloured by the language it names — ```bash and ```python are two
+                // different things to read, and the parser had the tag all along.
+                scheme={readScheme}
+                // A copy control per block, the way documentation sites do it. The point of the tool is
+                // handing something over; "select the code fence with the mouse without catching the
+                // line above it" is the friction that decides whether it gets used.
+                onCopyBlock={(block) => {
+                  copyText(block, "clipboard.note");
+                }}
+                onEditBlock={writeAt}
+                // `[see](tmux.md)` opens that note. It is not a URL and never was — sending it to
+                // `open_external` gets it refused for not being http(s), which is correct of that guard
+                // and useless to a reader. A target with a slash names another project's file.
+                onLocalLink={(target) => {
+                  const clean = target.replace(/\.md$/, "");
+                  const at = clean.lastIndexOf("/");
+                  if (at === -1) openNote(project, clean);
+                  else openNote(clean.slice(0, at), clean.slice(at + 1));
+                }}
+                // rule:content-size — a note reads like a terminal, and the size the user chose for
+                // the terminal is the size they need for this. On the scroll region, once, rather than
+                // on every block: a size repeated per element is one that gets forgotten on the sixth.
+                style={{ fontSize: `${String(fontSize)}px` }}
+                className={lens === "split" ? "" : "max-w-3xl"}
+                image={(src, alt) => <NoteImage project={project} src={src} alt={alt} />}
+              />
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {lens === "write" ? null : <BlockActions text={text} />}
     </div>
   );
 }
@@ -350,10 +533,20 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
   const remote = src.includes("://");
   const [load, setLoad] = useState(false);
 
+  /**
+   * `![]()` is what the toolbar's own Image button writes, for the user to fill in.
+   *
+   * So a note holding an image with no path is the ordinary half-finished case, and asking the
+   * backend to read `""` — which resolves to the project *directory* — is a failing IPC call per
+   * render, logged once a second, about a picture nobody has chosen yet. The backend refuses it too
+   * (`images::read`); this is the half that stops it being asked.
+   */
+  const named = src.trim() !== "";
+
   const data = useQuery({
     queryKey: ["note-image", project, src, load],
     // Local: read at once. Remote: only after the user has pressed — the whole point.
-    enabled: !remote || load,
+    enabled: named && (!remote || load),
     queryFn: async () => {
       const bytes = remote
         ? await notesApi.fetchImage(src)
@@ -364,6 +557,11 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
       return `data:image/*;base64,${btoa(out)}`;
     },
   });
+
+  // An image that names nothing draws its alt text, like any image that cannot be shown. Silent
+  // would be wrong — the `![]()` is in the source and the reader should see that something is meant
+  // to be here.
+  if (!named) return <span className="text-dim/70">{alt}</span>;
 
   if (remote && data.data === undefined) {
     return (

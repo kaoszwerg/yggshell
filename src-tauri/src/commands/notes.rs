@@ -338,6 +338,10 @@ pub fn notes_capture(state: State<'_, AppState>, project: String, text: String) 
 }
 
 /// Flip the task item at `offset`. Returns whether it is now done.
+///
+/// `offset` is in **UTF-16 code units**, because that is the only unit the frontend has: mdast
+/// reports its positions that way and `setSelectionRange` counts that way. `notes::offsets` converts
+/// (`rule:testing` — the contract is pinned by a test on this side).
 #[tauri::command]
 pub fn notes_toggle(
     state: State<'_, AppState>,
@@ -397,6 +401,119 @@ pub async fn notes_search(state: State<'_, AppState>, query: String) -> Result<V
                 offset: u32::try_from(hit.offset).unwrap_or(u32::MAX),
             })
             .collect()
+    })
+    .await
+}
+
+/// Import markdown the user picks in a native dialog, with the images it points at.
+///
+/// **The dialog is opened HERE, and that is the design rather than an implementation detail.** The
+/// webview says *which project* to import into and never learns the path that was chosen — so
+/// ADR-PROJ-004's rule that the frontend names a project and never a path holds without an exception,
+/// no `dialog:` permission is granted to the webview, and there is no npm package on the other side
+/// at all (`rule:security`: least privilege).
+///
+/// Off the main thread twice over: the picker's `blocking_*` API must not run on it, and neither must
+/// reading and copying the files afterwards.
+#[tauri::command]
+pub async fn notes_import(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    project: String,
+) -> Result<crate::dto::NoteImportReport> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let root = root(&state);
+    let stamp = now().to_string();
+
+    off_thread(move || {
+        // Files *and* folders in one gesture is not offered by any platform's picker, so the file
+        // dialog is the one shown: a folder of notes is picked by choosing the `.md` files in it,
+        // and a whole directory arrives through the folder picker below only when nothing was.
+        let picked = app
+            .dialog()
+            .file()
+            .add_filter("Markdown", &["md", "markdown"])
+            .blocking_pick_files();
+
+        let sources: Vec<std::path::PathBuf> = match picked {
+            Some(paths) => paths
+                .into_iter()
+                .filter_map(|path| path.into_path().ok())
+                .collect(),
+            // Closing the picker is not an error and must not be shown as one.
+            None => {
+                tracing::info!(project, "notes import cancelled");
+                return crate::dto::NoteImportReport {
+                    picked: false,
+                    entries: Vec::new(),
+                };
+            }
+        };
+
+        let entries = notes::import::run(&root, &project, &sources, &stamp)
+            .into_iter()
+            .map(|entry| crate::dto::NoteImportEntry {
+                file: entry.file,
+                topic: entry.topic,
+                images: u32::try_from(entry.images).unwrap_or(u32::MAX),
+                skipped: entry.skipped,
+            })
+            .collect();
+
+        crate::dto::NoteImportReport {
+            picked: true,
+            entries,
+        }
+    })
+    .await
+}
+
+/// Import a whole folder of markdown, with the images each file points at.
+///
+/// Separate from [`notes_import`] because no platform's picker offers files **and** folders in one
+/// dialog — offering both in one control would mean showing a picker that cannot do what its label
+/// says. Everything behind it is the same code path.
+#[tauri::command]
+pub async fn notes_import_folder(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    project: String,
+) -> Result<crate::dto::NoteImportReport> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let root = root(&state);
+    let stamp = now().to_string();
+
+    off_thread(move || {
+        let Some(folder) = app.dialog().file().blocking_pick_folder() else {
+            tracing::info!(project, "notes folder import cancelled");
+            return crate::dto::NoteImportReport {
+                picked: false,
+                entries: Vec::new(),
+            };
+        };
+        let Ok(path) = folder.into_path() else {
+            return crate::dto::NoteImportReport {
+                picked: false,
+                entries: Vec::new(),
+            };
+        };
+
+        let entries = notes::import::run(&root, &project, &[path], &stamp)
+            .into_iter()
+            .map(|entry| crate::dto::NoteImportEntry {
+                file: entry.file,
+                topic: entry.topic,
+                images: u32::try_from(entry.images).unwrap_or(u32::MAX),
+                skipped: entry.skipped,
+            })
+            .collect();
+
+        crate::dto::NoteImportReport {
+            picked: true,
+            entries,
+        }
     })
     .await
 }

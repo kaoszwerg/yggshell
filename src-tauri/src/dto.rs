@@ -259,7 +259,8 @@ pub struct NoteHit {
     pub project: String,
     pub topic: String,
     pub line: String,
-    /// Byte offset of the line, so the view can open at it.
+    /// Offset of the line, so the view can open at it — in **UTF-16 code units**, the unit the
+    /// caret on the other side counts in (`notes::offsets`).
     pub offset: u32,
 }
 
@@ -270,6 +271,32 @@ pub struct NoteOrphan {
     /// `<project>/assets/<file>` — what `notes_clean` takes back.
     pub key: String,
     pub bytes: u32,
+}
+
+/// What became of one file an import was pointed at.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct NoteImportEntry {
+    /// The file, as the user would recognise it in the dialog they picked it from.
+    pub file: String,
+    /// The topic it became, or absent when nothing was written.
+    pub topic: Option<String>,
+    /// How many images were copied in with it.
+    pub images: u32,
+    /// Everything deliberately not done, in words the user can act on — a picture that lay outside
+    /// the note's own folder, a topic that was already taken. **Reported, never swallowed**: an
+    /// import that quietly did less than it appeared to is indistinguishable from a broken one.
+    pub skipped: Vec<String>,
+}
+
+/// The result of one import, one entry per file.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct NoteImportReport {
+    /// False when the user closed the picker without choosing — which is not an error and must not
+    /// be shown as one.
+    pub picked: bool,
+    pub entries: Vec<NoteImportEntry>,
 }
 
 /// A file's contents for the inline viewer.

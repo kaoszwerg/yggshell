@@ -48,6 +48,10 @@ pub fn run() {
         // Persist + restore window size and position across runs.
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // The native file picker. Used only from Rust — `notes_import` opens it inside the command,
+        // so the chosen path never enters the webview and no `dialog:` permission is granted to it
+        // (ADR-PROJ-004, rule:security: least privilege).
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Tauri turns an `Err` from this closure into `panic!("Failed to setup app: {e}")`
             // (tauri 2.11.2, app.rs) — it never reaches `run()`'s `Result`. The panic hook would catch
@@ -83,6 +87,8 @@ pub fn run() {
             commands::notes::notes_rename_project,
             commands::notes::notes_create_project,
             commands::notes::notes_search,
+            commands::notes::notes_import,
+            commands::notes::notes_import_folder,
             commands::notes::notes_image_add,
             commands::notes::notes_image_read,
             commands::notes::notes_image_fetch,

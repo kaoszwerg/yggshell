@@ -3,19 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ThemeControls } from "./ThemeControls";
 import type { TerminalTheme } from "../../bindings/TerminalTheme";
 
-/** Captures the drag-drop listener the component installs, so a test can be the drop. */
-let onDrop: ((event: { payload: { type: string; paths?: string[] } }) => void) | undefined;
-const unlisten = vi.fn();
-
-vi.mock("@tauri-apps/api/webview", () => ({
-  getCurrentWebview: () => ({
-    onDragDropEvent: (handler: typeof onDrop) => {
-      onDrop = handler;
-      return Promise.resolve(unlisten);
-    },
-  }),
-}));
-
 vi.mock("../../hooks/useSettings", () => ({
   useSettings: vi.fn(),
   useUpdateSettings: vi.fn(),
@@ -52,7 +39,14 @@ const importMutate = vi.fn();
 const saveMutate = vi.fn();
 const deleteMutate = vi.fn();
 
-function setup(over: { chosen?: string; themes?: TerminalTheme[]; importing?: boolean } = {}) {
+function setup(
+  over: {
+    chosen?: string;
+    themes?: TerminalTheme[];
+    importing?: boolean;
+    importError?: unknown;
+  } = {},
+) {
   vi.mocked(useSettings).mockReturnValue({
     data: { terminal_theme: over.chosen ?? "" },
   } as unknown as ReturnType<typeof useSettings>);
@@ -65,6 +59,7 @@ function setup(over: { chosen?: string; themes?: TerminalTheme[]; importing?: bo
   vi.mocked(useImportTerminalTheme).mockReturnValue({
     mutate: importMutate,
     isPending: over.importing ?? false,
+    error: over.importError ?? null,
   } as unknown as ReturnType<typeof useImportTerminalTheme>);
   vi.mocked(useSaveTerminalTheme).mockReturnValue({
     mutate: saveMutate,
@@ -79,24 +74,16 @@ function setup(over: { chosen?: string; themes?: TerminalTheme[]; importing?: bo
 /** The terminal scheme buttons, which is where "Nord" means the terminal's Nord. */
 const terminalGroup = () => within(screen.getByRole("group", { name: "Terminal colour scheme" }));
 
-/** Deliver a drop of these paths to the component. */
-function drop(...paths: string[]) {
-  fireEvent(window, new Event("noop"));
-  onDrop?.({ payload: { type: "drop", paths } });
-}
-
 describe("ThemeControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    onDrop = undefined;
     setup();
   });
 
-  it("offers Yggdrasil alongside every stored scheme", async () => {
+  it("offers Yggdrasil alongside every stored scheme", () => {
     render(<ThemeControls />);
     expect(terminalGroup().getByRole("button", { name: /^Yggdrasil/ })).toBeTruthy();
     expect(terminalGroup().getByRole("button", { name: /^Nord/ })).toBeTruthy();
-    await waitFor(() => expect(onDrop).toBeDefined());
   });
 
   it("marks the chosen one, and Yggdrasil when nothing is chosen", () => {
@@ -121,35 +108,31 @@ describe("ThemeControls", () => {
     expect(update).toHaveBeenCalledWith({ terminalTheme: "nord" });
   });
 
-  it("imports the PATH of a dropped scheme — never its contents", async () => {
+  it("imports through a control, and hands the backend no path at all", () => {
+    // It was a drop zone, and it had stopped working: `dragDropEnabled: false` (set in 7d8254d so
+    // the status-bar editor's own dragging worked) makes Tauri register no drag-drop handler, so the
+    // event it listened for could not arrive. jsdom has no such layer, which is why the tests that
+    // used to stand here were green about a feature that did not exist. A button cannot fail that
+    // way — and the picker is the backend's, so no path crosses the boundary in either direction.
     render(<ThemeControls />);
-    await waitFor(() => expect(onDrop).toBeDefined());
 
-    drop("/Users/steve/Downloads/Ayu Mirage.itermcolors");
+    fireEvent.click(screen.getByRole("button", { name: /Import \.itermcolors/ }));
 
-    expect(importMutate).toHaveBeenCalledWith(
-      "/Users/steve/Downloads/Ayu Mirage.itermcolors",
-      expect.anything(),
-    );
+    expect(importMutate).toHaveBeenCalledWith();
   });
 
-  it("picks the scheme out of a drop that also carried other files", async () => {
+  it("says so when the import failed, instead of failing silently", () => {
+    setup({ importError: new Error("that is not an .itermcolors file") });
     render(<ThemeControls />);
-    await waitFor(() => expect(onDrop).toBeDefined());
 
-    drop("/tmp/notes.txt", "/tmp/Nord.itermcolors");
-
-    expect(importMutate).toHaveBeenCalledWith("/tmp/Nord.itermcolors", expect.anything());
+    expect(screen.getByText(/not an \.itermcolors file/)).toBeTruthy();
   });
 
-  it("says so when the dropped file is not a scheme, instead of failing silently", async () => {
+  it("says it is working while the dialog is open", () => {
+    setup({ importing: true });
     render(<ThemeControls />);
-    await waitFor(() => expect(onDrop).toBeDefined());
 
-    drop("/tmp/holiday.jpg");
-
-    expect(importMutate).not.toHaveBeenCalled();
-    expect(await screen.findByText(/not an \.itermcolors file/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Importing…" })).toBeDisabled();
   });
 
   it("opens an editor on a blank scheme, and on the chosen one", async () => {
@@ -203,13 +186,6 @@ describe("ThemeControls", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Delete this scheme" }));
 
     expect(deleteMutate).toHaveBeenCalledWith("nord", expect.anything());
-  });
-
-  it("stops listening for drops when it goes away", async () => {
-    const view = render(<ThemeControls />);
-    await waitFor(() => expect(onDrop).toBeDefined());
-    view.unmount();
-    await waitFor(() => expect(unlisten).toHaveBeenCalled());
   });
 
   it("lets diffs and commits be read in a scheme of their own", () => {

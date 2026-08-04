@@ -43,6 +43,32 @@ export const GIT_SPLIT_MAX = 85;
 const GIT_SPLIT_DEFAULT = 45;
 
 /**
+ * Which lens the Notes view draws a note through.
+ *
+ * `read` is the rendered markdown, `write` is the whole file as source, `split` is both at once with
+ * the editor on the left.
+ *
+ * **Three, not "reading plus a preview switch".** The narrow window and writing without distraction
+ * both want the editor on its own, and *split* has to be reachable from reading without passing
+ * through writing to get there. Each lens is still wholly one thing per pane — which is what the
+ * rejected in-place block editing never was (`views/NotesView.tsx`).
+ */
+export type NotesLens = "read" | "split" | "write";
+
+const NOTES_LENSES: NotesLens[] = ["read", "split", "write"];
+
+/**
+ * Share of the split given to the editor, as a percentage.
+ *
+ * A share rather than pixels, for the same reason the Git divider is one: a stored width is wrong on
+ * the next screen. The bounds stop either pane being dragged into a strip too narrow to write a line
+ * of markdown in.
+ */
+export const NOTES_SPLIT_MIN = 25;
+export const NOTES_SPLIT_MAX = 75;
+const NOTES_SPLIT_DEFAULT = 50;
+
+/**
  * What a Git detail panel is showing.
  *
  * The *value* lives here; **where it is shown does not** — it belongs to a tab (`TerminalPane.detail`).
@@ -133,7 +159,13 @@ export interface UiState {
   setView: (v: ViewId) => void;
   /** Which note the Notes view is showing. The tool sets it; the view reads it. */
   note: { project: string; topic: string; at: number | null } | null;
-  /** `at` is a byte offset to start WRITING at — the tool's "edit this entry" passes the item's. */
+  /**
+   * `at` is where WRITING starts — the tool's "edit this entry" passes the item's own position, and a
+   * search hit passes the line's.
+   *
+   * In **UTF-16 code units**, which is what `setSelectionRange` receives it as. The backend speaks the
+   * same unit at this boundary and converts to bytes on its side (`notes::offsets`).
+   */
   openNote: (project: string, topic: string, at?: number) => void;
   /**
    * Which project the notes tool is filing into and showing.
@@ -147,6 +179,26 @@ export interface UiState {
    */
   notesProject: string | null;
   setNotesProject: (project: string | null) => void;
+  /**
+   * Which lens the note is drawn through, and how the split is arranged.
+   *
+   * Persisted, all three: how you *work* on a note does not change from one note to the next, and
+   * being put back into reading on every launch is the kind of small re-decision that makes a mode
+   * feel like it is fighting you. Same reasoning as `diffSplit`.
+   */
+  notesLens: NotesLens;
+  setNotesLens: (lens: NotesLens) => void;
+  /** Percentage of the split given to the editor; the preview takes the rest. */
+  notesSplit: number;
+  setNotesSplit: (percent: number) => void;
+  /**
+   * Whether the two panes of the split stay pointed at the same place.
+   *
+   * On by default — it is the reason to have a split at all — and a switch rather than a fixed
+   * behaviour, because comparing two distant parts of one note means deliberately breaking the tie.
+   */
+  notesFollow: boolean;
+  setNotesFollow: (follow: boolean) => void;
   /** Show a tool. Choosing the one already shown collapses the column — the rail button is a toggle. */
   toggleTool: (t: ToolId) => void;
   setToolWidth: (px: number) => void;
@@ -168,6 +220,9 @@ const clampWidth = (px: number) =>
 
 const clampSplit = (percent: number) =>
   Math.min(GIT_SPLIT_MAX, Math.max(GIT_SPLIT_MIN, Math.round(percent)));
+
+const clampNotesSplit = (percent: number) =>
+  Math.min(NOTES_SPLIT_MAX, Math.max(NOTES_SPLIT_MIN, Math.round(percent)));
 
 /** Global client-UI state: view, tool column and transient dialog flags (rule:frontend-architecture). */
 export const useUiStore = create<UiState>()(
@@ -195,6 +250,13 @@ export const useUiStore = create<UiState>()(
       openNote: (project, topic, at) => set({ note: { project, topic, at: at ?? null } }),
       notesProject: null,
       setNotesProject: (notesProject) => set({ notesProject }),
+      // Reading is what opening a note is for; the split is one press away and remembered once taken.
+      notesLens: "read",
+      setNotesLens: (notesLens) => set({ notesLens }),
+      notesSplit: NOTES_SPLIT_DEFAULT,
+      setNotesSplit: (percent) => set({ notesSplit: clampNotesSplit(percent) }),
+      notesFollow: true,
+      setNotesFollow: (notesFollow) => set({ notesFollow }),
       toggleTool: (tool) => set((s) => ({ activeTool: s.activeTool === tool ? null : tool })),
       setToolWidth: (px) => set({ toolWidth: clampWidth(px) }),
       setGitSplit: (percent) => set({ gitSplit: clampSplit(percent) }),
@@ -230,6 +292,9 @@ export const useUiStore = create<UiState>()(
         statusLayout: s.statusLayout,
         // A place you are working in, not a moment — it should still be the one you chose tomorrow.
         notesProject: s.notesProject,
+        notesLens: s.notesLens,
+        notesSplit: s.notesSplit,
+        notesFollow: s.notesFollow,
         locale: s.locale,
         shortcuts: s.shortcuts,
         filesShowHidden: s.filesShowHidden,
@@ -253,6 +318,15 @@ export const useUiStore = create<UiState>()(
           : GIT_SPLIT_DEFAULT;
         // A payload from a build that predates the setting has no boolean at all.
         if (typeof state.diffSplit !== "boolean") state.diffSplit = true;
+        // A lens this build does not have — a downgrade, a hand-edited payload — would render
+        // neither pane, so the note would open blank.
+        if (!NOTES_LENSES.includes(state.notesLens)) state.notesLens = "read";
+        // `NaN` or a share from an older build would collapse one pane to nothing, with no handle
+        // left on screen to drag it back out.
+        state.notesSplit = Number.isFinite(state.notesSplit)
+          ? clampNotesSplit(state.notesSplit)
+          : NOTES_SPLIT_DEFAULT;
+        if (typeof state.notesFollow !== "boolean") state.notesFollow = true;
         // An empty bar is a legitimate choice and must survive a restart; `undefined` is a payload
         // from a build that predates the setting and gets the defaults (`sanitiseLayout`).
         // A language this build does not have — a downgrade, a hand-edited payload — would otherwise

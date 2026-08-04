@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { useState } from "react";
 import { Palette, Trash2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import { ColorField } from "../ui/ColorField";
@@ -78,10 +77,16 @@ const blank = (name: string): TerminalTheme => ({
 /**
  * Terminal colour schemes: choose one, import one from iTerm2, edit one, delete one.
  *
- * **Import is a file drop, not a file dialog**, and that is a deliberate trade rather than a shortcut.
- * A drop hands the webview a *path*; the backend is what opens the file (bounded, extension-checked,
- * parsed by a reader that resolves no entities). A dialog would have meant a plugin dependency for a
- * gesture that is, for a file you already have open in Finder, the more direct one anyway.
+ * **Import is a native picker the BACKEND opens**, and it replaced a drop zone that had stopped
+ * working. The drop listened for Tauri's own drag-drop event, and `7d8254d` set
+ * `"dragDropEnabled": false` so the status-bar editor's HTML5 dragging could work at all — which
+ * makes Tauri register no drag-drop handler, so that event can never fire
+ * (`tauri-runtime/src/webview.rs:477`). The zone stayed on screen inviting a gesture that did
+ * nothing, and every test stayed green, because jsdom has no such layer. That is the same failure
+ * class `7d8254d`'s own message named, hit in the same commit.
+ *
+ * The webview still never learns a path: the dialog is opened inside the command, and what comes back
+ * is the stored theme.
  */
 export function ThemeControls() {
   const t = useT();
@@ -91,55 +96,6 @@ export function ThemeControls() {
   const importTheme = useImportTerminalTheme();
   const chosen = settings.data?.terminal_theme ?? "";
   const [editing, setEditing] = useState<TerminalTheme | null>(null);
-  const [dropping, setDropping] = useState(false);
-  const [dropError, setDropError] = useState<string | null>(null);
-
-  // Tauri's own drag-drop events. The webview never reads the file — it learns the path and hands it
-  // to the backend, which is the side allowed to open anything (ADR-PROJ-001 §5).
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-
-    getCurrentWebview()
-      .onDragDropEvent((event) => {
-        if (event.payload.type === "over") {
-          setDropping(true);
-          return;
-        }
-        if (event.payload.type === "leave") {
-          setDropping(false);
-          return;
-        }
-        setDropping(false);
-        const paths = event.payload.paths;
-        const scheme = paths.find((path) => path.toLowerCase().endsWith(".itermcolors"));
-        if (scheme === undefined) {
-          setDropError(
-            paths.length === 0 ? null : "That is not an .itermcolors file — nothing was imported.",
-          );
-          return;
-        }
-        setDropError(null);
-        importTheme.mutate(scheme, {
-          onError: (error: unknown) => setDropError(String(error)),
-        });
-      })
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
-      })
-      .catch((error: unknown) => {
-        // Surfaced rather than swallowed: without this listener the drop zone is decoration, and the
-        // user deserves to know that rather than dropping files into nothing.
-        console.warn("themes: could not listen for file drops —", error);
-        setDropError("File drops are unavailable in this window.");
-      });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [importTheme]);
 
   return (
     // Five stacked card grids with nothing between them read as one enormous list — reported exactly
@@ -226,32 +182,22 @@ export function ThemeControls() {
 
       <Seam />
 
-      <div
-        // The drop target is the whole window (Tauri reports drops there), so this is a hint rather
-        // than a hit area — which is why it is not a control and takes no focus.
-        className={`hud-clip-sm border-dashed p-3 text-center transition-colors ${
-          dropping ? "border-cyan bg-cyan/10 border" : "border-cyan/25 border"
-        }`}
-      >
-        <Palette
-          size={18}
-          strokeWidth={1.5}
-          className={dropping ? "text-cyan mx-auto" : "text-cyan/50 mx-auto"}
-          aria-hidden
-        />
-        <p className="text-dim mt-1 font-mono text-xs">
-          {importTheme.isPending
-            ? "Importing…"
-            : "Drop an .itermcolors file anywhere on this window to import it."}
-        </p>
-        {dropError === null ? null : (
-          <p className="text-danger mt-1 font-mono text-xs">{dropError}</p>
-        )}
-      </div>
+      {importTheme.error === null ? null : (
+        <p className="text-danger font-mono text-xs">{String(importTheme.error)}</p>
+      )}
 
       <div className="flex flex-wrap items-center gap-1">
         <Button accent="green" onClick={() => setEditing(blank("New scheme"))}>
           {t("scheme.new")}
+        </Button>
+        <Button
+          disabled={importTheme.isPending}
+          onClick={() => {
+            importTheme.mutate();
+          }}
+        >
+          <Palette size={12} aria-hidden className="mr-1 inline" />
+          {importTheme.isPending ? t("scheme.importing") : t("scheme.import")}
         </Button>
         {chosen === "" ? null : (
           <Button

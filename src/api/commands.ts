@@ -51,7 +51,14 @@ export const api = {
    * the one that opens the file — bounded, extension-checked, and parsed by a reader that resolves no
    * entities (ADR-PROJ-001 §5, rule:security).
    */
-  importTerminalTheme: (path: string) => invoke<TerminalTheme>("import_terminal_theme", { path }),
+  /**
+   * Import an `.itermcolors` scheme the user picks.
+   *
+   * **No path crosses this boundary**: the native picker is opened by the backend inside the command,
+   * so the webview asks for an import and is handed the stored theme. `null` means the dialog was
+   * closed, which is not an error.
+   */
+  importTerminalTheme: () => invoke<TerminalTheme | null>("import_terminal_theme"),
 
   /** Store an edited theme. Its id is derived from the name by the backend, never sent. */
   saveTerminalTheme: (theme: TerminalTheme) =>

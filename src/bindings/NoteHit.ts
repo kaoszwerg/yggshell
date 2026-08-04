@@ -5,6 +5,7 @@
  */
 export type NoteHit = { project: string, topic: string, line: string, 
 /**
- * Byte offset of the line, so the view can open at it.
+ * Offset of the line, so the view can open at it — in **UTF-16 code units**, the unit the
+ * caret on the other side counts in (`notes::offsets`).
  */
 offset: number, };

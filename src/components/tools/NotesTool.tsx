@@ -16,6 +16,8 @@ import { useUiStore } from "../../store/ui";
 import { KebabMenu } from "../ui/KebabMenu";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { copyText } from "../../lib/clipboard";
+import { useToastStore } from "../../store/toast";
+import type { NoteImportReport } from "../../bindings/NoteImportReport";
 import type { NotesStatus } from "../../bindings/NotesStatus";
 
 /**
@@ -29,7 +31,7 @@ import type { NotesStatus } from "../../bindings/NotesStatus";
  *
  * **Ticking is not editing.** It rewrites `- [ ]` to `- [x]` in the file, from here, with no trip to
  * the view and no mode — by far the most frequent thing anyone does with this, and the second reason
- * the markdown parser reports byte offsets.
+ * the markdown parser's source offsets are carried around at all.
  *
  * **Search lives here**, because searching is navigation: it spans every project, the hits replace
  * the list, and picking one opens that note in the view.
@@ -56,6 +58,8 @@ export function NotesTool() {
   // which is exactly what was reported. Decided in the plan and missing from the first build.
   const [everything, setEverything] = useState(false);
   const [newTopic, setNewTopic] = useState<string | null>(null);
+  /** The last import's report, while it is on screen. Nothing is persisted — it describes one act. */
+  const [imported, setImported] = useState<NoteImportReport | null>(null);
   const [newProject, setNewProject] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renamingTopic, setRenamingTopic] = useState<{
@@ -115,6 +119,28 @@ export function NotesTool() {
     onSuccess: () => {
       setDraft("");
       refresh();
+    },
+  });
+
+  /**
+   * Bring markdown somebody else wrote into this project, with the pictures it points at.
+   *
+   * **The picker is the backend's** — this asks for a project and never learns which file was chosen
+   * (ADR-PROJ-004). The report is shown rather than summarised in a toast: an image left behind for
+   * being outside the note's own folder, or a topic that was already taken, are things the user has
+   * to be able to act on, and a message that fades in 1.8 s is not where they belong.
+   */
+  const importing = useMutation({
+    mutationFn: (from: "files" | "folder") =>
+      from === "files" ? notesApi.import(project) : notesApi.importFolder(project),
+    onSuccess: (report) => {
+      refresh();
+      // Closing the dialog is not a result and gets no panel.
+      if (report.picked) setImported(report);
+    },
+    onError: (error: unknown) => {
+      console.warn("could not import into the notes", error);
+      useToastStore.getState().notify("notes.importFailed", "error");
     },
   });
 
@@ -359,6 +385,23 @@ export function NotesTool() {
       label: t("notes.renameProject"),
       onSelect: () => {
         setRenaming(project);
+      },
+    },
+    { separator: true as const },
+    // Two entries because no platform's picker offers files AND folders in one dialog. One control
+    // promising both would open one that cannot deliver it.
+    {
+      id: "importFiles",
+      label: t("notes.import.files"),
+      onSelect: () => {
+        importing.mutate("files");
+      },
+    },
+    {
+      id: "importFolder",
+      label: t("notes.import.folder"),
+      onSelect: () => {
+        importing.mutate("folder");
       },
     },
   ];
@@ -771,6 +814,15 @@ export function NotesTool() {
         />
       )}
 
+      {imported === null ? null : (
+        <ImportReport
+          report={imported}
+          onDismiss={() => {
+            setImported(null);
+          }}
+        />
+      )}
+
       {capture.error === null && toggle.error === null ? null : (
         <p className="text-danger px-2 py-1 font-mono text-[10px]">
           {String(capture.error ?? toggle.error)}
@@ -788,6 +840,61 @@ export function NotesTool() {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * What an import actually did, per file.
+ *
+ * **Not a toast.** A message that fades after 1.8 s cannot carry "this picture was left behind
+ * because it lies outside the note's own folder" — and that is precisely the sentence the user has to
+ * read, because it is the one thing they may want to fix by moving a file and importing again. An
+ * import that quietly did less than it appeared to is indistinguishable from a broken one
+ * (`rule:logging`: surfaced, not merely logged).
+ *
+ * It stays until it is dismissed, for the same reason: it is a result, not a confirmation.
+ */
+function ImportReport({ report, onDismiss }: { report: NoteImportReport; onDismiss: () => void }) {
+  const t = useT();
+  const fontSize = useContentFontSize();
+  const taken = report.entries.filter((entry) => entry.topic !== null);
+  const images = report.entries.reduce((sum, entry) => sum + entry.images, 0);
+
+  return (
+    <section
+      aria-label={t("notes.import.result")}
+      className="border-cyan/15 max-h-48 shrink-0 overflow-y-auto border-t px-2 py-1.5"
+      // rule:content-size — file names and topics read like terminal output.
+      style={{ fontSize: `${String(fontSize)}px` }}
+    >
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-fg flex-1 font-mono">
+          {t("notes.import.summary", { notes: taken.length, images })}
+        </span>
+        <IconButton
+          label={t("notes.import.dismiss")}
+          variant="ghost"
+          className="h-4 w-4 shrink-0"
+          onClick={onDismiss}
+        >
+          <X size={11} aria-hidden />
+        </IconButton>
+      </div>
+      <ul className="flex flex-col gap-0.5">
+        {report.entries.map((entry) => (
+          <li key={entry.file} className="font-mono">
+            <span className={entry.topic === null ? "text-dim" : "text-green"}>{entry.file}</span>
+            {entry.skipped.map((why) => (
+              // Gold, not red: nothing failed. Something was deliberately not done, and the sentence
+              // says which — that is a different thing from an error and must not look like one.
+              <span key={why} className="text-gold block pl-3">
+                {why}
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "yggshell"
-version = "0.48.0"
+version = "0.49.0"
 description = "A Norse-inspired developer terminal, and a full replacement for the system one: independent tabs with tmux sessions that survive a crash, iTerm2-compatible themes and a theme editor, launchable from anywhere with `ygg`. What it adds is the work around the terminal — the repository, the files, the processes and ports, the containers, the sessions, and what an AI harness such as Claude Code is doing right now, each in the sidebar beside the shell rather than in another window. It is built to be used every day and extended continuously, so that running an agentic workflow needs one window instead of six."
 authors = ["kaoszwerg"]
 edition = "2021"
@@ -35,6 +35,16 @@ tauri-plugin-window-state = "=2.4.1"
 # paste into itself is not a terminal. Official Tauri plugin, same source as the framework and the
 # window-state plugin above, Apache-2.0/MIT (rule:dependencies).
 tauri-plugin-clipboard-manager = "=2.3.2"
+# The native file picker, used from RUST and never from the webview (ADR-PROJ-004).
+#
+# Importing a markdown file needs the user to name one, and this app has no filesystem capability in
+# the webview at all. Opening the dialog in the command means the frontend asks for "import into this
+# project" and the chosen path never reaches it — so the rule that the webview names a project and
+# never a path survives the feature instead of gaining an exception. No `@tauri-apps/plugin-dialog` on
+# the npm side, no new webview capability, nothing added to ui-boundary.json.
+#
+# Official Tauri plugin, same source and licence (Apache-2.0/MIT) as the two above (rule:dependencies).
+tauri-plugin-dialog = "=2.7.2"
 # Fetching a REMOTE image in a note, once, because the user pressed a control (ADR-PROJ-004). The
 # webview never opens a connection of its own: that is what keeps the CSP posture intact and stops the
 # request carrying a referrer or a user agent anywhere.

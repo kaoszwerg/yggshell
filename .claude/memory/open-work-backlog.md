@@ -75,6 +75,18 @@ triggers:
     interactive,
     environment,
     not-found,
+    drag,
+    drop,
+    dragdrop,
+    dragdropenabled,
+    picker,
+    dialog,
+    offset,
+    utf16,
+    utf-16,
+    umlaut,
+    unicode,
+    encoding,
   ]
 applies-to:
   [
@@ -611,6 +623,29 @@ change.
   `a_restored_tab_returns_to_the_session_it_remembers`.
 
 ## Traps this session paid for — do not re-learn them
+
+- **`dragDropEnabled: false` and `onDragDropEvent` are mutually exclusive, and neither side says so.**
+  `src-tauri/tauri.conf.json` sets it false so the status-bar editor's HTML5 dragging works at all.
+  What that *also* does is skip registering Tauri's drag-drop handler entirely
+  (`tauri-runtime/src/webview.rs:477` → `tauri-runtime-wry/src/lib.rs:4862`), so `tauri://drag-drop`
+  can never fire. The theme import listened for it anyway: a dashed drop zone, on screen, inviting a
+  gesture that did nothing, for three days — **with fourteen green tests**, because jsdom has no OS
+  drag layer to be wrong about. It was introduced in `7d8254d`, the same commit whose own message
+  named this exact failure class.
+
+  Now a gate: `scripts/project/check-drag-drop.mjs` reads the config and the sources together and
+  refuses whichever half the setting has switched off — in both directions, because flipping the flag
+  back would silently kill the in-window dragging instead. **A file from outside the app is a native
+  picker the BACKEND opens** (`notes_import`, `import_terminal_theme`), which is the stronger boundary
+  anyway: no path ever reaches the webview (ADR-PROJ-004).
+
+- **An offset that crosses to the webview is in UTF-16 code units, never bytes.** mdast reports
+  positions that way and `setSelectionRange` counts that way, and neither can be made to do anything
+  else — but Rust slices `&str` in bytes, so `notes::toggle` read the frontend's number as a byte
+  index. For ASCII the two are identical, which is why it survived: **one German word breaks it**
+  (`Grüße` is five code units and seven bytes), and every task below one was untickable, reported to
+  the user as "that item is no longer a task" about an item plainly sitting there. `notes::offsets`
+  converts at the edge and both sides now carry a test that says which unit they speak.
 
 - **Do not edit structured files with scripted string replacement. Use the Edit tool.** Seven files
   were damaged this way in one session (2026-08-02), and every one of them the same way: an anchor

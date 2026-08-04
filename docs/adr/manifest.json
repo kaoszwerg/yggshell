@@ -1001,7 +1001,7 @@
       "id": "ADR-PROJ-004",
       "layer": "proj",
       "title": "The notes leave the device, and exactly how",
-      "tldr": "Notes sync to a private repo the user names, through their own git; nothing else leaves. A remote image is fetched by the backend on request, never on render.",
+      "tldr": "Notes sync to a private repo the user names; nothing else leaves. Remote images load on request. An import copies only pictures under the note's own folder.",
       "scope": "fullstack",
       "load": "conditional",
       "status": "accepted",
@@ -1031,17 +1031,30 @@
         "repository",
         "private",
         "threat",
-        "injection"
+        "injection",
+        "import",
+        "importing",
+        "dialog",
+        "picker",
+        "file-dialog",
+        "drop",
+        "drag",
+        "dragdrop",
+        "dragdropenabled",
+        "itermcolors",
+        "theme"
       ],
       "applies-to": [
         "src-tauri/src/notes/**",
+        "src-tauri/src/commands/notes.rs",
+        "src/components/settings/ThemeControls.tsx",
         "src/components/tools/NotesTool.tsx",
         "src/views/NotesView.tsx",
         "src/api/notes.ts"
       ],
       "supersededBy": null,
       "path": "docs/adr/project/proj-004-notes-egress-and-trust.md",
-      "hash": "001036172838a511"
+      "hash": "9fd513b3c6ca569d"
     }
   ]
 }

@@ -66,15 +66,27 @@ pub fn add_bytes(
 /// `rel` comes out of a note's markdown, which is content that arrives by paste from anywhere, so it
 /// is the one path here that is genuinely untrusted: `![](../../../etc/passwd)` is the abuse case
 /// this check exists for.
+///
+/// **An empty target is refused before anything is opened.** The markdown toolbar's own Image button
+/// writes `![]()` for the user to fill in, so a note holding one is the ordinary case — and
+/// `dir.join("")` is the *project directory*, which produced `io error at : Is a directory` once a
+/// second in a running build, with an empty path in the message that named nothing. A target that
+/// does not name a file is not a failure to report, it is a picture that is not there yet.
 pub fn read(root: &Path, project: &str, rel: &str) -> Result<Vec<u8>> {
     if rel.contains("://") {
         return Err(AppError::Other(
             "a remote image is fetched on request, never on render".into(),
         ));
     }
+    if rel.trim().is_empty() {
+        return Err(AppError::Other("an image with no path".into()));
+    }
     let dir = project_dir(root, project)?;
     let target = within_root(root, &dir.join(rel))?;
     let meta = std::fs::metadata(&target).map_err(|e| AppError::io(rel.to_string(), e))?;
+    if !meta.is_file() {
+        return Err(AppError::Other(format!("{rel} is not a file")));
+    }
     let size = usize::try_from(meta.len()).unwrap_or(usize::MAX);
     if size > MAX_INLINE {
         return Err(AppError::Other(format!(

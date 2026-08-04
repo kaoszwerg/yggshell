@@ -1,6 +1,6 @@
 {
   "name": "yggshell",
-  "version": "0.48.0",
+  "version": "0.49.0",
   "private": true,
   "type": "module",
   "description": "A Norse-inspired developer terminal, and a full replacement for the system one: independent tabs with tmux sessions that survive a crash, iTerm2-compatible themes and a theme editor, launchable from anywhere with `ygg`. What it adds is the work around the terminal — the repository, the files, the processes and ports, the containers, the sessions, and what an AI harness such as Claude Code is doing right now, each in the sidebar beside the shell rather than in another window. It is built to be used every day and extended continuously, so that running an agentic workflow needs one window instead of six.",
@@ -41,13 +41,14 @@
     "security:deny": "cargo deny --manifest-path src-tauri/Cargo.toml check",
     "security:audit": "cargo audit --file src-tauri/Cargo.lock",
     "security:audit-js": "npm audit --omit=dev --audit-level=high",
-    "check:all": "npm run version:check && npm run identity:check && npm run typecheck && npm run lint && npm run format:check && npm run test && npm run knip && npm run secrets && npm run check:no-kill && npm run check:git-writes && npm run check:blocking && npm run governance:check && npm run rust:fmt && npm run rust:clippy && npm run rust:test && npm run security:deny && npm run security:audit && npm run security:audit-js",
+    "check:all": "npm run version:check && npm run identity:check && npm run typecheck && npm run lint && npm run format:check && npm run test && npm run knip && npm run secrets && npm run check:no-kill && npm run check:git-writes && npm run check:blocking && npm run check:drag-drop && npm run governance:check && npm run rust:fmt && npm run rust:clippy && npm run rust:test && npm run security:deny && npm run security:audit && npm run security:audit-js",
     "setup:hooks": "bash scripts/setup-hooks.sh",
     "setup:memory": "bash scripts/setup-claude-memory.sh",
     "prepare": "husky",
     "check:no-kill": "node scripts/project/check-no-process-kill.mjs",
     "check:blocking": "node scripts/project/check-blocking-commands.mjs",
-    "check:git-writes": "node scripts/project/check-git-writes.mjs"
+    "check:git-writes": "node scripts/project/check-git-writes.mjs",
+    "check:drag-drop": "node scripts/project/check-drag-drop.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.1",

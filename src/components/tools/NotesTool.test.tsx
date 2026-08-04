@@ -41,6 +41,9 @@ vi.mock("../../api/notes", () => ({
     sync: vi.fn(() => Promise.resolve()),
     toggle: vi.fn(() => Promise.resolve(true)),
     search: vi.fn(() => Promise.resolve([])),
+    // The backend opens the picker, so from here an import is "into this project" and nothing else.
+    import: vi.fn(() => Promise.resolve({ picked: true, entries: [] })),
+    importFolder: vi.fn(() => Promise.resolve({ picked: true, entries: [] })),
   },
 }));
 
@@ -359,5 +362,61 @@ describe("managing what is in the list", () => {
 
     expect(await screen.findByText(/lands in this project's inbox/)).toBeTruthy();
     expect(screen.getByText(/files into github.com\/a\/b/)).toBeTruthy();
+  });
+
+  it("imports into the project it is showing, and names no path", async () => {
+    // The picker belongs to the backend: this side asks for a project and never learns which file
+    // was chosen, which is what keeps ADR-PROJ-004's rule intact without an exception for imports.
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Project:/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Import markdown files…" }));
+
+    await waitFor(() => {
+      expect(notesApi.import).toHaveBeenCalledWith("github.com/a/b");
+    });
+  });
+
+  it("shows what was left behind, not only what came in", async () => {
+    // The sentence that matters is the one about a picture that stayed outside the note's folder —
+    // it is the one the user may want to act on, and a toast that fades in 1.8s cannot carry it.
+    vi.mocked(notesApi.import).mockResolvedValue({
+      picked: true,
+      entries: [
+        { file: "plan.md", topic: "plan", images: 2, skipped: [] },
+        {
+          file: "old.md",
+          topic: null,
+          images: 0,
+          skipped: ["/etc/hosts is outside the note's own folder — left as a link"],
+        },
+      ],
+    });
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Project:/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Import markdown files…" }));
+
+    const report = await screen.findByRole("region", { name: "What was imported" });
+    expect(report.textContent).toContain("1 notes, 2 images");
+    expect(report.textContent).toContain("outside the note's own folder");
+  });
+
+  it("says nothing at all when the dialog was closed", async () => {
+    // Cancelling is not a result. A report saying "0 notes" about a dialog somebody dismissed reads
+    // as a failure.
+    vi.mocked(notesApi.import).mockResolvedValue({ picked: false, entries: [] });
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Project:/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Import markdown files…" }));
+
+    await waitFor(() => {
+      expect(notesApi.import).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole("region", { name: "What was imported" })).toBeNull();
   });
 });

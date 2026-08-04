@@ -114,7 +114,7 @@ export function useTerminalThemes() {
 export function useImportTerminalTheme() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (path: string) => api.importTerminalTheme(path),
+    mutationFn: () => api.importTerminalTheme(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["terminal-themes"] }),
   });
 }

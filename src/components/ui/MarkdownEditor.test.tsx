@@ -76,6 +76,44 @@ describe("MarkdownEditor", () => {
     expect(area.style.padding).toBe(mirror?.style.padding);
   });
 
+  it("marks one element per source line, which is what a follow mode measures", async () => {
+    // The mirror is laid out pixel-identically to the textarea by construction, so a line's element
+    // IS that line's pixel position. `lib/followScroll` reads `offsetTop` off these and needs no font
+    // metrics of its own because of it.
+    const { container } = mount({ value: "one\ntwo\nthree" });
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("[data-md-line]")).toHaveLength(3);
+    });
+    expect([...container.querySelectorAll("[data-md-line]")].map((n) => n.textContent)).toEqual([
+      "one\n",
+      "two\n",
+      "three\n",
+    ]);
+  });
+
+  it("marks them before the colouring has arrived, too", () => {
+    // The trap this exists for: the uncoloured fallback used to render the raw value as one text
+    // node, so every anchor vanished for a frame on EVERY keystroke — precisely while typing, which
+    // is when a follow mode is watched.
+    const { container } = mount({ value: "one\ntwo" });
+
+    expect(container.querySelectorAll("[data-md-line]")).toHaveLength(2);
+  });
+
+  it("hands the mirror out, because only the caller knows what it wants to measure", async () => {
+    // A callback, not a ref to write into: a component may not assign to a ref it was given.
+    const seen: (HTMLPreElement | null)[] = [];
+    mount({
+      onMirror: (node) => {
+        seen.push(node);
+      },
+    });
+    await screen.findByLabelText("Note text");
+
+    expect(seen[0]?.tagName).toBe("PRE");
+  });
+
   it("hides the coloured copy from screen readers", async () => {
     // The textarea above it is the real control; announcing both reads the note twice.
     const { container } = mount();

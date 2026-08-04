@@ -22,7 +22,7 @@ describe("taskItems", () => {
     expect(items.map((i) => i.title)).toEqual(["now", "soon", "plain"]);
   });
 
-  it("carries the byte offset the backend rewrites", () => {
+  it("carries the offset the backend rewrites", () => {
     // Ticking flips `- [ ]` to `- [x]` at this offset. It has to be the PARSER's number: a second
     // reader of the same format drifts from the first, and the drift lands on a file the user cares
     // about.
@@ -30,6 +30,17 @@ describe("taskItems", () => {
     const items = taskItems(source);
 
     expect(source.slice(items[1]?.offset ?? 0).startsWith("- [ ] two")).toBe(true);
+  });
+
+  it("counts that offset in UTF-16 code units, which is the unit the boundary carries", () => {
+    // This side of the contract pinned in `notes::offsets` (`rule:testing` — a contract is pinned on
+    // both sides). `Grüße` is five code units and seven bytes; the backend converts, and it read this
+    // as a byte offset until 2026-08-04, which made every task below a German word untickable.
+    const source = "- [ ] Grüße\n- [ ] zwei\n";
+    const items = taskItems(source);
+
+    expect(items[1]?.offset).toBe(12);
+    expect(source.slice(items[1]?.offset ?? 0).startsWith("- [ ] zwei")).toBe(true);
   });
 
   it("says nothing about a note with no tasks in it", () => {

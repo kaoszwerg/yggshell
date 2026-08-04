@@ -26,6 +26,8 @@
 
 pub mod git;
 pub mod images;
+pub mod import;
+pub mod offsets;
 
 use crate::dto::NoteFile;
 use crate::error::{AppError, Result};
@@ -226,12 +228,18 @@ pub fn capture(root: &Path, project: &str, text: &str) -> Result<()> {
 
 /// Flip the task item whose `- [ ]` marker starts at `offset`.
 ///
-/// Takes a byte offset rather than a line number because that is what the markdown parser reports,
-/// and because a line number is wrong the moment anything above it changes. Verifies what it found
+/// Takes an offset rather than a line number because that is what the markdown parser reports, and
+/// because a line number is wrong the moment anything above it changes. Verifies what it found
 /// before rewriting: an offset that does not point at a marker is a stale view, not a licence to
 /// edit the file at that position.
+///
+/// **`offset` is in UTF-16 code units** — the frontend's unit, and the only one it has
+/// (`offsets::to_byte`). It was read as a byte offset until 2026-08-04, which made every task below
+/// a German word unreachable.
 pub fn toggle(root: &Path, project: &str, topic: &str, offset: usize) -> Result<bool> {
     let text = read(root, project, topic)?;
+    let offset = offsets::to_byte(&text, offset)
+        .ok_or_else(|| AppError::Other("that item is no longer where it was".into()))?;
     let rest = text
         .get(offset..)
         .ok_or_else(|| AppError::Other("that item is no longer where it was".into()))?;
@@ -416,7 +424,8 @@ pub struct Hit {
     pub project: String,
     pub topic: String,
     pub line: String,
-    /// Byte offset of the line's start, so the view can open at it.
+    /// Offset of the line's start, so the view can open at it — in **UTF-16 code units**, which is
+    /// what `setSelectionRange` on the other side counts in (`offsets`).
     pub offset: usize,
 }
 
@@ -438,6 +447,9 @@ pub fn search(root: &Path, query: &str) -> Vec<Hit> {
             let Ok(text) = read(root, &project, &topic) else {
                 continue;
             };
+            // Counted in UTF-16 code units as it goes, rather than converted per hit: the caret this
+            // number ends up in counts that way, and accumulating alongside the scan keeps it linear
+            // instead of re-measuring the head of the file for every match.
             let mut offset = 0usize;
             for line in text.split_inclusive('\n') {
                 if line.to_lowercase().contains(&needle) {
@@ -448,7 +460,7 @@ pub fn search(root: &Path, query: &str) -> Vec<Hit> {
                         offset,
                     });
                 }
-                offset += line.len();
+                offset += line.encode_utf16().count();
             }
         }
     }

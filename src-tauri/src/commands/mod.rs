@@ -336,18 +336,50 @@ pub fn list_terminal_themes(state: State<'_, AppState>) -> Vec<TerminalTheme> {
     themes
 }
 
-/// Import an `.itermcolors` file the user dropped on the window, and store it.
+/// Import an `.itermcolors` file the user picks, and store it.
 ///
-/// The path is a path from outside — the webview hands it over, even though a drop produced it — so
-/// the extension and the size are checked before anything is read, and the document is parsed by a
-/// reader that resolves no entities and follows no DTD (`theme::itermcolors`).
+/// **The picker is opened here, in the backend.** It used to be a drop on the window, and that stopped
+/// working the day `dragDropEnabled` was set to `false` so the status-bar editor's own HTML5 dragging
+/// could work (`7d8254d`): Tauri registers no drag-drop handler at all when that flag is off
+/// (`tauri-runtime/src/webview.rs`), so the event the drop zone listened for could never arrive. The
+/// zone stayed on screen, inviting a gesture that did nothing, and every test stayed green because
+/// jsdom has no such layer.
+///
+/// A path from outside is still a path from outside: the extension and the size are checked before
+/// anything is read, and the document is parsed by a reader that resolves no entities and follows no
+/// DTD (`theme::itermcolors`). Returns `None` when the dialog was closed — not an error.
 #[tauri::command]
-pub fn import_terminal_theme(state: State<'_, AppState>, path: String) -> Result<TerminalTheme> {
-    tracing::info!(%path, "import_terminal_theme");
-    let theme = crate::theme::import(std::path::Path::new(&path))?;
-    let stored = crate::theme::save(&state.data_dir, &theme)?;
-    tracing::info!(id = %stored.id, "import_terminal_theme ok");
-    Ok(stored)
+pub async fn import_terminal_theme(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<TerminalTheme>> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let data_dir = state.data_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(file) = app
+            .dialog()
+            .file()
+            .add_filter("iTerm2 colour scheme", &["itermcolors"])
+            .blocking_pick_file()
+        else {
+            tracing::info!("import_terminal_theme cancelled");
+            return Ok(None);
+        };
+        let Ok(path) = file.into_path() else {
+            return Ok(None);
+        };
+        tracing::info!(path = %path.display(), "import_terminal_theme");
+        let theme = crate::theme::import(&path)?;
+        let stored = crate::theme::save(&data_dir, &theme)?;
+        tracing::info!(id = %stored.id, "import_terminal_theme ok");
+        Ok(Some(stored))
+    })
+    .await
+    .map_err(|error| {
+        tracing::error!(%error, "the theme import task failed");
+        AppError::Other(format!("the theme import failed: {error}"))
+    })?
 }
 
 /// Store a theme the user edited. The id is derived from the name here, never taken from the caller.

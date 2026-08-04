@@ -201,12 +201,21 @@ export const en = {
   "notes.deleteProject.detail":
     "{notes} notes and their images. They stay in the repository's history.",
   "notes.cancel": "Cancel",
-  // Named after what pressing it DOES, not the state it lands in. "Read" while writing said nothing
-  // about the fact that leaving the editor is what commits the text — and it does.
-  "notes.edit": "Edit",
-  "notes.save": "Save",
+  // Three lenses, each named after the state it puts you in. A single toggle labelled with its own
+  // opposite was the earlier version and it hid what pressing it did; a segmented control with the
+  // current option filled says where you are and where each press goes. Leaving the editor still
+  // commits the text — that is what the hint below is for.
+  "notes.lens.label": "How the note is shown",
+  "notes.lens.read": "Read",
+  "notes.lens.split": "Split",
+  "notes.lens.write": "Write",
+  "notes.lens.tooNarrow": "Too narrow for two panes",
+  "notes.follow": "Keep both sides pointed at the same place",
+  "notes.splitter": "Editor and preview",
   "notes.editor": "Note text",
-  "notes.editHint": "Click a block to write at that spot · Escape returns",
+  "notes.editHint": "Click a block to write at that spot · Escape returns and saves",
+  "notes.saveFailed": "Could not save the note",
+  "notes.imageFailed": "Could not add that image",
   "notes.insert.toolbar": "Insert markdown",
   "notes.insert.heading": "Heading",
   "notes.insert.bold": "Bold",
@@ -222,6 +231,13 @@ export const en = {
   "notes.insert.rule": "Divider",
   "notes.insert.link": "Link",
   "notes.insert.image": "Image",
+  // Two entries, because no platform's picker offers files AND folders in one dialog.
+  "notes.import.files": "Import markdown files…",
+  "notes.import.folder": "Import a folder…",
+  "notes.import.result": "What was imported",
+  "notes.import.summary": "{notes} notes, {images} images",
+  "notes.import.dismiss": "Dismiss this report",
+  "notes.importFailed": "Could not import",
   "notes.newTopic": "New topic",
   "notes.openFile": "Open {name}",
   "notes.syncFailed": "Not syncing: {reason}",
@@ -590,6 +606,8 @@ export const en = {
     "Writing markdown source is not the same as reading it rendered. Left empty, the editor follows the scheme notes are read in.",
   "scheme.inUse": "in use",
   "scheme.new": "New scheme",
+  "scheme.import": "Import .itermcolors…",
+  "scheme.importing": "Importing…",
   "scheme.edit": "Edit “{name}”",
   "scheme.name": "Scheme name",
   "scheme.delete": "Delete this scheme",

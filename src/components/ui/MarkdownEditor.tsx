@@ -4,7 +4,9 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type Ref,
+  type UIEvent,
 } from "react";
 import { TextArea } from "./TextArea";
 import { tokenize, type SyntaxScheme, type Token } from "../../lib/highlight";
@@ -37,22 +39,43 @@ export function MarkdownEditor({
   onChange,
   onKeyDown,
   onPaste,
+  onKeyUp,
+  onClick,
+  onScroll,
   scheme,
   fontSize,
   label,
   className = "",
   ref,
+  onMirror,
 }: {
   value: string;
   onChange: (next: string) => void;
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  /** Both of these exist for one reason: the caret may have moved without the text changing. */
+  onKeyUp?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onClick?: (event: MouseEvent<HTMLTextAreaElement>) => void;
   onPaste?: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
+  /** Called after the mirror has been kept in step — a follow mode hangs its own work off this. */
+  onScroll?: (event: UIEvent<HTMLTextAreaElement>) => void;
   /** The colour scheme to highlight in; `null` draws the HUD's own. */
   scheme: SyntaxScheme | null;
   fontSize: number;
   label: string;
   className?: string;
   ref?: Ref<HTMLTextAreaElement>;
+  /**
+   * Handed the coloured mirror as it attaches, for a caller that needs to measure where a line sits.
+   *
+   * A callback rather than a ref to write into: a component may not assign to a ref it was **given**
+   * (the compiler's immutability rule, and it is right — the owner of a ref is the only one who
+   * knows when it is safe to change). The caller stores it in its own.
+   *
+   * Handed out rather than measured here: the mirror lays out identically to the textarea by
+   * construction, so its per-line elements are the only pixel-accurate source position in the app —
+   * but what to do with that belongs to whoever is syncing something to it (`lib/followScroll`).
+   */
+  onMirror?: (node: HTMLPreElement | null) => void;
 }) {
   /** The coloured copy, and the text it was made from — so a stale colouring is never drawn. */
   const [coloured, setColoured] = useState<{ source: string; lines: Token[][] }>({
@@ -60,6 +83,13 @@ export function MarkdownEditor({
     lines: [],
   });
   const mirror = useRef<HTMLPreElement>(null);
+
+  // Kept here AND handed to the caller: this component needs it to keep the two layers scrolled
+  // together, and a follow mode needs it to measure where a line sits. One node, two readers.
+  const attachMirror = (node: HTMLPreElement | null) => {
+    mirror.current = node;
+    onMirror?.(node);
+  };
 
   useEffect(() => {
     let dropped = false;
@@ -87,14 +117,19 @@ export function MarkdownEditor({
       {/* The coloured copy. `aria-hidden`, because the textarea above it is the real control and a
           screen reader reading both would read the note twice. */}
       <pre
-        ref={mirror}
+        ref={attachMirror}
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden font-mono break-words whitespace-pre-wrap"
         style={{ ...metrics, color: "var(--scheme-fg)" }}
       >
+        {/* **One marked element per source line, in BOTH branches.** The mirror lays out identically
+            to the textarea, so a line's element is that line's pixel position — the measurement a
+            follow mode is built on (`lib/followScroll`). The uncoloured branch used to render the
+            raw value as a single text node, which made every anchor vanish for a frame on every
+            keystroke: precisely while typing, which is the one moment the sync is watched. */}
         {fresh
           ? coloured.lines.map((line, at) => (
-              <span key={at}>
+              <span key={at} data-md-line={at}>
                 {line.map((token, tokenAt) => (
                   <span
                     key={tokenAt}
@@ -106,7 +141,12 @@ export function MarkdownEditor({
                 {"\n"}
               </span>
             ))
-          : value}
+          : value.split("\n").map((line, at) => (
+              <span key={at} data-md-line={at}>
+                {line}
+                {"\n"}
+              </span>
+            ))}
         {/* A trailing newline is not rendered by `pre`, so a document ending in one would scroll a
             line short of the textarea and the last line would sit off by one. */}
         {"\n"}
@@ -120,14 +160,20 @@ export function MarkdownEditor({
           onChange(event.target.value);
         }}
         onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
+        onClick={onClick}
         onPaste={onPaste}
         // The two layers scroll as one. Without this the coloured copy stays at the top while the
         // text moves, which looks like the colouring belongs to different text entirely.
         onScroll={(event) => {
           const pre = mirror.current;
-          if (pre === null) return;
-          pre.scrollTop = event.currentTarget.scrollTop;
-          pre.scrollLeft = event.currentTarget.scrollLeft;
+          if (pre !== null) {
+            pre.scrollTop = event.currentTarget.scrollTop;
+            pre.scrollLeft = event.currentTarget.scrollLeft;
+          }
+          // After the mirror, never before: a caller measuring line positions from here must see the
+          // two layers already in step, or it reads a position that is one scroll event out of date.
+          onScroll?.(event);
         }}
         style={{
           ...metrics,

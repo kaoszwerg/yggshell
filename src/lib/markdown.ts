@@ -25,7 +25,9 @@ import type { Nodes, PhrasingContent, RootContent } from "mdast";
  */
 
 /**
- * Where a node came from in the source, in bytes. The reason this parser was chosen.
+ * Where a node came from in the source, in UTF-16 code units — the unit a JavaScript string is
+ * indexed in, and therefore the one the whole boundary carries (`notes::offsets`). The reason this
+ * parser was chosen.
  *
  * Not exported yet: it is reachable structurally through {@link Block}, and the unused-export check
  * is part of the gate. It becomes an export when the notes view takes it by name.

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { NoteFile } from "../bindings/NoteFile";
 import type { NoteHit } from "../bindings/NoteHit";
+import type { NoteImportReport } from "../bindings/NoteImportReport";
 import type { NoteOrphan } from "../bindings/NoteOrphan";
 import type { NotesStatus } from "../bindings/NotesStatus";
 
@@ -79,9 +80,10 @@ export const notesApi = {
   /**
    * Flip the task at `offset`, and return whether it is now done.
    *
-   * A byte offset, because that is what the markdown parser reports and a line number is wrong the
-   * moment anything above it changes. The backend verifies it still points at a marker before
-   * rewriting anything.
+   * A source offset in **UTF-16 code units**, because that is what the markdown parser reports and a
+   * line number is wrong the moment anything above it changes. The backend converts it to a byte
+   * index (`notes::offsets`) and verifies it still points at a marker before rewriting anything —
+   * read as bytes until 2026-08-04, which made every task below a German word untickable.
    */
   toggle: (project: string, topic: string, offset: number) =>
     invoke<boolean>("notes_toggle", { project, topic, offset }),
@@ -112,6 +114,31 @@ export const notesApi = {
 
   /** Case-insensitive plain text, across every project. Not a regex, deliberately. */
   search: (query: string) => invoke<NoteHit[]>("notes_search", { query }),
+
+  /**
+   * Take markdown files the user picks into `project`, with the images they point at.
+   *
+   * **This wrapper names a project and still never names a path** — the native picker is opened by
+   * the BACKEND inside the command, so the chosen file never enters the webview at all. That is what
+   * lets the import exist without an exception to the rule at the top of this file, without a
+   * `dialog:` permission in the window's capability, and without a picker package on this side
+   * (ADR-PROJ-004).
+   *
+   * An image is copied only when it resolves **under the markdown file's own folder**; anything else
+   * keeps its link and is named in the report. Without that, `![](../../.ssh/id_rsa)` in an offered
+   * file would put a private key into a repository that gets pushed.
+   *
+   * `picked: false` means the user closed the dialog. That is not an error and is not shown as one.
+   */
+  import: (project: string) => invoke<NoteImportReport>("notes_import", { project }),
+
+  /**
+   * The same, for a whole folder — every `.md` directly inside it becomes a topic.
+   *
+   * A second command because no platform's picker offers files *and* folders in one dialog, and a
+   * control whose label promises both would open one that cannot deliver it.
+   */
+  importFolder: (project: string) => invoke<NoteImportReport>("notes_import_folder", { project }),
 
   /** Copy an image into the project's assets; returns the note-relative path to write. */
   addImage: (project: string, name: string, bytes: number[]) =>

@@ -8,6 +8,34 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A note can be read and written side by side, and the two halves stay pointed at the same place.**
+  The header now offers three lenses — Read, Split, Write — and the split ties the source on the left
+  to its rendering on the right. Tied at **anchors**, not by a scroll ratio: an image is one line of
+  markdown and four hundred pixels of preview, so a proportional mapping drifts further apart the
+  further down a note you read, which is exactly where a long note is read. Every block already
+  carried its source range and the editor's coloured mirror already had one element per line, so the
+  sync measures what the browser drew rather than reimplementing text metrics. Following is a switch,
+  because comparing two distant parts of one note means deliberately breaking the tie; the divider is
+  draggable and remembered, and the split is refused in a window with no room for two panes rather
+  than offered and inert.
+
+- **Markdown can be imported into the notes, with the pictures it points at.** In a project's menu:
+  markdown files, or a whole folder of them. Each file becomes a topic and every local image it
+  refers to is copied into the project's own assets, with the links rewritten — a note whose pictures
+  stayed behind is a note full of broken images on the second machine, which is what the synced
+  repository exists to prevent. **An image is copied only when it lies under the markdown file's own
+  folder**: an offered file referencing `~/.ssh/id_rsa` would otherwise put a private key into a
+  repository that is pushed. Anything left behind — that, an existing topic, a file that is not
+  markdown — is named in a report rather than passed over in silence. The picker is opened by the
+  backend, so the chosen path never enters the webview at all.
+
+- **Colour schemes are imported through a control again.** The drop zone had stopped working:
+  `dragDropEnabled: false`, set so the status-bar editor's own dragging would function, makes Tauri
+  register no drag-drop handler at all — so the event the zone listened for could never arrive. It
+  invited a gesture that did nothing, and every test stayed green, because jsdom has no OS drag
+  layer. `npm run check:drag-drop` now reads the config and the sources together and refuses either
+  half the setting has switched off.
+
 - **Notes have their own colour schemes — two of them.** A note is monospace text read like terminal
   output, so it is drawn in a scheme like the terminal, the diff and the commit already were; it was
   the one content surface still nailed to the HUD palette while following the terminal's *font size*.
@@ -76,6 +104,22 @@ All notable changes to this project are documented here. The format follows
   a reader.
 
 ### Fixed
+
+- **A task below a German word could not be ticked.** The offsets the interface works in are UTF-16
+  code units — the markdown parser reports them that way and the text caret counts them that way,
+  and neither can be made to do anything else — while the backend read the same number as a byte
+  index into UTF-8. For ASCII the two are identical, which is how it survived: `Grüße` is five code
+  units and seven bytes, so one umlaut above a checkbox put every task below it out of reach, and the
+  answer was "that item is no longer a task" about an item plainly sitting there. Search hits carried
+  the same mismatch in the other direction, dropping the caret further from the hit the more
+  non-ASCII text was above it. Converted at the one boundary that can see both, with a test on each
+  side saying which unit it speaks.
+
+- **A note that failed to save said nothing at all.** The write went through a mutation with no error
+  branch, so a failure reached a console the user does not have open — and a note is the one thing in
+  this app that cannot be regenerated, which makes "it looked like it saved" the worst outcome
+  available. It now says so, and a note left mid-edit is committed on the way out rather than waiting
+  for a debounce that the closing view would have cancelled.
 
 - **The notes reported "Cannot rebase onto multiple branches" on and off, with nothing wrong.** Two
   syncs ran at the same time: the shell root and the notes tool each hold an instance of the sync

@@ -5,7 +5,13 @@ export type Task = {
   title: string;
   done: boolean;
   priority: 0 | 1 | 2;
-  /** Byte range of the whole item, body included — what a delete removes and a tick rewrites into. */
+  /**
+   * Source range of the whole item, body included — what a delete removes and a tick rewrites into.
+   *
+   * In **UTF-16 code units**: these come straight from the parser, are sliced against the JavaScript
+   * string here, and are handed to the backend, which converts (`notes::offsets`). One unit, all the
+   * way across, because the frontend has no other.
+   */
   offset: number;
   end: number;
 };

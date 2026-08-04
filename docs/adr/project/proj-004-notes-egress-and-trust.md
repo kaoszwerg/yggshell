@@ -2,7 +2,7 @@
 id: ADR-PROJ-004
 title: The notes leave the device, and exactly how
 status: accepted
-tldr: "Notes sync to a private repo the user names, through their own git; nothing else leaves. A remote image is fetched by the backend on request, never on render."
+tldr: "Notes sync to a private repo the user names; nothing else leaves. Remote images load on request. An import copies only pictures under the note's own folder."
 scope: fullstack
 load: conditional
 triggers:
@@ -33,9 +33,22 @@ triggers:
     private,
     threat,
     injection,
+    import,
+    importing,
+    dialog,
+    picker,
+    file-dialog,
+    drop,
+    drag,
+    dragdrop,
+    dragdropenabled,
+    itermcolors,
+    theme,
   ]
 applies-to:
   - src-tauri/src/notes/**
+  - src-tauri/src/commands/notes.rs
+  - src/components/settings/ThemeControls.tsx
   - src/components/tools/NotesTool.tsx
   - src/views/NotesView.tsx
   - src/api/notes.ts
@@ -117,6 +130,29 @@ and now neither does the backend.** A tracking pixel pasted into a note finds no
 the user deliberately opens it somewhere else. If a fetch is ever wanted here, it is the backend that
 does it — never the webview — for the CSP and referrer reasons the first version gave.
 
+### Importing a note somebody else wrote
+
+A markdown file can be brought in from anywhere on the machine, with the pictures it points at
+(`notes::import`). Three things about it are decided here rather than left to the implementation,
+because each one is a place the trust boundary could have been widened by accident.
+
+**The picker is opened by the backend, so no path crosses into the webview.** The rule at the top of
+this ADR — *the frontend names a project and a topic, never a path* — would otherwise need an
+exception, since an import is by definition about a file outside the notes root. It does not: the
+webview asks for "import into this project", the command opens the native dialog itself
+(`tauri-plugin-dialog`, used from Rust), reads what the user chose, and answers with a report. The
+window's capability grows no `dialog:` permission, and there is no picker package on the frontend at
+all. The theme import was moved onto the same mechanism in the same change.
+
+**An image is copied only when it resolves under the markdown file's own directory.** This is the
+defence the whole feature turns on, and it is in the table below. Anything else keeps its link, is
+never read, and is named in the report.
+
+**Nothing else is swept in.** An image no note refers to is not copied — it would arrive and be
+reported as an orphan by `images::orphans` a moment later — and nothing is fetched: a remote image
+keeps its URL and stays subject to the press-to-load rule above. An existing topic is refused rather
+than overwritten, because a note is the one thing here that cannot be regenerated.
+
 ### Links keep the `http(s)` whitelist
 
 Unchanged from `open_external`. A `mailto:` or an unknown scheme renders as text with a copy control.
@@ -134,6 +170,7 @@ URL**, which the user types.
 | Abuse case | Defence |
 | --- | --- |
 | `![](../../../etc/passwd)` — reading outside the notes | Every image path is canonicalised and must resolve under the notes root (`files::verify`), before anything opens it. |
+| **An imported file referencing `~/.ssh/id_rsa`** — the copy would be **pushed to the remote** | An image is copied only when it canonicalises **under the source markdown file's own directory**. Anything else is never opened, keeps its link, and is named in the import report (`notes::import`). This is the same canonicalise-and-verify-against-a-root as the row above, against a root chosen per file rather than fixed — and it is the one check that stands between "import this note" and a private key in a repository that syncs. |
 | A tracking pixel in a pasted note | Remote images are never fetched on render; the backend fetches, only on an explicit press, per image. |
 | `[click](javascript:…)` or a `file:` link | `open_external` refuses anything that is not `http(s)`, at the IPC boundary. |
 | Raw HTML in markdown (`<script>`, `<img onerror>`) | The renderer produces components, never HTML. `html` nodes render as **literal text**. There is no sanitiser to get wrong because there is no markup path. |
