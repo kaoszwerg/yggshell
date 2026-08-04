@@ -1,9 +1,9 @@
 ---
 id: rule:content-size
 title: Content follows the user's settings; chrome does not
-tldr: A tool's monospace content is drawn at terminal_font_size via useContentFontSize, never a hard-coded px. Chrome stays fixed. Pin it with a test.
+tldr: Anything that renders content follows the user's text size — useContentFontSize on the surface, relative units within it. Never a fixed px. Chrome stays fixed.
 scope: project
-load: conditional
+load: core
 triggers:
   [
     tool,
@@ -21,7 +21,16 @@ triggers:
     accessibility,
     px,
     rem,
+    em,
     tailwind,
+    heading,
+    markdown,
+    primitive,
+    component,
+    view,
+    render,
+    text,
+    typography,
   ]
 applies-to:
   ["src/components/tools/**", "src/components/ui/**", "src/views/**", "src/hooks/useContentFontSize.ts"]
@@ -51,8 +60,42 @@ followed the setting since the day it was built. Same app, two answers.
 - **Never divide by the UI scale.** That is native WebView zoom (ADR-APP-021) and it already applies
   to ordinary DOM. Dividing would shrink the panels as the rest of the interface grew — the exact
   opposite of what the user asked for. Only the *emulator* divides, because xterm sizes its own grid.
+- **Inside content, sizes are RELATIVE.** The surface sets the size once; everything within it says
+  how it compares — `text-[1.3em]`, not `text-[13px]`. A fixed size in there does not merely ignore
+  the setting, it **inverts** it: turn the text up and the fixed thing becomes the smallest thing on
+  the page.
 
-## Prove it, per tool
+## This applies to the PRIMITIVES, not only the tools
+
+The rule was written after five tools got it wrong, so it reads as if tools were the subject. They
+are not. **Anything that renders content is the subject**, and a shared primitive is the worst place
+to get it wrong, because it is wrong everywhere at once and nobody owns the mistake.
+
+Measured, 2026-08-04: `components/ui/Markdown.tsx` drew its headings at `14px`, `13px` and `11px`.
+The notes view sets the terminal's size on the scroll region exactly as this rule says — so with the
+text turned up, **every heading was smaller than the paragraph under it.** The one element whose job
+is to stand out was the least prominent thing on the page, in the app's own markdown renderer, used
+by the notes, the Credits and the Changelog. Reported as *"die H tags müssen jeweils größer
+rendern"*; nobody had to report the inversion, because by then it just looked broken.
+
+The fix is the `em` above, and it costs nothing anywhere else: relative sizes follow whatever
+container they land in, so the same component is right inside a note at the terminal's size and
+inside Settings at Settings' size, with no second decision.
+
+## Why this is `load: core`
+
+**The failure emits no vocabulary.** Somebody writing `text-sm` on a heading is not thinking about a
+font-size setting and will never search for a rule about one — which is exactly what happened here:
+this rule already listed `src/components/ui/**` in its `applies-to`, and it did not fire, because
+nobody looked it up for a two-line change to a heading. A rule that is only found by those who
+already suspect it is a rule for people who do not need it.
+
+So it is in context from the start, and it does not have to be asked for once per widget. The
+maintainer's words when that failed for the second time are the requirement: *"ich will nicht bei
+jeder änderung und jedem widget nochmal sagen müssen dass sie auf ui und textgröße reagieren
+müssen"*.
+
+## Prove it, per surface
 
 A hook that is imported and never reaches the DOM looks identical from the outside. Each tool gets
 one test:
@@ -62,6 +105,15 @@ vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 
 // …
 const sized = container.querySelector<HTMLElement>("[style*='font-size']");
 expect(sized?.style.fontSize).toBe("17px");
+```
+
+A **primitive** cannot be tested that way — it has no setting of its own, by design. What it can be
+held to is the *relationship*, which is the part that was broken:
+
+```tsx
+// Each level larger than the one below, in relative units — the numbers are a judgement, the
+// ordering is the contract (`components/ui/Markdown.test.tsx`).
+expect(size("One")).toBeGreaterThan(size("Two"));
 ```
 
 ## Why this is a rule and not a lint
