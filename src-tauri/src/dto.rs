@@ -273,6 +273,84 @@ pub struct NoteOrphan {
     pub bytes: u32,
 }
 
+/// Every word the native application menu shows.
+///
+/// **The words come from the frontend, the shape does not.** A macOS menu has rules about which
+/// submenu holds what and in which order, and those are not the frontend's to decide — so `menu.rs`
+/// owns the skeleton and this carries the strings that go into it. Typed field by field rather than
+/// a map, so a menu item added here without a translation is a compile error on both sides instead
+/// of a blank line in a menu (ADR-CORE-005).
+///
+/// It is the frontend's because that is where the language lives: the catalogue in `src/i18n` is the
+/// single source for every user-visible word, and the menu is rebuilt when the setting changes. A
+/// second copy of these strings in Rust would be a second thing to translate and a first thing to
+/// forget.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AppMenuLabels {
+    pub about: String,
+    pub settings: String,
+    pub services: String,
+    pub hide: String,
+    pub hide_others: String,
+    pub show_all: String,
+    pub quit: String,
+
+    pub shell: String,
+    pub new_tab: String,
+    pub close_tab: String,
+    pub find: String,
+    pub clear: String,
+
+    pub edit: String,
+    pub undo: String,
+    pub redo: String,
+    pub cut: String,
+    pub copy: String,
+    pub paste: String,
+    pub select_all: String,
+
+    pub view: String,
+    pub font_bigger: String,
+    pub font_smaller: String,
+    pub font_reset: String,
+    pub logs: String,
+
+    pub tools: String,
+    pub tool_git: String,
+    pub tool_files: String,
+    pub tool_activity: String,
+    pub tool_docker: String,
+    pub tool_agent: String,
+    pub tool_tmux: String,
+    pub tool_notes: String,
+
+    pub window: String,
+    pub minimize: String,
+    pub zoom: String,
+    pub next_tab: String,
+    pub previous_tab: String,
+    /// Nine entries, already numbered — the numbering is wording, and wording is the catalogue's.
+    pub select_tabs: Vec<String>,
+}
+
+/// The menu, as the frontend describes it: what it says, and which key asks for it.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+#[serde(rename_all = "camelCase")]
+pub struct AppMenuSpec {
+    pub labels: AppMenuLabels,
+    /// Accelerator per action id, already in the menu's own spelling (`Cmd+T`).
+    ///
+    /// **From the shortcut store, which is the only place a binding lives.** Hard-coding these in
+    /// Rust is what the default menu did, and it is why `⌘W` closed the window instead of the tab:
+    /// a menu key equivalent is dispatched by AppKit *before* the webview sees the keystroke, so a
+    /// menu that disagrees with the user's own binding does not lose the argument — it wins it,
+    /// silently. An absent entry means the item shows no key, which is honest.
+    pub keys: std::collections::HashMap<String, String>,
+}
+
 /// What became of one file an import was pointed at.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]

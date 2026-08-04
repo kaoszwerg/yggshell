@@ -336,6 +336,19 @@ pub fn list_terminal_themes(state: State<'_, AppState>) -> Vec<TerminalTheme> {
     themes
 }
 
+/// Describe the native application menu — its words and its keys — and install it.
+///
+/// Called once the interface knows both, and again whenever either changes: a different language, or
+/// a shortcut the user rebound. **That is what keeps the menu from becoming a second opinion about
+/// which key does what** — the store is the only place a binding lives, and the menu is rebuilt from
+/// it rather than carrying its own copy (`menu.rs`).
+#[tauri::command]
+pub fn set_app_menu(app: tauri::AppHandle, spec: crate::dto::AppMenuSpec) -> Result<()> {
+    crate::menu::install(&app, &spec).map_err(|error| {
+        AppError::Other(format!("the application menu could not be built: {error}"))
+    })
+}
+
 /// Import an `.itermcolors` file the user picks, and store it.
 ///
 /// **The picker is opened here, in the backend.** It used to be a drop on the window, and that stopped

@@ -8,6 +8,41 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The application has a menu of its own.** Until now it had Tauri's default, and that default was
+  wrong in three ways that never announced themselves: its *About* opened the system panel rather
+  than this app's — the one that knows the build's commit and channel; its File menu carried *Close
+  Window* on ⌘W, which is *close tab* here, and a menu key equivalent is dispatched by AppKit
+  **before** the webview sees the keystroke, so it did not lose that argument, it won it; and it said
+  nothing about tabs, tools, font size or logs. The new one has YggShell, Shell, Edit, View, Tools
+  and Window.
+
+  **Its words and its keys come from the interface, its shape from the backend.** The words from the
+  i18n catalogue, so the menu follows the language setting instead of needing a second translation;
+  the keys from the shortcut store, so rebinding one rebuilds the menu — a menu carrying its own copy
+  would silently override the user's own binding, which is exactly what ⌘W was doing. A press comes
+  back as one event and runs through the same code the keyboard uses.
+
+  The Edit submenu is kept deliberately: on macOS the terminal's own copy and paste ride on its key
+  equivalents, so a menu without it is a terminal that cannot copy.
+
+- **Full screen**, in the View menu with ⌃⌘F and as a control in the title bar. A frameless window is
+  not full-screen-capable to AppKit until it is told so, and until then every route through the
+  responder chain declined in silence — including the *Enter Full Screen* item AppKit adds by itself.
+  Nothing of the interface goes away: the tabs, the tool column and the status bar are the window's
+  content, and the content is what gets bigger.
+
+- **Images in a note open in a viewer.** They are drawn at the column's width, which is right for
+  reading and useless for looking — a screenshot of a stack trace arrives unreadable and a Retina
+  capture at half its pixels. Clicking one opens it on its own surface: the wheel zooms about the
+  pointer, dragging moves, `+`/`-`/`0`/`1` and the arrow keys do the same without a mouse, and Escape
+  steps out of the zoom before it steps out of the viewer. The note itself is untouched, because
+  enlarging in place pushes the text off the screen.
+
+  It also closes a hole beside it: a picture over 4 MB was not shown **at all**, so an imported
+  photograph sat in the repository, named in the note, and invisible. The viewer holds one image
+  rather than all of them and is allowed a larger one, and a picture too big to draw inline now
+  offers a way in instead of nothing.
+
 - **A note can be read and written side by side, and the two halves stay pointed at the same place.**
   The header now offers three lenses — Read, Split, Write — and the split ties the source on the left
   to its rendering on the right. Tied at **anchors**, not by a scroll ratio: an image is one line of

@@ -546,6 +546,20 @@ pub fn notes_image_read(
     notes::images::read(&root(&state), &project, &path)
 }
 
+/// The same image for the viewer, which is allowed a larger one.
+///
+/// A rendered note holds a data URL per picture, all at once; the viewer holds exactly one, while
+/// somebody is looking at it. A photograph with no business inflating every render is perfectly
+/// reasonable to open on purpose — so the two have their own ceilings (`notes::images`).
+#[tauri::command]
+pub fn notes_image_read_large(
+    state: State<'_, AppState>,
+    project: String,
+    path: String,
+) -> Result<Vec<u8>> {
+    notes::images::read_for_viewer(&root(&state), &project, &path)
+}
+
 /// Fetch a remote image, once, because the user pressed.
 ///
 /// Never on render: rendering `![](https://…)` from a pasted note would call a stranger's server the

@@ -15,6 +15,7 @@ import { useScrollTop } from "./hooks/useScrollTop";
 import { useApplyUiScale } from "./hooks/useUiScale";
 import { useSyncLocale } from "./hooks/useT";
 import { useLaunchRequests } from "./hooks/useLaunchRequests";
+import { useAppMenu } from "./hooks/useAppMenu";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useNativeContextMenuGuard } from "./hooks/useNativeContextMenuGuard";
 import { useFileDropGuard } from "./hooks/useFileDropGuard";
@@ -39,6 +40,9 @@ export default function App() {
   useLaunchRequests();
   // Keyboard shortcuts, matched on the window so they work wherever the caret is.
   useShortcuts();
+  // The native menu says what the catalogue says and shows the keys the store holds — so it is
+  // rebuilt from here, where both are already in hand (`hooks/useAppMenu`).
+  useAppMenu();
   useNativeContextMenuGuard();
   // A dropped file must never navigate the WebView: that replaces the whole interface with the file,
   // with no way back, and the only escape is quitting — which takes every terminal with it.

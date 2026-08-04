@@ -7,7 +7,7 @@ import { useTerminalStore } from "../store/terminal";
 
 vi.mock("../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../api/notes", () => ({
-  notesApi: { read: vi.fn(), write: vi.fn(), readImage: vi.fn() },
+  notesApi: { read: vi.fn(), write: vi.fn(), readImage: vi.fn(), readImageLarge: vi.fn() },
 }));
 
 import { notesApi } from "../api/notes";
@@ -120,6 +120,35 @@ describe("NotesView", () => {
     await waitFor(() => {
       expect(vi.mocked(notesApi.write)).toHaveBeenCalledWith("p", "inbox", "changed");
     });
+  });
+
+  it("opens a picture in the viewer, at the viewer's own ceiling", async () => {
+    // A note's images are drawn at the column's width, which is right for reading and useless for
+    // looking. The viewer holds ONE image rather than all of them, so it reads through the larger
+    // cap — which is also what makes a photograph that will not inline reachable at all.
+    vi.mocked(notesApi.read).mockResolvedValue("![a shot](assets/1-shot.png)\n");
+    vi.mocked(notesApi.readImage).mockResolvedValue([1, 2, 3]);
+    vi.mocked(notesApi.readImageLarge).mockResolvedValue([1, 2, 3]);
+    renderView();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open this image" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(notesApi.readImageLarge)).toHaveBeenCalledWith("p", "assets/1-shot.png");
+    });
+    // "Actual size" rather than "Fit": the control is named after what pressing it DOES, and the
+    // viewer opens fitted.
+    expect(await screen.findByRole("button", { name: "Actual size" })).toBeTruthy();
+  });
+
+  it("still offers a way in when the picture is too big to draw in the note", async () => {
+    // Found on an import: the file is in the repository, the link is in the note, and the reader
+    // saw nothing at all because the inline read refused it for its size.
+    vi.mocked(notesApi.read).mockResolvedValue("![huge](assets/1-photo.jpg)\n");
+    vi.mocked(notesApi.readImage).mockRejectedValue(new Error("over the 4194304-byte limit"));
+    renderView();
+
+    expect(await screen.findByRole("button", { name: "Open this image" })).toBeTruthy();
   });
 
   it("does not ask the backend to read an image that names no file", async () => {

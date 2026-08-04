@@ -25,6 +25,17 @@ pub const ASSETS: &str = "assets";
 /// a photograph or a capture that deserves a real viewer, and gets one.
 pub const MAX_INLINE: usize = 4 * 1024 * 1024;
 
+/// The largest image handed to the **viewer**, in bytes.
+///
+/// Far above [`MAX_INLINE`] because the two hold different amounts: a rendered note carries a data
+/// URL per picture, all at once, for as long as it is open — while the viewer holds exactly one, for
+/// as long as somebody is looking at it. A photograph that has no business inflating every render is
+/// perfectly reasonable to open on purpose.
+///
+/// Still bounded: base64 inflates by a third, so this is about 43 MB of string in the webview, and a
+/// note is not a place to put a video.
+pub const MAX_VIEWER: usize = 32 * 1024 * 1024;
+
 /// Copy `source` into the project's assets and return the note-relative path to write in the
 /// markdown.
 ///
@@ -73,6 +84,19 @@ pub fn add_bytes(
 /// second in a running build, with an empty path in the message that named nothing. A target that
 /// does not name a file is not a failure to report, it is a picture that is not there yet.
 pub fn read(root: &Path, project: &str, rel: &str) -> Result<Vec<u8>> {
+    read_capped(root, project, rel, MAX_INLINE)
+}
+
+/// The same image, for the **viewer**, which may hold a larger one ([`MAX_VIEWER`]).
+///
+/// A separate entry point rather than a cap the caller names: how much this application is willing
+/// to hold in the webview is not the webview's decision to make (`rule:security` — the client is
+/// treated as hostile even though we wrote it).
+pub fn read_for_viewer(root: &Path, project: &str, rel: &str) -> Result<Vec<u8>> {
+    read_capped(root, project, rel, MAX_VIEWER)
+}
+
+fn read_capped(root: &Path, project: &str, rel: &str, cap: usize) -> Result<Vec<u8>> {
     if rel.contains("://") {
         return Err(AppError::Other(
             "a remote image is fetched on request, never on render".into(),
@@ -88,9 +112,9 @@ pub fn read(root: &Path, project: &str, rel: &str) -> Result<Vec<u8>> {
         return Err(AppError::Other(format!("{rel} is not a file")));
     }
     let size = usize::try_from(meta.len()).unwrap_or(usize::MAX);
-    if size > MAX_INLINE {
+    if size > cap {
         return Err(AppError::Other(format!(
-            "{rel} is {size} bytes, over the {MAX_INLINE}-byte inline limit"
+            "{rel} is {size} bytes, over the {cap}-byte limit"
         )));
     }
     std::fs::read(&target).map_err(|e| AppError::io(rel.to_string(), e))

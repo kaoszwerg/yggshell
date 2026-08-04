@@ -1,6 +1,7 @@
 // Typed wrappers around the Tauri command surface. Types come from the ts-rs bindings (SSOT,
 // ADR-CORE-005). Run `npm run gen:types` after touching Rust DTOs.
 import { invoke } from "@tauri-apps/api/core";
+import type { AppMenuSpec } from "../bindings/AppMenuSpec";
 import type { BuildInfo } from "../bindings/BuildInfo";
 import type { SystemLoad } from "../bindings/SystemLoad";
 import type { CliInstall } from "../bindings/CliInstall";
@@ -59,6 +60,14 @@ export const api = {
    * closed, which is not an error.
    */
   importTerminalTheme: () => invoke<TerminalTheme | null>("import_terminal_theme"),
+
+  /**
+   * Describe the native application menu and have it installed.
+   *
+   * Sent again whenever the language or a key binding changes: the menu carries no strings and no
+   * keys of its own, so this call is the only thing keeping it true (`lib/appMenu`, `menu.rs`).
+   */
+  setAppMenu: (spec: AppMenuSpec) => invoke<void>("set_app_menu", { spec }),
 
   /** Store an edited theme. Its id is derived from the name by the backend, never sent. */
   saveTerminalTheme: (theme: TerminalTheme) =>

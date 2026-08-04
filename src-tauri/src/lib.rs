@@ -15,6 +15,7 @@ pub mod files;
 mod git;
 pub mod launch;
 pub mod logging;
+pub mod menu;
 pub mod notes;
 pub mod procs;
 pub mod profile;
@@ -25,6 +26,7 @@ pub mod sysload;
 pub mod terminal;
 pub mod theme;
 pub mod tray;
+pub mod window_chrome;
 
 use crate::state::AppState;
 use tauri::{Emitter, Manager};
@@ -52,6 +54,9 @@ pub fn run() {
         // so the chosen path never enters the webview and no `dialog:` permission is granted to it
         // (ADR-PROJ-004, rule:security: least privilege).
         .plugin(tauri_plugin_dialog::init())
+        // Every menu press goes one way: to the interface, which already knows what each action
+        // does. The menu is a second way to ASK, never a second answer (ADR-CORE-005, menu.rs).
+        .on_menu_event(|app, event| menu::route(app, event.id.as_ref()))
         .setup(|app| {
             // Tauri turns an `Err` from this closure into `panic!("Failed to setup app: {e}")`
             // (tauri 2.11.2, app.rs) — it never reaches `run()`'s `Result`. The panic hook would catch
@@ -87,10 +92,12 @@ pub fn run() {
             commands::notes::notes_rename_project,
             commands::notes::notes_create_project,
             commands::notes::notes_search,
+            commands::set_app_menu,
             commands::notes::notes_import,
             commands::notes::notes_import_folder,
             commands::notes::notes_image_add,
             commands::notes::notes_image_read,
+            commands::notes::notes_image_read_large,
             commands::notes::notes_image_fetch,
             commands::notes::notes_orphans,
             commands::notes::notes_clean,
@@ -213,6 +220,20 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         data_dir = %data_dir.display(),
         "starting"
     );
+
+    // The smallest menu that leaves the app usable, until the interface describes the real one.
+    // Without it Tauri installs its own default, whose About opens the SYSTEM panel instead of ours
+    // and whose File menu takes ⌘W away from "close tab" — and the frontend would then have to
+    // replace a wrong menu rather than an incomplete one. It is also what the user is left with if
+    // the webview never comes up at all: Quit, and the editing items the terminal's copy and paste
+    // depend on (menu.rs, rule:crash-handling).
+    menu::install_minimal(&app.handle().clone())?;
+
+    // A frameless window is not full-screen-capable to AppKit until it is told so, and until then
+    // every route through the responder chain — its own View-menu item included — declines in
+    // silence (window_chrome.rs).
+    #[cfg(target_os = "macos")]
+    window_chrome::allow_fullscreen(&app.handle().clone());
 
     // The Finder context-menu entry ("New YggShell Terminal Here"). Declaring it in Info.plist is
     // only half — without a registered provider the item appears and does nothing (services.rs).

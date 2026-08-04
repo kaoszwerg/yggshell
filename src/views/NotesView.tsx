@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Copy, ExternalLink, Link2, Link2Off } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { IconButton } from "../components/ui/IconButton";
+import { ImageViewer, ZoomableImage } from "../components/ui/ImageViewer";
 import { Markdown } from "../components/ui/Markdown";
 import { MarkdownEditor } from "../components/ui/MarkdownEditor";
 import { Splitter } from "../components/ui/Splitter";
@@ -532,6 +533,10 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
   const t = useT();
   const remote = src.includes("://");
   const [load, setLoad] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const close = () => {
+    setViewing(false);
+  };
 
   /**
    * `![]()` is what the toolbar's own Image button writes, for the user to fill in.
@@ -596,8 +601,107 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
     );
   }
 
-  if (data.data === undefined) return <span className="text-dim/70">{alt}</span>;
-  return <img src={data.data} alt={alt} className="my-2 max-w-full" />;
+  // Too large to inline is not "gone": the viewer holds one image rather than all of them, so it is
+  // allowed a bigger one, and this is the way in. Without this the picture is in the repository, in
+  // the note, and unreachable — which is what an import of a photograph produced.
+  if (data.data === undefined) {
+    return (
+      <>
+        <Button
+          variant="ghost"
+          className="my-1 px-1 py-0 text-[10px]"
+          onClick={() => {
+            setViewing(true);
+          }}
+        >
+          {data.isError ? t("notes.openImage") : alt}
+        </Button>
+        {viewing ? <NoteImageViewer project={project} src={src} alt={alt} onClose={close} /> : null}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* **The picture is the control.** A note's images are drawn at the column's width, which is
+          right for reading and useless for looking — a screenshot of a stack trace arrives
+          unreadable and a Retina capture at half its pixels. Clicking opens the viewer; the note
+          itself is left exactly as it was, because enlarging in place pushes the text off the
+          screen (`components/ui/ImageViewer`). */}
+      <ZoomableImage
+        src={data.data}
+        alt={alt}
+        label={t("notes.openImage")}
+        className="my-2 max-w-full"
+        onOpen={() => {
+          setViewing(true);
+        }}
+      />
+      {viewing ? <NoteImageViewer project={project} src={src} alt={alt} onClose={close} /> : null}
+    </>
+  );
+}
+
+/**
+ * The viewer, with the image loaded at the viewer's own ceiling rather than the note's.
+ *
+ * Split out so the bigger read happens **only when somebody opens one** — a note full of pictures
+ * must not fetch every one of them twice on the chance that one gets clicked.
+ */
+function NoteImageViewer({
+  project,
+  src,
+  alt,
+  onClose,
+}: {
+  project: string;
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const remote = src.includes("://");
+
+  const data = useQuery({
+    queryKey: ["note-image-large", project, src],
+    queryFn: async () => {
+      const bytes = remote
+        ? await notesApi.fetchImage(src)
+        : await notesApi.readImageLarge(project, src);
+      const binary = Uint8Array.from(bytes);
+      let out = "";
+      for (const byte of binary) out += String.fromCharCode(byte);
+      return `data:image/*;base64,${btoa(out)}`;
+    },
+  });
+
+  if (data.data === undefined) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85">
+        <p className="text-dim font-mono text-[11px]">
+          {data.isError ? String(data.error) : t("notes.loadingImage")}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ImageViewer
+      src={data.data}
+      alt={alt}
+      caption={src}
+      onClose={onClose}
+      labels={{
+        // "Back", not "Close" — the control is the same back arrow this view's own header carries,
+        // in the same place, because a viewer is a surface you leave rather than a window you shut.
+        back: t("common.back"),
+        zoomIn: t("notes.zoomIn"),
+        zoomOut: t("notes.zoomOut"),
+        fit: t("notes.zoomFit"),
+        actual: t("notes.zoomActual"),
+      }}
+    />
+  );
 }
 
 /**

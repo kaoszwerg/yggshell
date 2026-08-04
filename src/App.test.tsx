@@ -21,6 +21,9 @@ vi.mock("./api/commands", () => ({
     }),
     getSettings: vi.fn().mockResolvedValue({ ui_scale: 1 }),
     updateSettings: vi.fn(),
+    // The app root describes the native menu on mount, and again whenever the language or a
+    // binding changes (`hooks/useAppMenu`).
+    setAppMenu: vi.fn().mockResolvedValue(undefined),
     getRecentLogs: vi.fn().mockResolvedValue([]),
     openExternal: vi.fn(),
   },

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { Minus, Square, X } from "lucide-react";
+import { Expand, Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { toggleFullscreen } from "../../lib/fullscreen";
 import { IconButton } from "../ui/IconButton";
 import { ContextMenu } from "../ui/ContextMenu";
 import { Tabs } from "../ui/Tabs";
@@ -189,6 +190,25 @@ export function TitleBar() {
           onClick={() => void getCurrentWindow().toggleMaximize()}
         >
           <Square size={13} strokeWidth={2.5} />
+        </WinButton>
+        {/* **Full screen is not "maximised".** Zooming fills the desktop and keeps the menu bar and
+            the Dock; full screen gives the window its own Space and hides both. On macOS the View
+            menu offers it too (⌃⌘F), but a frameless window has no green button — so without this
+            control the gesture exists only for somebody who thinks to look in a menu, and on Windows
+            and Linux it would not exist at all.
+
+            The menu and this call the SAME function, which is not tidiness: the menu's first version
+            used AppKit's predefined item, and AppKit declines to perform it on a frameless window —
+            so the entry was inert while this button worked (`lib/fullscreen`). */}
+        <WinButton
+          label={t("titlebar.fullscreen")}
+          onClick={() => {
+            void toggleFullscreen().catch((error: unknown) => {
+              console.warn("could not toggle full screen", error);
+            });
+          }}
+        >
+          <Expand size={13} strokeWidth={2.5} />
         </WinButton>
         <WinButton
           label={t("titlebar.close")}

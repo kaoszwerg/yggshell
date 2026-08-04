@@ -200,6 +200,33 @@ export function formatBinding(binding: Binding, mac: boolean = isMacPlatform()):
 }
 
 /**
+ * The same binding, spelled the way the **native menu** wants it — `Cmd+T`, or `Ctrl` and `Shift`
+ * joined to a named key with `+`.
+ *
+ * **Not `formatBinding`, and the difference is load-bearing.** That one produces what a human reads
+ * (`⌘T`); this one produces what `muda` parses into a real key equivalent. Handing the pretty form to
+ * the menu gets it rejected, and a rejected accelerator does not fail loudly — the item simply appears
+ * without a key, which looks like a menu somebody forgot to finish.
+ *
+ * `Cmd`/`Ctrl` explicitly rather than `CmdOrCtrl`: our defaults already differ per platform
+ * (`defaultBindings`), so the platform decision has been made by the time a binding exists, and
+ * asking the accelerator parser to make it a second time could only disagree.
+ *
+ * A single character is passed through as it is typed — `parse_key` falls back to a character key for
+ * anything that is not a named code, so `,`, `]` and `=` all arrive intact.
+ */
+export function toAccelerator(binding: Binding): string {
+  const parts = [
+    ...(binding.meta ? ["Cmd"] : []),
+    ...(binding.ctrl ? ["Ctrl"] : []),
+    ...(binding.alt ? ["Alt"] : []),
+    ...(binding.shift ? ["Shift"] : []),
+    binding.key.length === 1 ? binding.key.toUpperCase() : binding.key,
+  ];
+  return parts.join("+");
+}
+
+/**
  * A binding from a keyboard event, or `null` when the event is not a combination at all.
  *
  * A bare modifier is not a shortcut — somebody holding `⌘` on the way to pressing something must not

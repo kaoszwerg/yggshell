@@ -153,6 +153,15 @@ export const notesApi = {
   readImage: (project: string, path: string) =>
     invoke<number[]>("notes_image_read", { project, path }),
 
+  /**
+   * The same image for the viewer, which is allowed a larger one.
+   *
+   * A rendered note holds one data URL per picture at once; the viewer holds exactly one, while it
+   * is being looked at. So a photograph that would bloat every render is still openable on purpose.
+   */
+  readImageLarge: (project: string, path: string) =>
+    invoke<number[]>("notes_image_read_large", { project, path }),
+
   /** Every image no note refers to. Deletes nothing. */
   orphans: () => invoke<NoteOrphan[]>("notes_orphans"),
 
