@@ -18,6 +18,24 @@ describe("Markdown", () => {
     vi.mocked(tokenize).mockClear();
   });
 
+  it("makes each heading level larger than the one below it, relative to the text", () => {
+    // They were fixed pixels — 14, 13 and 11 — so a note drawn at the terminal's own size
+    // (rule:content-size) had headings SMALLER than its body the moment anybody turned that up, and
+    // one pixel between a level 1 and a level 2 was not a hierarchy anyone could see.
+    render(<Markdown source={"# One\n\n## Two\n\n### Three\n\n#### Four\n"} />);
+
+    const size = (name: string) =>
+      Number(
+        /text-\[([\d.]+)em\]/.exec(screen.getByRole("heading", { name }).className)?.[1] ?? "0",
+      );
+
+    expect(size("One")).toBeGreaterThan(size("Two"));
+    expect(size("Two")).toBeGreaterThan(size("Three"));
+    expect(size("Three")).toBeGreaterThan(size("Four"));
+    // Relative, so they follow whatever they are inside rather than fixing their own pixels.
+    expect(size("Four")).toBeGreaterThanOrEqual(1);
+  });
+
   it("renders headings as headings", () => {
     render(<Markdown source="## Bundled colour schemes" />);
     expect(screen.getByRole("heading", { name: "Bundled colour schemes" })).toBeInTheDocument();

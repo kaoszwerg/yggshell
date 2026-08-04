@@ -196,18 +196,33 @@ function BlockView({ block }: { block: Block }) {
   if (block.kind === "rule") return <hr className="bg-cyan/15 my-3 h-px border-0" />;
 
   if (block.kind === "heading") {
+    /**
+     * **Relative to the text around them, and actually different from each other.**
+     *
+     * They were fixed pixels — 14, 13 and 11 — and both halves of that were wrong. A note is drawn at
+     * the size the user chose for the terminal (`rule:content-size`), so a fixed heading *shrank*
+     * below its own body text the moment anybody turned that up: the one element that is supposed to
+     * stand out ended up smaller than the paragraph under it. And one pixel between a level 1 and a
+     * level 2 is not a hierarchy anyone can see — reported as headings not rendering larger.
+     *
+     * `em`, so they scale with whatever they are inside: the terminal's size in a note, the
+     * surrounding size in the Credits and the Changelog, with no second decision anywhere.
+     */
     const size =
       block.level <= 1
-        ? "scheme-accent mt-4 mb-2 font-mono text-sm"
+        ? "scheme-accent mt-[1.4em] mb-[0.6em] font-mono text-[1.6em] font-semibold"
         : block.level === 2
-          ? "scheme-accent mt-4 mb-1.5 font-mono text-[13px]"
-          : "scheme-ok mt-3 mb-1 font-mono text-[11px] tracking-wide";
+          ? "scheme-accent mt-[1.3em] mb-[0.5em] font-mono text-[1.3em] font-semibold"
+          : block.level === 3
+            ? "scheme-accent mt-[1.2em] mb-[0.4em] font-mono text-[1.12em]"
+            : "scheme-ok mt-[1.1em] mb-[0.3em] font-mono text-[1em] tracking-wide";
     // The level is data, so the element has to be chosen rather than interpolated — a heading tag
     // built from a variable is exactly what React refuses to type.
     const content = <InlineView runs={block.content} />;
     if (block.level <= 1) return <h2 className={`${size} first:mt-0`}>{content}</h2>;
     if (block.level === 2) return <h3 className={`${size} first:mt-0`}>{content}</h3>;
-    return <h4 className={size}>{content}</h4>;
+    if (block.level === 3) return <h4 className={`${size} first:mt-0`}>{content}</h4>;
+    return <h5 className={size}>{content}</h5>;
   }
 
   if (block.kind === "list") {

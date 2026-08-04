@@ -140,6 +140,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Markdown headings render as headings again, at every level.** They carried fixed pixel sizes —
+  14, 13 and 11 — and both halves of that were wrong. A note is drawn at the size chosen for the
+  terminal, so turning that up made the headings *smaller than their own body text*: the one element
+  meant to stand out ended up the least prominent thing on the page. And one pixel between a level 1
+  and a level 2 is not a hierarchy anybody can see. They are relative now (1.6 / 1.3 / 1.12 / 1.0 of
+  the surrounding text, the top two half-bold), so they follow the terminal's size in a note and the
+  surrounding size in the Credits and the Changelog, with no second decision anywhere. Levels 3 and
+  4 also get their own elements; all three used to land in the same one.
+
 - **Opening an entry from the list now goes to it.** Pressing a todo, or a search hit, opened the
   note at the top and left the line you had just pointed at to be found again by reading the
   markdown — which is the one thing pressing it was meant to save. Three places knew the exact
