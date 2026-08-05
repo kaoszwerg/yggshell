@@ -42,7 +42,16 @@ export type Inline =
   | { kind: "emphasis"; text: string }
   | { kind: "strike"; text: string }
   | { kind: "link"; text: string; href: string }
-  | { kind: "image"; alt: string; src: string };
+  | { kind: "image"; alt: string; src: string }
+  /**
+   * A hard line break — two trailing spaces, or a backslash at the end of a line.
+   *
+   * **It carries its `\n` as text on purpose.** The renderer draws a `<br>` from the *kind*, but
+   * `lib/noteTasks` cuts a todo's title at the first newline so the list stays one line per entry,
+   * and it reads the runs' text. A break without text would silently pull the second line of every
+   * two-line entry into the tool's list.
+   */
+  | { kind: "break"; text: "\n" };
 
 /** A block-level element. */
 export type Block =
@@ -124,7 +133,10 @@ function inline(nodes: readonly PhrasingContent[]): Inline[] {
         out.push({ kind: "image", alt: node.alt ?? "", src: node.url });
         break;
       case "break":
-        out.push({ kind: "text", text: "\n" });
+        // Its own kind, not a text run holding a newline: HTML collapses a newline inside a
+        // paragraph to a space, so the break was parsed and then thrown away — two trailing spaces
+        // did nothing at all on screen. The renderer needs to know it is a break to draw one.
+        out.push({ kind: "break", text: "\n" });
         break;
       case "html":
         // Literal, never markup. See the note at the top of this file.

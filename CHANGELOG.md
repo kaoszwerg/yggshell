@@ -140,6 +140,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A hard line break inside a paragraph now breaks the line.** Two trailing spaces — markdown's own
+  way of breaking a line without starting a paragraph — was parsed and then thrown away: it became a
+  text run holding a newline, and HTML collapses a newline inside a paragraph to a space. It draws a
+  real break now. The break still carries its newline as text, because the tool cuts a todo's title
+  at the first one to keep the list at one line per entry.
+
 - **The notes tool says which project it is filing into.** It said so nowhere: the name lived only
   in the `⋮` menu's accessible label, so the one way to find out was to open the menu and look. It
   now has its own line above the search, in the foreground colour so it wins against the section

@@ -43,6 +43,15 @@ describe("taskItems", () => {
     expect(source.slice(items[1]?.offset ?? 0).startsWith("- [ ] zwei")).toBe(true);
   });
 
+  it("still cuts the title at a hard line break", () => {
+    // The tool is one line per entry. A break became its own inline kind when the renderer learned
+    // to draw it — and it kept its `\n` as text precisely so this keeps working: without that, the
+    // second line of every two-line entry would be pulled into the list.
+    const items = taskItems("- [ ] the title  \n      and its second line\n");
+
+    expect(items[0]?.title).toBe("the title");
+  });
+
   it("says nothing about a note with no tasks in it", () => {
     expect(taskItems("# A heading\n\nSome prose.\n")).toEqual([]);
   });

@@ -36,6 +36,17 @@ describe("Markdown", () => {
     expect(size("Four")).toBeGreaterThanOrEqual(1);
   });
 
+  it("draws a hard line break, instead of parsing one and dropping it", () => {
+    // Two trailing spaces (or a backslash) is markdown's line break inside a paragraph. It was
+    // parsed and turned into a text run holding "\n" — and HTML collapses a newline inside a
+    // paragraph to a space, so it did nothing whatsoever on screen.
+    const { container } = render(<Markdown source={"first line  \nsecond line\n"} />);
+
+    expect(container.querySelectorAll("br")).toHaveLength(1);
+    expect(container.textContent).toContain("first line");
+    expect(container.textContent).toContain("second line");
+  });
+
   it("keeps a bullet and its text on one line", () => {
     // Reported from a real note: the bullet sat alone on its line with the text underneath. The
     // item's paragraph rendered as a `<p>`, which is a block, so it broke the line and added its

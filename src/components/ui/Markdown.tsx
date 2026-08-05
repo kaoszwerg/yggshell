@@ -431,6 +431,11 @@ function InlineView({ runs }: { runs: Inline[] }) {
         if (run.kind === "link") {
           return <LinkView key={at} text={run.text} href={run.href} />;
         }
+        if (run.kind === "break") {
+          // A real `<br>`. The run also carries a `\n`, but a newline inside a paragraph is
+          // collapsed to a space by HTML — which is why two trailing spaces used to do nothing.
+          return <br key={at} />;
+        }
         if (run.kind === "image") {
           return <ImageView key={at} alt={run.alt} src={run.src} />;
         }
