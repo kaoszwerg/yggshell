@@ -370,6 +370,34 @@ describe("managing what is in the list", () => {
     expect(screen.getByText(/files into github.com\/a\/b/)).toBeTruthy();
   });
 
+  it("says which project it is filing into, without anything being opened", async () => {
+    // It lived only in the kebab's `aria-label`, so the one way to find out where you were was to
+    // open the menu and look — reported as "es ist schwer zu erkennen in welchem Notes bereich man
+    // sich befindet". Shortened to the last segment, with the full key in the accessible name.
+    renderTool();
+
+    const scope = await screen.findByRole("button", { name: "Project: github.com/a/b" });
+    expect(scope.textContent).toBe("b");
+  });
+
+  it("keeps a move inside the project you are in", async () => {
+    // Offering every other project's files while one project is selected is a menu that can take an
+    // entry somewhere the list in front of you cannot show it — and it is where the length came
+    // from. Across "all projects" the whole tree is right, because that is what was asked for.
+    vi.mocked(notesApi.index).mockResolvedValue([
+      { project: "github.com/a/b", topic: "inbox", text: "" },
+      { project: "github.com/a/b", topic: "release", text: "" },
+      { project: "github.com/x/y", topic: "elsewhere", text: "" },
+    ]);
+    renderTool();
+    await screen.findByText("first");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for first" }));
+
+    expect(await screen.findByRole("menuitem", { name: "Move to release" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /elsewhere/ })).toBeNull();
+  });
+
   it("carries the entry's own position into the view", async () => {
     // The defect: every caller here KNEW the position and threw it away, so the note opened at the
     // top and the line just pressed had to be found again by reading the markdown — which is the one

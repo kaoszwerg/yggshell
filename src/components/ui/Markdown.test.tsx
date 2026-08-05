@@ -36,6 +36,33 @@ describe("Markdown", () => {
     expect(size("Four")).toBeGreaterThanOrEqual(1);
   });
 
+  it("keeps a bullet and its text on one line", () => {
+    // Reported from a real note: the bullet sat alone on its line with the text underneath. The
+    // item's paragraph rendered as a `<p>`, which is a block, so it broke the line and added its
+    // own margin — and the hanging indent had nothing inline left to hang. The task items looked
+    // right only because their flex row happened to keep the paragraph beside the checkbox.
+    const { container } = render(<Markdown source={"- DMS Grundfunktionen\n- DMS Workflows\n"} />);
+
+    const items = [...container.querySelectorAll("li")];
+    expect(items).toHaveLength(2);
+    for (const item of items) {
+      expect(item.querySelector("p"), "a block element broke the line").toBeNull();
+      expect(item.textContent).toContain("•");
+    }
+    expect(items[0]?.textContent).toContain("DMS Grundfunktionen");
+  });
+
+  it("still separates an item that really does have two paragraphs", () => {
+    // The fix must not flatten a loose item into one run of text: the second paragraph keeps its
+    // block, because an item with two of them needs the separation.
+    const { container } = render(<Markdown source={"- first\n\n  second\n"} />);
+
+    const item = container.querySelector("li");
+    expect(item?.textContent).toContain("first");
+    expect(item?.textContent).toContain("second");
+    expect(item?.querySelectorAll("p")).toHaveLength(1);
+  });
+
   it("renders headings as headings", () => {
     render(<Markdown source="## Bundled colour schemes" />);
     expect(screen.getByRole("heading", { name: "Bundled colour schemes" })).toBeInTheDocument();

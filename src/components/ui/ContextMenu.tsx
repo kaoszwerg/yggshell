@@ -236,8 +236,17 @@ export function ContextMenu({
               ref={menuRef}
               role="menu"
               aria-label={label}
-              className="hud-popover hud-clip-sm hud-accent-cyan fixed z-[80] min-w-[11rem] py-1"
-              style={{ top: pos.top, left: pos.left }}
+              // **Bounded and scrollable.** There was no ceiling at all: a menu taller than the
+              // window was pinned to the top edge by the clamp below (`innerHeight - height - EDGE`
+              // goes negative, `Math.max` takes EDGE) and everything past the bottom of the screen
+              // became unreachable — no scrollbar, no indication, just entries nobody could get to.
+              // The notes tool's "move to" reaches that size with a few dozen notes.
+              className="hud-popover hud-clip-sm hud-accent-cyan fixed z-[80] min-w-[11rem] overflow-y-auto py-1"
+              style={{
+                top: pos.top,
+                left: pos.left,
+                maxHeight: `calc(100vh - ${String(EDGE * 2)}px)`,
+              }}
             >
               {items.map((entry, i) =>
                 isItem(entry) ? (

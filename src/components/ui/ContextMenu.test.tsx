@@ -27,6 +27,31 @@ function Subject({ items }: { items: ReturnType<typeof entries> }) {
   );
 }
 
+describe("ContextMenu overflow", () => {
+  it("bounds itself to the window and scrolls", () => {
+    // There was no ceiling at all. A menu taller than the window was pinned to the top edge by the
+    // clamp (`innerHeight - height - EDGE` goes negative and `Math.max` takes EDGE), and everything
+    // past the bottom of the screen was unreachable — no scrollbar, no indication. The notes tool's
+    // "move to" gets there with a few dozen notes.
+    const many = Array.from({ length: 200 }, (_, at) => ({
+      id: `i${String(at)}`,
+      label: `entry ${String(at)}`,
+      onSelect: vi.fn(),
+    }));
+    render(
+      <ContextMenu label="Long" items={many} openOnClick>
+        <button type="button">open</button>
+      </ContextMenu>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "open" }));
+
+    const menu = screen.getByRole("menu", { name: "Long" });
+    expect(menu.style.maxHeight).toContain("100vh");
+    expect(menu.className).toContain("overflow-y-auto");
+  });
+});
+
 describe("ContextMenu", () => {
   it("stays closed until the trigger is right-clicked", () => {
     render(<Subject items={entries()} />);

@@ -244,9 +244,22 @@ function BlockView({ block }: { block: Block }) {
               </span>
             )}
             <span className={item.done === true ? "line-through opacity-60" : undefined}>
-              {item.blocks.map((child, childAt) => (
-                <BlockView key={childAt} block={child} />
-              ))}
+              {/* **The item's first paragraph renders INLINE, without its `<p>`.** A `<p>` is a block,
+                  so it began on its own line — the bullet sat alone above its text with `mb-2` of air
+                  under it, and the hanging indent (`pl-3 -indent-3`) had nothing inline to hang. The
+                  task items escaped it only because their `flex` row happened to keep the paragraph
+                  beside the checkbox; same markdown, two answers.
+
+                  This is what a *tight* list is in CommonMark — an item whose paragraph is not
+                  wrapped. A second paragraph keeps its block, because an item that really does have
+                  two of them needs the separation. */}
+              {item.blocks.map((child, childAt) =>
+                child.kind === "paragraph" && childAt === 0 ? (
+                  <InlineView key={childAt} runs={child.content} />
+                ) : (
+                  <BlockView key={childAt} block={child} />
+                ),
+              )}
             </span>
           </li>
         ))}

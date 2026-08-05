@@ -140,6 +140,31 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The notes tool says which project it is filing into.** It said so nowhere: the name lived only
+  in the `⋮` menu's accessible label, so the one way to find out was to open the menu and look. It
+  now has its own line above the search, in the foreground colour so it wins against the section
+  headings under it — and the label *is* the control that changes it, which is the pattern a branch
+  or workspace picker uses everywhere. Shortened to the last segment, because `yggshell` is what
+  anybody reads and `github.com/kaoszwerg/yggshell` is what nobody does.
+
+- **Moving an entry stays inside the project you are in.** The move list offered every note in every
+  project even while one project was selected — so it could take an entry somewhere the list in
+  front of you cannot show it. Across *all projects* the whole tree is still offered, because that
+  is what was asked for.
+
+- **A long menu is no longer unreachable past the bottom of the screen.** The context menu had no
+  maximum height and no scrolling at all; one taller than the window was pinned to the top edge by
+  its own clamp and everything below the screen edge simply could not be reached — no scrollbar, no
+  indication. Bounded to the viewport and scrolled, in the primitive, so it holds for every menu in
+  the app rather than the one where it was noticed.
+
+- **A bullet and its text share a line again.** A list item's paragraph rendered as a block, so the
+  marker sat alone above its text with a margin under it, and the hanging indent had nothing inline
+  left to hang. The task items escaped it only because their flex row happened to keep the paragraph
+  beside the checkbox — the same markdown, two answers. An item's first paragraph is inline now, as
+  a tight list is defined; a second one keeps its block, because an item that really has two needs
+  the separation.
+
 - **Markdown headings render as headings again, at every level.** They carried fixed pixel sizes —
   14, 13 and 11 — and both halves of that were wrong. A note is drawn at the size chosen for the
   terminal, so turning that up made the headings *smaller than their own body text*: the one element

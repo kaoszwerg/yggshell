@@ -14,6 +14,7 @@ import { useNotesSync } from "../../hooks/useNotesSync";
 import { useT } from "../../hooks/useT";
 import { useUiStore } from "../../store/ui";
 import { KebabMenu } from "../ui/KebabMenu";
+import { MenuButton } from "../ui/MenuButton";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { copyText } from "../../lib/clipboard";
 import { useToastStore } from "../../store/toast";
@@ -339,16 +340,23 @@ export function NotesTool() {
   ];
 
   /**
-   * Every other note this entry could go to — this project's files first, then every other
-   * project's.
+   * Every other note this entry could go to.
    *
-   * Built from the WHOLE tree, not from what is on screen. Reading it off `sections` meant the list
-   * held only the current project's files, so "move to another project" was an entry that could not
-   * do what it said — reported as the menu partly not doing what it should.
+   * **What it offers follows the scope you are in**, which is the whole reason the scope is now
+   * visible above. Inside one project, moving means moving *within* it: offering every other
+   * project's files there is a menu that can take an entry somewhere the list you are looking at
+   * cannot show it, and it is where the length came from — a few dozen notes and the menu ran off
+   * the bottom of the screen. Across *all projects*, the whole tree is the right answer, because
+   * that is what you asked to see.
+   *
+   * Built from the whole tree either way, not from what is on screen: reading it off `sections`
+   * meant the list held only the current project's files even in "all projects", so "move to
+   * another project" was an entry that could not do what it said.
    */
   const moveTargets = (fromProject: string, fromTopic: string) =>
     (allTopics.data ?? [])
       .filter((s) => !(s.project === fromProject && s.topic === fromTopic))
+      .filter((s) => everything || s.project === fromProject)
       .sort((a, b) => Number(b.project === fromProject) - Number(a.project === fromProject))
       .map((s) => ({
         project: s.project,
@@ -464,6 +472,23 @@ export function NotesTool() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* **Where you are, on its own line and readable at a glance.** The project lived only in the
+          kebab's `aria-label`, so the single way to find out which one you were filing into was to
+          open the menu and look — reported as "es ist schwer zu erkennen in welchem Notes bereich
+          man sich befindet". Its own row rather than squeezed beside the search field, because in a
+          280px column a label that competes with a text input is a label that gets truncated away.
+
+          Shortened to the last segment: `github.com/kaoszwerg/yggshell` is the key, `yggshell` is
+          what anybody reads. The full one is in the tooltip and in the menu. */}
+      <div className="border-cyan/15 flex shrink-0 items-center gap-1 border-b px-2 py-1">
+        <MenuButton
+          label={t("notes.projectMenu", {
+            project: everything ? t("notes.allProjects") : project,
+          })}
+          text={everything ? t("notes.allProjects") : (project.split("/").at(-1) ?? project)}
+          items={projectMenu}
+        />
+      </div>
       <header className="border-cyan/15 flex shrink-0 items-center gap-1 border-b px-2 py-1">
         <Search size={12} className="text-dim shrink-0" aria-hidden />
         <TextField
@@ -492,15 +517,8 @@ export function NotesTool() {
             <X size={12} aria-hidden />
           </IconButton>
         )}
-        {/* The project, and every other one. A picker rather than a toggle: projects are chosen, not
-            derived from whichever tab is in front. */}
-        <KebabMenu
-          label={t("notes.projectMenu", {
-            project: everything ? t("notes.allProjects") : project,
-          })}
-          items={projectMenu}
-          size={11}
-        />
+        {/* The project picker moved to its own row above, where it can say which project it is on.
+            A second, anonymous ⋮ opening the same menu would be a second way to ask one question. */}
         <IconButton
           label={t("notes.open")}
           onClick={() => {
