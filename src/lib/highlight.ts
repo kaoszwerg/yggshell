@@ -155,6 +155,17 @@ const BY_NAME = new Map<string, string>([
  * `null` for a tag we have no grammar for — `perl`, or an empty fence. That is a normal answer: the
  * block still renders, in the foreground colour, which is what it did for every language before this.
  */
+/**
+ * Whether a path names a file with a **rendered** form worth offering.
+ *
+ * Here beside `languageFor` because it answers the same question — what kind of file is this — and a
+ * tool reaching into another tool's panel to ask it was the alternative.
+ */
+export function isMarkdown(path: string): boolean {
+  const name = path.toLowerCase();
+  return name.endsWith(".md") || name.endsWith(".markdown");
+}
+
 export function languageForTag(tag: string): string | null {
   const name = tag.trim().toLowerCase();
   if (name === "") return null;

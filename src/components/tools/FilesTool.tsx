@@ -10,6 +10,7 @@ import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { useT } from "../../hooks/useT";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { isMarkdown } from "../../lib/highlight";
 import { humanSize } from "../../lib/humanSize";
 import { copyText } from "../../lib/clipboard";
 import { useCaptureNote } from "../../hooks/useCaptureNote";
@@ -218,6 +219,27 @@ function Entry({
                     }
                   },
                 },
+                // Offered only where there is something to draw. The panel carries the same switch,
+                // so the choice is not final — but a document you open to READ should not have to be
+                // opened wrong first.
+                ...(isMarkdown(entry.name)
+                  ? [
+                      {
+                        id: "view-rendered",
+                        label: t("files.viewRendered"),
+                        onSelect: () => {
+                          if (activeKey !== null) {
+                            setPaneDetail(activeKey, {
+                              kind: "text" as const,
+                              root,
+                              path: entry.path,
+                              rendered: true,
+                            });
+                          }
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   id: "open",
                   label: t("files.open"),

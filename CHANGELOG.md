@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A markdown file from the file browser can be read as markdown, not only as source.** Its menu
+  offers *View as markdown* beside *View here* — only for markdown, because a `.rs` has nothing to
+  draw — and the panel itself carries the same switch, so a document opened in the wrong lens does
+  not have to be closed and found again in the tree to change it. It is the same file read through
+  the same command with the same check against the tree's root; only the lens differs.
+
+  Images in such a file draw their alt text rather than the picture. The notes have an image reader
+  because their pictures live in a directory this app owns; an arbitrary file in the user's tree has
+  no such reader, and adding a "read any binary under root" command to preview one is a wider door
+  than the feature is worth.
+
 - **The application has a menu of its own.** Until now it had Tauri's default, and that default was
   wrong in three ways that never announced themselves: its *About* opened the system panel rather
   than this app's — the one that knows the build's commit and channel; its File menu carried *Close

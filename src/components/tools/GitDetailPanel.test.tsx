@@ -279,6 +279,33 @@ describe("reading a file here", () => {
     expect(surface?.style.getPropertyValue("--scheme-fg")).not.toBe("");
   });
 
+  it("draws markdown when asked, and flips back from the panel itself", async () => {
+    // Opening a document to find out it is the wrong lens, and having to walk back to the file tree
+    // to say so, is the friction that stops the second lens being used at all.
+    vi.mocked(filesApi.readText).mockResolvedValue({ text: "# A heading\n", truncated: false });
+    showDetail({ kind: "text", root: "/repo", path: "/repo/README.md", rendered: true });
+    renderPanel();
+
+    // Rendered: a real heading element, not the `#` as source.
+    expect(await screen.findByRole("heading", { name: "A heading" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "View the source" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "A heading" })).toBeNull();
+    });
+    expect(screen.getByText(/# A heading/)).toBeTruthy();
+  });
+
+  it("offers no lens for a file that has nothing to render", async () => {
+    vi.mocked(filesApi.readText).mockResolvedValue({ text: "fn main() {}", truncated: false });
+    showDetail({ kind: "text", root: "/repo", path: "/repo/main.rs" });
+    renderPanel();
+
+    await screen.findByText(/fn main/);
+    expect(screen.queryByRole("button", { name: "View as markdown" })).toBeNull();
+  });
+
   it("says so when only part of the file is shown", async () => {
     // A file that silently stops is read as a file that ends there.
     vi.mocked(filesApi.readText).mockResolvedValue({ text: "x", truncated: true });

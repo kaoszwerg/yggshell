@@ -90,7 +90,19 @@ export type PaneDetail =
    * `root` travels with it because the backend checks the path against it, exactly as a listing is
    * checked — the browser cannot be talked into reading outside the tree it shows.
    */
-  | { kind: "text"; root: string; path: string };
+  | {
+      kind: "text";
+      root: string;
+      path: string;
+      /**
+       * Markdown, drawn rather than shown as source.
+       *
+       * A flag on the same detail rather than a second kind, because it is the same file read the
+       * same way through the same command — only the lens differs, and the panel can flip it without
+       * going back to the tree.
+       */
+      rendered?: boolean;
+    };
 
 /**
  * @deprecated The union covers more than Git now — it is what a TAB shows in its detail area. Kept

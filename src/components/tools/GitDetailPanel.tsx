@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Columns2, GitCommitHorizontal, X } from "lucide-react";
+import { ArrowLeft, Columns2, FileText, GitCommitHorizontal, X } from "lucide-react";
 import { gitApi } from "../../api/git";
 import { DiffView } from "../ui/DiffView";
+import { Markdown } from "../ui/Markdown";
 import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
@@ -11,7 +12,7 @@ import { useUiStore, type PaneDetail } from "../../store/ui";
 import { useSettings } from "../../hooks/useSettings";
 import { useDetailScheme } from "../../hooks/useDetailScheme";
 import { surfaceStyle } from "../../lib/schemeSurface";
-import { languageFor, tokenize } from "../../lib/highlight";
+import { isMarkdown, languageFor, tokenize } from "../../lib/highlight";
 import { filesApi } from "../../api/files";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitFileStat } from "../../bindings/GitFileStat";
@@ -191,12 +192,33 @@ function TextContent({
     enabled: query.data !== undefined,
   });
 
+  const markdown = isMarkdown(detail.path);
+  const rendered = markdown && detail.rendered === true;
+
   return (
     <>
       <Header
         heading={detail.path.split("/").pop() ?? detail.path}
         subtitle={detail.path}
         show={show}
+        // **The lens lives on the panel, not only in the tree's menu.** Opening a document to find
+        // out it is the wrong lens and having to walk back to the file list to say so is the friction
+        // that stops anybody using the second lens at all. Only for markdown: a `.rs` has nothing to
+        // render.
+        extra={
+          markdown ? (
+            <IconButton
+              label={rendered ? t("files.viewSource") : t("files.viewRendered")}
+              variant="ghost"
+              active={rendered}
+              onClick={() => {
+                show({ ...detail, rendered: !rendered });
+              }}
+            >
+              <FileText size={13} strokeWidth={2.5} />
+            </IconButton>
+          ) : undefined
+        }
       />
       {/* `scheme-surface` is what APPLIES the variables `surfaceStyle` sets — without it the nine
           custom properties sit on the element and nothing reads them, so the file drew on the HUD's
@@ -214,20 +236,32 @@ function TextContent({
           <p className="text-dim p-4 font-mono text-xs">{String(query.error)}</p>
         ) : (
           <>
-            <pre className="px-2 py-1 font-mono leading-[1.5] wrap-anywhere whitespace-pre-wrap">
-              {coloured.data === undefined
-                ? query.data.text
-                : coloured.data.map((line, at) => (
-                    <span key={at}>
-                      {line.map((token, index) => (
-                        <span key={index} style={token.color ? { color: token.color } : undefined}>
-                          {token.content}
-                        </span>
-                      ))}
-                      {"\n"}
-                    </span>
-                  ))}
-            </pre>
+            {rendered ? (
+              // **No `image` renderer, deliberately.** The notes have one because their pictures live
+              // inside a directory this app owns; an arbitrary file in the user's tree has no such
+              // reader, and inventing a "read any binary under root" command to preview a picture is
+              // a wider door than the feature is worth (rule:security). An image therefore draws its
+              // alt text, which says something is there rather than pretending nothing is.
+              <Markdown source={query.data.text} scheme={scheme} className="px-3 py-2" />
+            ) : (
+              <pre className="px-2 py-1 font-mono leading-[1.5] wrap-anywhere whitespace-pre-wrap">
+                {coloured.data === undefined
+                  ? query.data.text
+                  : coloured.data.map((line, at) => (
+                      <span key={at}>
+                        {line.map((token, index) => (
+                          <span
+                            key={index}
+                            style={token.color ? { color: token.color } : undefined}
+                          >
+                            {token.content}
+                          </span>
+                        ))}
+                        {"\n"}
+                      </span>
+                    ))}
+              </pre>
+            )}
             {query.data.truncated ? (
               // Said out loud: a file that silently stops is read as a file that ends there.
               <p className="scheme-meta px-2 py-1 font-mono text-[10px]">

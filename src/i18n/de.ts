@@ -186,6 +186,8 @@ export const de: Translations = {
   "files.showHidden": "Versteckte Einträge zeigen",
   "files.hideHidden": "Versteckte Einträge ausblenden",
   "files.view": "Hier ansehen",
+  "files.viewRendered": "Als Markdown ansehen",
+  "files.viewSource": "Quelltext ansehen",
   "files.open": "Mit Standardprogramm öffnen",
   "files.newTerminal": "In neuem Terminal öffnen",
   "files.thisTerminal": "cd in dieses Terminal tippen",

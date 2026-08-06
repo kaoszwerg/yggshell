@@ -181,6 +181,31 @@ describe("what a path can be opened as", () => {
     expect(filesApi.open).not.toHaveBeenCalled();
   });
 
+  it("offers a rendered view for markdown, and asks for it directly", async () => {
+    // A document you open to READ should not have to be opened wrong first. The panel carries the
+    // same switch, so the choice is not final either way.
+    renderTool();
+    fireEvent.contextMenu(await screen.findByText("README.md"));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View as markdown" }));
+
+    expect(useTerminalStore.getState().panes[0]?.detail).toEqual({
+      kind: "text",
+      root: "/repo",
+      path: "/repo/README.md",
+      rendered: true,
+    });
+  });
+
+  it("does not offer it for a file that has nothing to render", async () => {
+    renderTool();
+    fireEvent.click(await screen.findByRole("button", { name: "Show hidden entries" }));
+    fireEvent.contextMenu(await screen.findByText(".env"));
+    await screen.findByRole("menu");
+
+    expect(screen.getByRole("menuitem", { name: "View here" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "View as markdown" })).toBeNull();
+  });
+
   it("offers neither viewing nor opening for a directory", async () => {
     renderTool();
     fireEvent.contextMenu(await screen.findByText("src"));

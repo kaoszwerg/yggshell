@@ -195,6 +195,8 @@ export const en = {
   "files.showHidden": "Show hidden entries",
   "files.hideHidden": "Hide hidden entries",
   "files.view": "View here",
+  "files.viewRendered": "View as markdown",
+  "files.viewSource": "View the source",
   "files.open": "Open with the default app",
   "files.newTerminal": "Open in a new terminal",
   "files.thisTerminal": "Type cd into this terminal",
