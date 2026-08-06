@@ -180,6 +180,7 @@ export const en = {
   "chain.copyRuleDone": "Copied. Paste it into the agent working here.",
   "chain.installGate": "Put the check in this repo",
   "chain.updateGate": "Update the check in this repo",
+  "chain.backgroundFailed": "ended badly",
   "adoption.title": "Hand a project the work convention",
   "adoption.description":
     "Copies the manual and the rule, ready to paste into the agent working in another repository. It explains how to be legible to the Chain tool and how to write that project's work-levels.json.",

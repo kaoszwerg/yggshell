@@ -89,6 +89,30 @@ impl Act {
     }
 }
 
+/// Work the agent started and walked away from, still running after its turn closed.
+///
+/// **"Nothing outstanding" answers a different question than "nothing is happening".** `Stop` means
+/// the agent has replied, not that the machine is idle: a build started in the background runs on,
+/// and the panel said the session was quiet through all of it. Reported while a DMG was compiling.
+///
+/// Kept apart from [`Standing`] on purpose. That says whether the agent owes *you* something; this
+/// says whether the machine is busy. Folding a background build into "working" would put back
+/// exactly the inferred state that was cut out of it — the agent really has finished.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct Background {
+    /// What the command was, as the classifier read it — `build`, `verify`, `ship`.
+    pub act: Act,
+    pub refinement: Option<String>,
+    /// Seconds since it was started.
+    pub seconds: u64,
+    /// It reported a non-zero exit while nobody was looking.
+    ///
+    /// The other half this pairing buys, and nothing reads it today: a background run that *failed*
+    /// after the agent went idle is invisible in every other surface.
+    pub failed: bool,
+}
+
 /// What kind of thing a step is, beyond its act.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/")]
@@ -318,6 +342,8 @@ pub struct Chain {
     /// What is expected next, from this session's own edge frequencies. An observation, never a
     /// plan — the interface draws it differently for that reason.
     pub expected: Vec<Round>,
+    /// Work still running after the turn closed — see [`Background`].
+    pub background: Vec<Background>,
     /// Seconds since the first step of the session.
     pub elapsed: u64,
     /// Seconds since the **last** step — how long nothing has happened.

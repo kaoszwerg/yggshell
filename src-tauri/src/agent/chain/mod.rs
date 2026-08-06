@@ -65,8 +65,27 @@ pub struct Parsed {
     /// How many complete plans came before this one. Kept so the tool can say "the fourth list of
     /// the day" rather than pretending the earlier ones never existed.
     pub finished_plans: u32,
+    /// Work started in the background and not yet reported finished, by its task id.
+    ///
+    /// **Both ends are already in this file**, which is why this needs no second mechanism: the
+    /// result of a backgrounded call carries `running in background with ID: …`, and its completion
+    /// arrives later as a `<task-notification>` naming the same id. Measured in a live session: 17
+    /// starts, each paired.
+    pub background: HashMap<String, OpenRun>,
     /// Byte offset one past the last complete line consumed.
     pub offset: u64,
+}
+
+/// One backgrounded command, from the moment it started until something says it ended.
+#[derive(Debug, Clone)]
+pub struct OpenRun {
+    pub act: Act,
+    pub refinement: Option<String>,
+    /// When it started, as the transcript recorded it.
+    pub at: Option<String>,
+    /// It has ended, and badly. Kept rather than dropped: a background run that failed while the
+    /// agent was already idle is invisible in every other surface this app has.
+    pub failed: bool,
 }
 
 /// Read a transcript and classify everything in it.
@@ -101,6 +120,9 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
     // `TaskCreate` gives a subject; its id comes back in the tool result. Matched by tool-use id so
     // the plan survives interleaved calls.
     let mut pending_subjects: HashMap<String, String> = HashMap::new();
+    // The same shape for a backgrounded command: the call says what it is, its result says what the
+    // task is called, and only the pair is useful.
+    let mut pending_background: HashMap<String, OpenRun> = HashMap::new();
 
     for line in text.lines() {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
@@ -126,12 +148,17 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
             out.steps
                 .push(Step::new(Act::Compact, None).at(timestamp.clone()));
         }
-        let content = value
-            .get("message")
-            .and_then(|m| m.get("content"))
-            .and_then(Value::as_array);
+        let content = value.get("message").and_then(|m| m.get("content"));
 
-        let Some(parts) = content else { continue };
+        // A completion arrives as plain text, not as a tool call — the harness injects it as a
+        // message. It is the only line in the file that says a background run has ended.
+        if let Some(text) = content.and_then(Value::as_str) {
+            close_background(&mut out.background, text);
+        }
+
+        let Some(parts) = content.and_then(Value::as_array) else {
+            continue;
+        };
         for part in parts {
             match str_at(part, "type").as_deref() {
                 Some("tool_use") => {
@@ -150,6 +177,26 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                     let status = input.and_then(|i| i.get("status")).and_then(Value::as_str);
                     let step =
                         classify::classify(&name, command, file, status).at(timestamp.clone());
+
+                    // A backgrounded call: remembered by tool-use id, because what it *is* is known
+                    // here and what it is *called* only arrives with its result.
+                    let backgrounded = input
+                        .and_then(|i| i.get("run_in_background"))
+                        .and_then(Value::as_bool)
+                        == Some(true);
+                    if backgrounded {
+                        if let Some(id) = str_at(part, "id") {
+                            pending_background.insert(
+                                id,
+                                OpenRun {
+                                    act: step.act,
+                                    refinement: step.refinement.clone(),
+                                    at: timestamp.clone(),
+                                    failed: false,
+                                },
+                            );
+                        }
+                    }
                     if step.recognised {
                         out.understood += 1;
                     }
@@ -179,6 +226,12 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                 }
                 Some("tool_result") => {
                     if let Some(id) = str_at(part, "tool_use_id") {
+                        // The result names the task, which is what a completion will name later.
+                        if let Some(run) = pending_background.remove(&id) {
+                            if let Some(task) = background_id(part) {
+                                out.background.insert(task, run);
+                            }
+                        }
                         if let Some(subject) = pending_subjects.remove(&id) {
                             let task_id = created_id(part)
                                 .unwrap_or_else(|| (out.plan.len() + 1).to_string());
@@ -196,6 +249,83 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
         }
     }
     out
+}
+
+/// How long an unfinished background run is still believed.
+///
+/// **A bound, because the end of a run can genuinely never arrive**: the session was closed, the
+/// task was killed by something outside this app, or the marker below stopped matching. Reporting
+/// "still running" about something that stopped four hours ago is exactly the confident wrongness
+/// this whole panel is being corrected for, so an entry older than this is dropped rather than
+/// shown. Two hours is longer than any build here and short enough that a stale one does not
+/// survive a lunch break.
+const BACKGROUND_MAX_SECS: u64 = 2 * 60 * 60;
+
+/// What is still running, oldest first, with the stale entries dropped.
+fn still_running(open: &HashMap<String, OpenRun>) -> Vec<model::Background> {
+    let mut out: Vec<model::Background> = open
+        .values()
+        .map(|run| model::Background {
+            act: run.act,
+            refinement: run.refinement.clone(),
+            seconds: run.at.as_deref().map_or(0, seconds_since),
+            failed: run.failed,
+        })
+        .filter(|run| run.seconds <= BACKGROUND_MAX_SECS)
+        .collect();
+    // Oldest first: the one that has been running longest is the one worth asking about.
+    out.sort_by_key(|run| std::cmp::Reverse(run.seconds));
+    out
+}
+
+/// What the harness calls a backgrounded command, from the result that started it.
+///
+/// **The one string this feature depends on**, and it is the harness's wording rather than ours — a
+/// reword makes it stop finding anything. That failure is deliberately one-sided: nothing is
+/// reported, rather than something wrong being reported, and the pinned test below is what turns a
+/// reword into a red build here instead of a quiet gap in somebody's panel.
+const BACKGROUND_MARKER: &str = "running in background with ID: ";
+
+/// The task id in a result that started something in the background.
+fn background_id(part: &Value) -> Option<String> {
+    let text = part.get("content").map(|c| match c.as_str() {
+        Some(text) => text.to_string(),
+        None => c.to_string(),
+    })?;
+    let after = text.split_once(BACKGROUND_MARKER)?.1;
+    let id: String = after
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    (!id.is_empty()).then_some(id)
+}
+
+/// Close whatever a task notification says has ended.
+///
+/// A completion that did **not** succeed is kept rather than removed: the agent has long since gone
+/// idle, so a failed background run is otherwise invisible in every surface this app has.
+fn close_background(open: &mut HashMap<String, OpenRun>, text: &str) {
+    if !text.contains("<task-notification>") {
+        return;
+    }
+    let Some(id) = between(text, "<task-id>", "</task-id>") else {
+        return;
+    };
+    let Some(run) = open.get_mut(&id) else { return };
+    match between(text, "<status>", "</status>").as_deref() {
+        Some("completed") => {
+            open.remove(&id);
+        }
+        // Killed, failed, or a status this reader has not met: it ended, and not well.
+        Some(_) => run.failed = true,
+        None => {}
+    }
+}
+
+fn between(text: &str, open: &str, close: &str) -> Option<String> {
+    let after = text.split_once(open)?.1;
+    let inner = after.split_once(close)?.0;
+    (!inner.is_empty()).then(|| inner.trim().to_string())
 }
 
 /// Apply one `TaskUpdate` to the reconstructed plan.
@@ -455,6 +585,7 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
         plan: parsed.plan,
         plan_done,
         expected,
+        background: still_running(&parsed.background),
         elapsed,
         idle,
         standing,
@@ -783,6 +914,74 @@ mod tests {
     fn an_empty_chain_expects_nothing_rather_than_guessing() {
         assert!(expectation(&[]).is_empty());
         assert!(expectation(&[stub(Act::Verify)]).is_empty());
+    }
+
+    #[test]
+    fn a_background_run_is_open_until_its_notification_says_otherwise() {
+        // **"Nothing outstanding" and "nothing is happening" are different sentences.** `Stop` says
+        // the agent has replied; a build it started keeps compiling, and the panel called the
+        // session quiet throughout — reported while a DMG was being built. Both ends were already
+        // in this file: the result names the task, the notification names it again.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("t.jsonl");
+        let start = r#"{"type":"assistant","timestamp":"2026-08-06T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"u1","name":"Bash","input":{"command":"npm run build","run_in_background":true}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"u1","content":"Command running in background with ID: bx42. Output is being written to /tmp/x"}]}}
+"#;
+        std::fs::write(&path, start).expect("write");
+
+        let open = parse_transcript(&path, 0);
+        assert_eq!(open.background.len(), 1, "started and not yet finished");
+        assert_eq!(open.background["bx42"].act, Act::Build);
+
+        // And it closes on its own notification, by id.
+        std::fs::write(
+            &path,
+            format!(
+                "{start}{}\n",
+                r#"{"type":"user","message":{"content":"<task-notification>\n<task-id>bx42</task-id>\n<status>completed</status>\n</task-notification>"}}"#
+            ),
+        )
+        .expect("append");
+        assert!(parse_transcript(&path, 0).background.is_empty());
+    }
+
+    #[test]
+    fn a_background_run_that_ended_badly_is_kept_rather_than_forgotten() {
+        // The half nothing else in this app can show: it failed after the agent went idle, so no
+        // other surface will ever mention it.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("t.jsonl");
+        std::fs::write(
+            &path,
+            format!(
+                "{}\n{}\n{}\n",
+                r#"{"type":"assistant","timestamp":"2026-08-06T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"u1","name":"Bash","input":{"command":"npm run build","run_in_background":true}}]}}"#,
+                r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"u1","content":"Command running in background with ID: bx42."}]}}"#,
+                r#"{"type":"user","message":{"content":"<task-notification>\n<task-id>bx42</task-id>\n<status>killed</status>\n</task-notification>"}}"#,
+            ),
+        )
+        .expect("write");
+
+        let parsed = parse_transcript(&path, 0);
+        assert!(parsed.background["bx42"].failed);
+    }
+
+    #[test]
+    fn a_run_nobody_ever_closed_stops_being_believed() {
+        // A session that ended, a task killed from outside, or the marker having stopped matching.
+        // Claiming something has been running for four hours is the confident wrongness this whole
+        // panel is being corrected for.
+        let old = HashMap::from([(
+            "b1".to_string(),
+            OpenRun {
+                act: Act::Build,
+                refinement: None,
+                at: Some("2020-01-01T00:00:00.000Z".into()),
+                failed: false,
+            },
+        )]);
+
+        assert!(still_running(&old).is_empty());
     }
 
     #[test]

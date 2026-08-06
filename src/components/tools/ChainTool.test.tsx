@@ -66,6 +66,7 @@ function chain(over: Partial<Chain> = {}): Chain {
     plan: [],
     plan_done: false,
     expected: [],
+    background: [],
     elapsed: 3600n as unknown as bigint,
     idle: 5n as unknown as bigint,
     standing: "working",
@@ -325,6 +326,27 @@ describe("ChainTool", () => {
     state.chain = chain({ links: [] });
     render(<ChainTool />);
     expect((await screen.findAllByText(/does not declare its runs/i)).length).toBeGreaterThan(0);
+  });
+
+  it("says what is still running after the agent has stopped", () => {
+    // "Nothing outstanding" answers whether the agent owes you something. It was being read as
+    // "nothing is happening" while a build compiled — reported while a DMG was being built.
+    state.chain = chain({
+      standing: "idle",
+      background: [
+        {
+          act: "build",
+          refinement: "app:build",
+          seconds: 240n as unknown as bigint,
+          failed: false,
+        },
+      ],
+    });
+    render(<ChainTool />);
+
+    expect(screen.getByText(/nothing outstanding/i)).toBeTruthy();
+    expect(screen.getByText("app:build")).toBeTruthy();
+    expect(screen.getByText("4 min")).toBeTruthy();
   });
 
   it("explains the marks on demand, and says which region each one belongs to", () => {

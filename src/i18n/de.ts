@@ -167,6 +167,7 @@ export const de: Translations = {
   "chain.copyRuleDone": "Kopiert. Füge sie dem Agenten ein, der hier arbeitet.",
   "chain.installGate": "Prüfung in dieses Repo legen",
   "chain.updateGate": "Prüfung in diesem Repo erneuern",
+  "chain.backgroundFailed": "schlecht geendet",
   "adoption.title": "Einem Projekt die Arbeitskonvention geben",
   "adoption.description":
     "Kopiert Handbuch und Regel, fertig zum Einfügen beim Agenten eines anderen Repositories. Darin steht, wie er für das Ketten-Tool lesbar wird und wie er die work-levels.json dieses Projekts schreibt.",

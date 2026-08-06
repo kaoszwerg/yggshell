@@ -6726,7 +6726,7 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "yggshell"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "chrono",
  "gix",

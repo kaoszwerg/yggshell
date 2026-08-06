@@ -287,6 +287,43 @@ function Now({ chain, link }: { chain: Chain; link: ChainLink }) {
               ? t("chain.openSteps", { n: String(openSteps) })
               : t("chain.quietFor", { duration: duration(Number(chain.idle), t) })}
       </div>
+
+      <BackgroundRuns chain={chain} />
+    </div>
+  );
+}
+
+/**
+ * What is still running after the agent stopped.
+ *
+ * **Drawn under the state line rather than inside it**, because it answers a different question.
+ * The line above says whether the agent owes you something; this says whether the machine is busy —
+ * and "nothing outstanding" was being read as "nothing is happening" while a build compiled for
+ * minutes. Folding it into `working` would put back the inferred state that was just cut out of it:
+ * the agent really has finished.
+ */
+function BackgroundRuns({ chain }: { chain: Chain }) {
+  const t = useT();
+  if (chain.background.length === 0) return null;
+  return (
+    <div className="mt-[0.35em] flex flex-col gap-[0.15em]">
+      {chain.background.map((run, index) => (
+        <div
+          key={`${run.act}-${index}`}
+          className={`flex items-baseline gap-[0.4em] text-[0.85em] tabular-nums ${
+            run.failed ? "text-danger" : "text-dim"
+          }`}
+        >
+          <span aria-hidden>{run.failed ? "▲" : "↻"}</span>
+          <span className="tracking-wider">{actWord(run.act, t)}</span>
+          {run.refinement === null ? null : (
+            <span className="min-w-0 truncate">{run.refinement}</span>
+          )}
+          <span className="ml-auto shrink-0">
+            {run.failed ? t("chain.backgroundFailed") : duration(Number(run.seconds), t)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

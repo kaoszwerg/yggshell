@@ -136,6 +136,15 @@ mod tests {
             seen: 7,
             understood: 5,
             finished_plans: 2,
+            background: std::collections::HashMap::from([(
+                "b1".to_string(),
+                crate::agent::chain::OpenRun {
+                    act: Act::Build,
+                    refinement: Some("app:build".into()),
+                    at: None,
+                    failed: false,
+                },
+            )]),
             offset,
         }
     }
@@ -175,6 +184,12 @@ mod tests {
         assert_eq!(kept.seen, 7, "the tally");
         assert_eq!(kept.understood, 5, "and the understood half of it");
         assert_eq!(kept.finished_plans, 2, "how many lists came before");
+        assert_eq!(
+            kept.background.len(),
+            1,
+            "and what is still running — a build outlives many polls, so losing this on the second \
+             one would mean the panel only ever knew about it for four seconds"
+        );
         assert_eq!(kept.session_id.as_deref(), Some("abc"));
         assert_eq!(kept.harness_version.as_deref(), Some("2.1.223"));
     }
