@@ -185,6 +185,44 @@ pub fn agent_session(
     Ok(session)
 }
 
+/// The chain of work the agent in this tab has been through.
+///
+/// **Always the whole chain, never a delta.** The offset that makes this cheap lives in the backend
+/// cache and does not cross the boundary — a delta command would be destructive on call, and the
+/// frontend loses one four different ways (StrictMode, `retry: 3`, remount, two tabs on one repo).
+/// See `agent::chain::cache`.
+///
+/// `None` when no agent has run in this directory. Nothing read here is logged: this reads the
+/// user's prompts, commands and file contents, and ADR-PROJ-005 §1 permits counters and
+/// classifications in the log, never content.
+#[tauri::command]
+pub fn agent_chain(
+    app: tauri::AppHandle,
+    cwd: String,
+) -> Result<Option<crate::agent::chain::model::Chain>> {
+    use tauri::Manager;
+    let cwd_path = std::path::Path::new(&cwd);
+    let home = crate::agent::declared_home(cwd_path)
+        .or_else(|| {
+            home_dir(&app)
+                .and_then(|dir| crate::agent::homes_for(&dir, cwd_path).into_iter().next())
+        })
+        .or_else(|| home_dir(&app).map(|dir| dir.join(".claude")));
+    let Some(home) = home else {
+        return Ok(None);
+    };
+    let state = app.state::<crate::state::AppState>();
+    let chain = crate::agent::chain::read(&home, cwd_path, &state.chain);
+    tracing::debug!(
+        found = chain.is_some(),
+        links = chain.as_ref().map_or(0, |c| c.links.len()),
+        understood = chain.as_ref().map_or(0, |c| c.steps_understood),
+        seen = chain.as_ref().map_or(0, |c| c.steps_seen),
+        "agent_chain ok"
+    );
+    Ok(chain)
+}
+
 /// The user's home directory, through Tauri's path API rather than by assembling `$HOME`
 /// (rule:rust-conventions).
 fn home_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {

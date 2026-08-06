@@ -5,6 +5,7 @@ import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { AttentionPanel } from "./AttentionPanel";
 import { UsageBars } from "./UsageBars";
+import { Disclosure } from "../ui/Disclosure";
 import { useT } from "../../hooks/useT";
 import { formatTokens, sinceLabel } from "../../lib/tokens";
 
@@ -95,12 +96,13 @@ export function AgentTool() {
       {/* The account is part of "what is the agent here", so switching it lives with the reading of
           it rather than in Settings — a preference page is where you go to decide something once,
           and this is decided per project. */}
-      <details className="border-cyan/15 border-t">
-        <summary className="text-dim cursor-pointer px-2 py-1 font-mono text-[10px] select-none">
-          {t("env.title")}
-        </summary>
+      <Disclosure
+        className="border-cyan/15 border-t"
+        summaryClassName="text-dim px-2 py-1 font-mono text-[10px] select-none"
+        summary={<span>{t("env.title")}</span>}
+      >
         <EnvironmentPanel />
-      </details>
+      </Disclosure>
     </div>
   );
 }

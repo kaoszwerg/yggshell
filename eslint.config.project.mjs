@@ -28,6 +28,37 @@ export default [
     },
   },
   {
+    // `<details>`/`<summary>` are stock UI, and the base config does not name them.
+    //
+    // It bans `button`, `input`, `select`, `textarea` and the `title` tooltip — the list was written
+    // from the controls that existed then. A disclosure is exactly as much an interactive control a
+    // view touches (ADR-APP-026), and styling the native one means deleting its marker and rebuilding
+    // its focus ring, which is the "fighting its skin" the rule names. `ui/Disclosure` is the
+    // primitive; this is what keeps callers on it.
+    //
+    // Its OWN entry, not an addition to the base config's `no-restricted-syntax`: flat config
+    // REPLACES a rule's options instead of merging them, so extending that entry here would silently
+    // switch off its existing bans. Two other overlays in this file carry the same warning, learned
+    // the same way.
+    files: ["src/**/*.tsx"],
+    ignores: ["src/**/*.test.tsx", "src/components/ui/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXOpeningElement[name.name='details']",
+          message:
+            "No native <details> outside src/components/ui — use the Disclosure primitive (ADR-APP-026).",
+        },
+        {
+          selector: "JSXOpeningElement[name.name='summary']",
+          message:
+            "No native <summary> outside src/components/ui — use the Disclosure primitive (ADR-APP-026).",
+        },
+      ],
+    },
+  },
+  {
     // Every user-facing string comes from the catalogue. Two languages are easy to ship and hard to
     // KEEP: without this, the interface drifts back into English one new button at a time, and the
     // type system cannot object — an English word in JSX is a perfectly good string.

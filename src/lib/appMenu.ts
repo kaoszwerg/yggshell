@@ -25,6 +25,7 @@ const KEYED: ActionId[] = [
   "toggleActivityTool",
   "toggleDockerTool",
   "toggleAgentTool",
+  "toggleChainTool",
   "toggleTmuxTool",
   "toggleNotesTool",
   "nextTab",
@@ -105,6 +106,7 @@ export function appMenuSpec(
       toolActivity: t("menu.tool.activity"),
       toolDocker: t("menu.tool.docker"),
       toolAgent: t("menu.tool.agent"),
+      toolChain: t("menu.tool.chain"),
       toolTmux: t("menu.tool.tmux"),
       toolNotes: t("menu.tool.notes"),
 

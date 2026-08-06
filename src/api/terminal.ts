@@ -6,6 +6,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TerminalExit } from "../bindings/TerminalExit";
 import type { TerminalOpened } from "../bindings/TerminalOpened";
 import type { AgentSession } from "../bindings/AgentSession";
+import type { Chain } from "../bindings/Chain";
 import type { UsageSummary } from "../bindings/UsageSummary";
 import type { TerminalActivity } from "../bindings/TerminalActivity";
 import type { TerminalStatus } from "../bindings/TerminalStatus";
@@ -144,6 +145,19 @@ export const terminalApi = {
    */
   agentSession: (id: SessionId, cwd: string) =>
     invoke<AgentSession | null>("agent_session", { id, cwd }),
+
+  /**
+   * The chain of work the agent in this directory has been through.
+   *
+   * **Always the whole chain**, never a delta — the offset that makes it cheap lives in the backend
+   * and never crosses this boundary. A delta would be consumed by whichever caller got there first,
+   * and there are four ways to have more than one: StrictMode doubles mounts, `retry` repeats a
+   * failed call, switching tools remounts the query, and two tabs on one repository read the same
+   * file.
+   *
+   * `null` when no agent has run there.
+   */
+  agentChain: (cwd: string) => invoke<Chain | null>("agent_chain", { cwd }),
 
   /**
    * How much of the subscription this tab's account has used.

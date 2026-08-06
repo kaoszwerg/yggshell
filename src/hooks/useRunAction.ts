@@ -113,6 +113,9 @@ export function useRunAction(): (action: ActionId) => void {
       case "toggleAgentTool":
         toggleTool("agent");
         return;
+      case "toggleChainTool":
+        toggleTool("chain");
+        return;
       default: {
         // `selectTab1`…`selectTab9`. Derived rather than nine cases: the number IS the index, and
         // nine near-identical branches is nine places for one of them to be wrong.

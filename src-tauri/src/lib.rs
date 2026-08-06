@@ -145,6 +145,7 @@ pub fn run() {
             commands::terminal::terminal_status,
             commands::terminal::terminal_activity,
             commands::terminal::agent_session,
+            commands::terminal::agent_chain,
             commands::terminal::agent_usage,
             commands::terminal::clipboard_text,
             commands::terminal::clipboard_write,

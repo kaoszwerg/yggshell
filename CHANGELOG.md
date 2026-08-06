@@ -8,6 +8,38 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A Chain tool: what the agent in this tab has been through, and what it is doing now.** It reads
+  the transcript the harness writes anyway — no hook in the agent's path, no token in its context, no
+  configuration asked of it — and folds four hours of work into something readable. Measured against
+  a live session: **391 tool calls became 34 links**, with half of everything folded into the block it
+  happened inside, because reading a log after a test run is part of the test, not a step beside it.
+
+  A repeated `verify ⇄ build` collapses into one link carrying its iteration count, which is the one
+  number that says *this is not progressing*. It folds only while the thing being returned to stays
+  the same: sixteen rounds fixing sixteen files is one agent stuck on one suite, but a Rust suite
+  fixed once and a TypeScript suite fixed once are two successful passes and reporting them as `×2`
+  would say the opposite of what happened.
+
+  Whether a check was red is read from **what followed it**, never from an exit code — measured twice,
+  in two projects, only 6 of 381 and 6 of 876 results carry one, because agents pipe test runs
+  through `tail`. A verify followed by a build had found something; a verify followed by a commit had
+  not.
+
+  The agent's own plan appears above the trace when it keeps one, reconstructed from the same file in
+  the same pass. That matters more than it sounds: the harness clears its task list the moment
+  nothing is open, so *finished* and *never had one* look identical there — the transcript is what
+  tells them apart, and the tool says which it is.
+
+- **`work-levels.json`: a project can declare what its runs mean.** `verify/e2e@dev`,
+  `ship/deploy@prod` — an act, a refinement, and the target it reaches, with `reaches` naming the
+  host whenever that is not this machine. The chain reads it for naming, and it may only ever
+  *widen* what a run is said to touch: a repository that declares its deploy as local does not get
+  to turn a production run green in somebody's sidebar. A gate holds the grammar, and it caught two
+  invalid entries in this repository's own file on its first run.
+
+- **A `Disclosure` HUD primitive**, and a lint that keeps `<details>`/`<summary>` out of views. The
+  Agent tool had been using the native element since it shipped; it now uses the primitive.
+
 - **A markdown file from the file browser can be read as markdown, not only as source.** Its menu
   offers *View as markdown* beside *View here* — only for markdown, because a `.rs` has nothing to
   draw — and the panel itself carries the same switch, so a document opened in the wrong lens does

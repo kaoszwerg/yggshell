@@ -8,6 +8,7 @@ import { ActivityTool } from "./ActivityTool";
 import { TmuxTool } from "./TmuxTool";
 import { NotesTool } from "./NotesTool";
 import { AgentTool } from "./AgentTool";
+import { ChainTool } from "./ChainTool";
 import { DockerTool } from "./DockerTool";
 import { FilesTool } from "./FilesTool";
 import { GitTool } from "./GitTool";
@@ -28,6 +29,8 @@ function toolLabelKey(tool: ToolId): MessageKey {
       return "nav.docker";
     case "agent":
       return "nav.agent";
+    case "chain":
+      return "nav.chain";
     case "tmux":
       return "nav.tmux";
     case "notes":
@@ -111,6 +114,7 @@ export function ToolPanel() {
           {activeTool === "activity" ? <ActivityTool /> : null}
           {activeTool === "docker" ? <DockerTool /> : null}
           {activeTool === "agent" ? <AgentTool /> : null}
+          {activeTool === "chain" ? <ChainTool /> : null}
           {activeTool === "tmux" ? <TmuxTool /> : null}
           {activeTool === "notes" ? <NotesTool /> : null}
         </div>

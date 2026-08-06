@@ -8,7 +8,7 @@ import {
   Settings,
   TerminalSquare,
 } from "lucide-react";
-import { Layers, NotebookPen } from "lucide-react";
+import { Layers, Link2, NotebookPen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IconButton } from "../ui/IconButton";
 import type { HudAccent } from "../ui/hudButton";
@@ -36,6 +36,9 @@ const TOOLS: ToolItem[] = [
   { id: "git", Icon: GitBranch, label: "nav.git" },
   { id: "files", Icon: FolderTree, label: "nav.files" },
   { id: "agent", Icon: Bot, label: "nav.agent" },
+  // Beside Agent, not after it: one answers "who is working here and on what account", the other
+  // "what have they been through". Same subject, two questions, so they sit together.
+  { id: "chain", Icon: Link2, label: "nav.chain" },
   { id: "activity", Icon: Activity, label: "nav.activity" },
   { id: "docker", Icon: Box, label: "nav.docker" },
   { id: "tmux", Icon: Layers, label: "nav.tmux" },

@@ -14,7 +14,7 @@
  * second copy of these strings in Rust would be a second thing to translate and a first thing to
  * forget.
  */
-export type AppMenuLabels = { about: string, settings: string, services: string, hide: string, hideOthers: string, showAll: string, quit: string, shell: string, newTab: string, closeTab: string, find: string, clear: string, edit: string, undo: string, redo: string, cut: string, copy: string, paste: string, selectAll: string, view: string, fontBigger: string, fontSmaller: string, fontReset: string, logs: string, tools: string, toolGit: string, toolFiles: string, toolActivity: string, toolDocker: string, toolAgent: string, toolTmux: string, toolNotes: string, window: string, minimize: string, zoom: string, nextTab: string, previousTab: string, 
+export type AppMenuLabels = { about: string, settings: string, services: string, hide: string, hideOthers: string, showAll: string, quit: string, shell: string, newTab: string, closeTab: string, find: string, clear: string, edit: string, undo: string, redo: string, cut: string, copy: string, paste: string, selectAll: string, view: string, fontBigger: string, fontSmaller: string, fontReset: string, logs: string, tools: string, toolGit: string, toolFiles: string, toolActivity: string, toolDocker: string, toolAgent: string, toolChain: string, toolTmux: string, toolNotes: string, window: string, minimize: string, zoom: string, nextTab: string, previousTab: string, 
 /**
  * Nine entries, already numbered — the numbering is wording, and wording is the catalogue's.
  */

@@ -53,6 +53,7 @@ export const en = {
   "menu.tool.activity": "Activity",
   "menu.tool.docker": "Containers",
   "menu.tool.agent": "Agent",
+  "menu.tool.chain": "Chain",
   "menu.tool.tmux": "Sessions",
   "menu.tool.notes": "Notes",
   "menu.window": "Window",
@@ -149,6 +150,37 @@ export const en = {
   "env.created": "Created {path}. Claude Code signs in there on first use.",
   "env.wrote": "Wrote and allowed {path}.",
   "nav.agent": "Agent",
+  // ── The Chain tool ────────────────────────────────────────────────────────────────────────────
+  //
+  // What is NOT here, deliberately: the act names (`verify`, `build`, `ship`, `probe`, `plan`) and
+  // their refinements. Those are identifiers from `rule:work-legibility`, the same words that appear
+  // in `work-levels.json` and in the commands the agent types. A German interface showing `PRÜFEN`
+  // beside a declaration saying `verify` would be three names for one thing (rule:i18n).
+  "nav.chain": "Chain",
+  "chain.noTerminal": "This tab has no terminal running.",
+  "chain.reading": "Reading the session…",
+  "chain.none": "No agent has run in this directory.",
+  "chain.failed": "The session could not be read.",
+  "chain.plan": "Plan",
+  "chain.trace": "Trace",
+  "chain.goal": "Goal",
+  "chain.noPlan": "This session keeps no plan.",
+  "chain.noPlanHint": "Its goal and remaining steps are unknown — below is what actually happened.",
+  "chain.planDone": "Every planned step is finished.",
+  "chain.running": "running for {duration}",
+  "chain.attempt": "attempt {n}",
+  "chain.iterations": "{n}×",
+  "chain.probes": "+ {n} lookups",
+  "chain.expected": "expected · seen {n}×",
+  "chain.guessed": "guessed from the program name",
+  "chain.disputed": "the project declares this as closer than it reaches",
+  "chain.delegated": "{n} steps in a subagent",
+  "chain.coverage": "{understood} of {seen} steps recognised",
+  "chain.unverifiedHarness": "written by an unverified harness version ({version})",
+  "chain.steps": "{n} steps",
+  "chain.links": "{n} links",
+  "chain.underMinute": "< 1 min",
+  "chain.openDetail": "Show what this consisted of",
   "agent.noSession": "This tab has no terminal running.",
   "agent.reading": "Reading the session…",
   "agent.none": "No agent has run in this directory.",
@@ -548,6 +580,7 @@ export const en = {
   "keys.action.toggleActivityTool": "Show or hide the Activity tool",
   "keys.action.toggleDockerTool": "Show or hide the Docker tool",
   "keys.action.toggleAgentTool": "Show or hide the Agent tool",
+  "keys.action.toggleChainTool": "Show or hide the Chain tool",
   "keys.action.toggleTmuxTool": "Show or hide the tmux tool",
   "keys.action.toggleNotesTool": "Show or hide the Notes tool",
 

@@ -42,6 +42,7 @@ export const ACTIONS = [
   "toggleActivityTool",
   "toggleDockerTool",
   "toggleAgentTool",
+  "toggleChainTool",
   "toggleTmuxTool",
   "toggleNotesTool",
 ] as const;
@@ -125,6 +126,10 @@ export function defaultBindings(mac: boolean = isMacPlatform()): Record<ActionId
     // N for notes. Free in this app, and the view is reached FROM the tool rather than by a second
     // near-identical combination nobody would remember which of.
     toggleNotesTool: mod("n"),
+    // Y for the chain — the last free letter that is not a shell key and not one of the above. It is
+    // in Y-ggshell, which is as much mnemonic as an arbitrary letter can be given that C (copy), H
+    // (hide) and B (bold, in half the programs a terminal runs) are all spoken for.
+    toggleChainTool: mod("y"),
   };
 }
 

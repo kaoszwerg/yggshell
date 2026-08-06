@@ -13,6 +13,12 @@ pub struct AppState {
     /// Where the app's own bundled files live — the shipped colour schemes, today. Separate from
     /// `data_dir` because one is ours and read-only and the other is the user's.
     pub resource_dir: PathBuf,
+    /// How far each transcript has been read, and what was folded out of it.
+    ///
+    /// **In memory only, deliberately** (ADR-PROJ-005 §3): its contents are transcript-derived, and
+    /// writing them anywhere would create a second copy of the user's sessions outside Claude's own
+    /// home — unbounded, undeletable, and unknown to them.
+    pub chain: crate::agent::chain::cache::ChainCache,
 }
 
 impl AppState {
@@ -21,6 +27,7 @@ impl AppState {
             settings: SettingsStore::load(data_dir),
             data_dir: data_dir.to_path_buf(),
             resource_dir: resource_dir.to_path_buf(),
+            chain: crate::agent::chain::cache::ChainCache::default(),
         }
     }
 }

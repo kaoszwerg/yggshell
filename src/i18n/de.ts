@@ -49,6 +49,7 @@ export const de: Translations = {
   "menu.tool.activity": "Aktivität",
   "menu.tool.docker": "Container",
   "menu.tool.agent": "Agent",
+  "menu.tool.chain": "Kette",
   "menu.tool.tmux": "Sessions",
   "menu.tool.notes": "Notizen",
   "menu.window": "Fenster",
@@ -142,6 +143,37 @@ export const de: Translations = {
   "env.created": "{path} angelegt. Claude Code meldet sich dort beim ersten Start an.",
   "env.wrote": "{path} geschrieben und freigegeben.",
   "nav.agent": "Agent",
+  // ── Das Kettenwerkzeug ────────────────────────────────────────────────────────────────────────
+  //
+  // Die Akte (`verify`, `build`, `ship`, `probe`, `plan`) stehen bewusst NICHT hier: sie sind
+  // Bezeichner aus rule:work-legibility und stehen wortgleich in `work-levels.json` und in den
+  // Kommandos, die der Agent tippt. Ein übersetztes `PRÜFEN` daneben wären drei Namen für eine Sache.
+  "nav.chain": "Kette",
+  "chain.noTerminal": "In diesem Tab läuft kein Terminal.",
+  "chain.reading": "Sitzung wird gelesen…",
+  "chain.none": "In diesem Verzeichnis lief noch kein Agent.",
+  "chain.failed": "Die Sitzung konnte nicht gelesen werden.",
+  "chain.plan": "Plan",
+  "chain.trace": "Spur",
+  "chain.goal": "Ziel",
+  "chain.noPlan": "Diese Sitzung führt keinen Plan.",
+  "chain.noPlanHint":
+    "Ziel und kommende Schritte sind unbekannt — unten steht, was tatsächlich geschah.",
+  "chain.planDone": "Alle geplanten Schritte sind erledigt.",
+  "chain.running": "läuft seit {duration}",
+  "chain.attempt": "{n}. Anlauf",
+  "chain.iterations": "{n}×",
+  "chain.probes": "+ {n} Abfragen",
+  "chain.expected": "erwartet · {n}× gesehen",
+  "chain.guessed": "aus dem Programmnamen geraten",
+  "chain.disputed": "das Projekt deklariert das näher, als es tatsächlich reicht",
+  "chain.delegated": "{n} Schritte in einem Subagenten",
+  "chain.coverage": "{understood} von {seen} Schritten erkannt",
+  "chain.unverifiedHarness": "von einer ungeprüften Harness-Version geschrieben ({version})",
+  "chain.steps": "{n} Schritte",
+  "chain.links": "{n} Glieder",
+  "chain.underMinute": "< 1 Min",
+  "chain.openDetail": "Zeigen, woraus das bestand",
   "agent.noSession": "In diesem Tab läuft kein Terminal.",
   "agent.reading": "Die Session wird gelesen…",
   "agent.none": "In diesem Verzeichnis lief noch kein Agent.",
@@ -532,6 +564,7 @@ export const de: Translations = {
   "keys.action.toggleActivityTool": "Aktivitäts-Werkzeug ein- oder ausblenden",
   "keys.action.toggleDockerTool": "Docker-Werkzeug ein- oder ausblenden",
   "keys.action.toggleAgentTool": "Agent-Werkzeug ein- oder ausblenden",
+  "keys.action.toggleChainTool": "Ketten-Werkzeug ein- oder ausblenden",
   "keys.action.toggleTmuxTool": "tmux-Tool ein- oder ausblenden",
   "keys.action.toggleNotesTool": "Notizen-Tool ein- oder ausblenden",
 

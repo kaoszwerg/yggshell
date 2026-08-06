@@ -157,6 +157,7 @@ pub fn install(app: &AppHandle, spec: &AppMenuSpec) -> tauri::Result<()> {
             &action!("toggleActivityTool", &labels.tool_activity),
             &action!("toggleDockerTool", &labels.tool_docker),
             &action!("toggleAgentTool", &labels.tool_agent),
+            &action!("toggleChainTool", &labels.tool_chain),
             &action!("toggleTmuxTool", &labels.tool_tmux),
             &action!("toggleNotesTool", &labels.tool_notes),
         ],

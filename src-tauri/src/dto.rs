@@ -323,6 +323,7 @@ pub struct AppMenuLabels {
     pub tool_activity: String,
     pub tool_docker: String,
     pub tool_agent: String,
+    pub tool_chain: String,
     pub tool_tmux: String,
     pub tool_notes: String,
 

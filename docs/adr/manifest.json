@@ -1,6 +1,6 @@
 {
   "generated": true,
-  "count": 34,
+  "count": 35,
   "adrs": [
     {
       "id": "ADR-APP-001",
@@ -1055,6 +1055,62 @@
       "supersededBy": null,
       "path": "docs/adr/project/proj-004-notes-egress-and-trust.md",
       "hash": "9fd513b3c6ca569d"
+    },
+    {
+      "id": "ADR-PROJ-005",
+      "layer": "proj",
+      "title": "Reading the agent's transcript — what may be derived, and what may never be written",
+      "tldr": "The chain reads the whole transcript: counters may be logged, content never. Nothing leaves the device; the declaration may escalate, never reassure.",
+      "scope": "fullstack",
+      "load": "conditional",
+      "status": "accepted",
+      "triggers": [
+        "chain",
+        "transcript",
+        "jsonl",
+        "task",
+        "tasks",
+        "taskcreate",
+        "taskupdate",
+        "subagent",
+        "subagents",
+        "plan",
+        "trace",
+        "step",
+        "block",
+        "classify",
+        "classification",
+        "work-levels",
+        "entrypoint",
+        "declaration",
+        "offset",
+        "incremental",
+        "cache",
+        "idempotent",
+        "privacy",
+        "egress",
+        "logging",
+        "redaction",
+        "secret",
+        "credential",
+        "threat",
+        "injection",
+        "path",
+        "traversal",
+        "canonicalise",
+        "session-id",
+        "home",
+        "account"
+      ],
+      "applies-to": [
+        "src-tauri/src/agent/**",
+        "src/components/tools/ChainTool*",
+        "src/hooks/useChain*",
+        "work-levels.json"
+      ],
+      "supersededBy": null,
+      "path": "docs/adr/project/proj-005-chain-tool-trust.md",
+      "hash": "b485e021f6d9100a"
     }
   ]
 }

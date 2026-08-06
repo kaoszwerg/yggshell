@@ -23,6 +23,7 @@
 //! read here is defensive: an unknown shape yields *less* information, never an error and never a
 //! crash. If it changes, this tool goes quiet — the app does not.
 
+pub mod chain;
 pub mod direnv;
 pub mod hooks;
 pub mod usage;
@@ -309,6 +310,14 @@ const SEARCH_BUDGET: u64 = 16 * TAIL_BYTES;
 /// would be several megabytes per poll. The tail carries the answer, and everything here degrades to
 /// "unknown" rather than to a wrong value if it does not.
 const TAIL_BYTES: u64 = 256 * 1024;
+
+/// The transcript file the live session is writing, or `None` when no agent has run here.
+///
+/// Separate from [`session`] because the chain needs the **path** — it reads the file itself, and
+/// incrementally, where the session summary only wants the values parsed out of its tail.
+pub fn newest_transcript(home: &Path, cwd: &Path) -> Option<PathBuf> {
+    newest_session(&project_dir(home, cwd)).map(|(path, _)| path)
+}
 
 /// What the harness in this project is doing, as far as its transcript says.
 ///
