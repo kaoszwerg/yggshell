@@ -170,7 +170,14 @@ export const en = {
   "chain.running": "running for {duration}",
   "chain.attempt": "attempt {n}",
   "chain.iterations": "{n}×",
-  "chain.probes": "+ {n} lookups",
+  // A mark nobody can read is not a mark. Each of these was reported as unexplainable.
+  "chain.probes": "+ {n}× looked something up",
+  "chain.probesExplain":
+    "Reads, searches and status checks that happened inside this step — they get no line of their own.",
+  "chain.iterationsExplain":
+    "It went round {n} times: it ran, something was changed, it ran again. A high number means it is not getting past this.",
+  "chain.roundsHeading": "What changed between the runs",
+  "chain.roundsAlso": "Also in this step",
   "chain.expected": "expected · seen {n}×",
   "chain.guessed": "guessed from the program name",
   "chain.disputed": "the project declares this as closer than it reaches",
@@ -181,6 +188,17 @@ export const en = {
   "chain.links": "{n} links",
   "chain.underMinute": "< 1 min",
   "chain.openDetail": "Show what this consisted of",
+  "chain.splitLabel": "Plan and trace",
+  // Three states, three sentences. There are exactly two ways for an agent to be quiet — it is
+  // waiting for you, or there is nothing outstanding — and a single "idle" would leave the reader
+  // to open the terminal and find out, which is the work this panel exists to save.
+  "chain.waiting": "Waiting for you",
+  "chain.waitingUnspecified": "It asked for something and stopped.",
+  "chain.finished": "Nothing outstanding",
+  "chain.stopped": "Stopped",
+  "chain.openSteps": "{n} planned steps are still open",
+  "chain.quietFor": "quiet for {duration}",
+  "chain.showRecord": "Show the record — {n} links",
   "chain.nudgeInstall": "Ask the agent to keep one",
   "chain.nudgeExplain":
     "Adds one sentence to each prompt, and only while no list exists. It asks; it never blocks.",

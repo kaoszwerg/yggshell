@@ -212,7 +212,21 @@ pub fn agent_chain(
         return Ok(None);
     };
     let state = app.state::<crate::state::AppState>();
-    let chain = crate::agent::chain::read(&home, cwd_path, &state.chain);
+    let mut chain = crate::agent::chain::read(&home, cwd_path, &state.chain);
+
+    // **Which of the two silences this is.** The transcript cannot say: an agent blocked on a
+    // permission prompt and one that has simply finished both write nothing at all. The hook events
+    // can, and they are already installed for the attention bell — one source, two renderings
+    // (ADR-CORE-005), rather than a second mechanism that would eventually disagree in front of the
+    // user.
+    if let Some(chain) = chain.as_mut() {
+        if chain.standing == crate::agent::chain::model::Standing::Idle {
+            if let Some(asking) = waiting_here(&app, &cwd) {
+                chain.standing = crate::agent::chain::model::Standing::Waiting;
+                chain.waiting_for = asking;
+            }
+        }
+    }
     tracing::debug!(
         found = chain.is_some(),
         links = chain.as_ref().map_or(0, |c| c.links.len()),
@@ -221,6 +235,29 @@ pub fn agent_chain(
         "agent_chain ok"
     );
     Ok(chain)
+}
+
+/// Whether the agent in this directory is blocked on the user, and on what.
+///
+/// `Some(message)` when it is asking, `Some(None)` when it is asking without saying what, `None`
+/// when it is not asking at all. Reuses `hooks::waiting_now`, which already knows the two things
+/// that matter: the newest event per directory *is* the state, and an `idle_prompt` is a timer
+/// noticing a quiet prompt rather than a question (rule:attention-signals).
+fn waiting_here(app: &tauri::AppHandle, cwd: &str) -> Option<Option<String>> {
+    use tauri::Manager;
+    let data = app.path().app_data_dir().ok()?;
+    let events = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 200);
+    let asking = crate::agent::hooks::waiting_now(events)
+        .into_iter()
+        .filter(|event| event.cwd == cwd)
+        .find(|event| !crate::agent::hooks::is_idle(event))?;
+    // An event the agent has since worked past was answered — the transcript is the finer clock
+    // (`hooks::has_moved_on`), and without this a prompt answered mid-turn would sit here for the
+    // rest of it.
+    if crate::agent::hooks::has_moved_on(&asking, crate::agent::hooks::modified_secs) {
+        return None;
+    }
+    Some(asking.message)
 }
 
 /// The user's home directory, through Tauri's path API rather than by assembling `$HOME`

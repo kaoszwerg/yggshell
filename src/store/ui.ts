@@ -52,6 +52,20 @@ export const GIT_SPLIT_MAX = 85;
 const GIT_SPLIT_DEFAULT = 45;
 
 /**
+ * How much of the Chain tool the plan gets, as a share of its height.
+ *
+ * Two scrolling regions rather than one, and the boundary is the user's to place: a plan is a
+ * handful of lines somebody wants to keep in view, while the trace grows all day. Sharing one
+ * scrollbar means the plan leaves the screen the moment the work gets long — which is exactly when
+ * it is worth having.
+ *
+ * The default is small on purpose: most sessions have a short plan and a long trace.
+ */
+export const CHAIN_SPLIT_MIN = 10;
+export const CHAIN_SPLIT_MAX = 70;
+const CHAIN_SPLIT_DEFAULT = 30;
+
+/**
  * Which lens the Notes view draws a note through.
  *
  * `read` is the rendered markdown, `write` is the whole file as source, `split` is both at once with
@@ -128,6 +142,8 @@ export interface UiState {
   toolWidth: number;
   /** Percentage of the Git tool's body given to the changes list; the graph takes the rest. */
   gitSplit: number;
+  /** Percentage of the Chain tool's body given to the plan; the trace takes the rest. */
+  chainSplit: number;
   /**
    * Whether a diff is drawn side by side rather than as one interleaved column.
    *
@@ -240,6 +256,7 @@ export interface UiState {
   toggleTool: (t: ToolId) => void;
   setToolWidth: (px: number) => void;
   setGitSplit: (percent: number) => void;
+  setChainSplit: (percent: number) => void;
   setDiffSplit: (split: boolean) => void;
   /** Replace the bar's contents. Sanitised on the way in, so the renderer never meets an unknown id. */
   setStatusLayout: (items: StatusItem[]) => void;
@@ -258,6 +275,9 @@ const clampWidth = (px: number) =>
 const clampSplit = (percent: number) =>
   Math.min(GIT_SPLIT_MAX, Math.max(GIT_SPLIT_MIN, Math.round(percent)));
 
+const clampChainSplit = (percent: number) =>
+  Math.min(CHAIN_SPLIT_MAX, Math.max(CHAIN_SPLIT_MIN, Math.round(percent)));
+
 const clampNotesSplit = (percent: number) =>
   Math.min(NOTES_SPLIT_MAX, Math.max(NOTES_SPLIT_MIN, Math.round(percent)));
 
@@ -273,6 +293,7 @@ export const useUiStore = create<UiState>()(
       activeTool: null,
       toolWidth: TOOL_WIDTH_DEFAULT,
       gitSplit: GIT_SPLIT_DEFAULT,
+      chainSplit: CHAIN_SPLIT_DEFAULT,
       // Side by side is the default: it is what makes a reindent or a rename readable, and the
       // interleaved form is the one to fall back to in a narrow window.
       diffSplit: true,
@@ -299,6 +320,7 @@ export const useUiStore = create<UiState>()(
       toggleTool: (tool) => set((s) => ({ activeTool: s.activeTool === tool ? null : tool })),
       setToolWidth: (px) => set({ toolWidth: clampWidth(px) }),
       setGitSplit: (percent) => set({ gitSplit: clampSplit(percent) }),
+      setChainSplit: (percent) => set({ chainSplit: clampChainSplit(percent) }),
       setDiffSplit: (diffSplit) => set({ diffSplit }),
       // Sanitised HERE rather than at render time: one gate on the way in beats every consumer
       // defending itself against a payload it did not write (rule:code-quality).
@@ -327,6 +349,7 @@ export const useUiStore = create<UiState>()(
         activeTool: s.activeTool,
         toolWidth: s.toolWidth,
         gitSplit: s.gitSplit,
+        chainSplit: s.chainSplit,
         diffSplit: s.diffSplit,
         statusLayout: s.statusLayout,
         // A place you are working in, not a moment — it should still be the one you chose tomorrow.
@@ -355,6 +378,9 @@ export const useUiStore = create<UiState>()(
         state.gitSplit = Number.isFinite(state.gitSplit)
           ? clampSplit(state.gitSplit)
           : GIT_SPLIT_DEFAULT;
+        state.chainSplit = Number.isFinite(state.chainSplit)
+          ? clampChainSplit(state.chainSplit)
+          : CHAIN_SPLIT_DEFAULT;
         // A payload from a build that predates the setting has no boolean at all.
         if (typeof state.diffSplit !== "boolean") state.diffSplit = true;
         // A lens this build does not have — a downgrade, a hand-edited payload — would render

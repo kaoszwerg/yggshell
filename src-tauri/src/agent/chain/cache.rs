@@ -21,18 +21,21 @@
 //! are reading. Comparing `(inode, length)` catches all of them: same inode and a length that has
 //! only grown means the tail is genuinely new, and anything else means start again.
 
-use super::model::Step;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
 /// What was read from one transcript last time.
+///
+/// **Everything derived, not a selection of it.** An earlier version kept only `steps`, and the
+/// plan, the tally and the version were rebuilt from whatever few lines each poll happened to read —
+/// so a session with nineteen tracked tasks reported that it kept no plan, and its coverage read
+/// `173/173` for a file where it was `275/392`. A partial cache is worse than none: it is wrong only
+/// from the second poll onwards, which is the one nobody watches.
 #[derive(Debug, Clone)]
 struct Entry {
     inode: u64,
-    len: u64,
-    offset: u64,
-    steps: Vec<Step>,
+    parsed: super::Parsed,
 }
 
 /// Per-transcript parse state.
@@ -41,19 +44,14 @@ pub struct ChainCache {
     entries: Mutex<HashMap<String, Entry>>,
 }
 
-/// What the caller should do for this poll.
-pub enum Resume {
-    /// Continue from this offset, with these steps already in hand.
-    From(u64, Vec<Step>),
-    /// Start again: a different file, or one that shrank.
-    Fresh,
-}
-
 impl ChainCache {
-    /// Decide where to resume reading `path`.
-    pub fn resume(&self, path: &Path) -> Resume {
+    /// Everything already known about `path`, or a fresh state when it must be read again.
+    ///
+    /// Returns what to hand to `parse_onto`: its `offset` says where to continue, and `0` means
+    /// start over — which is always correct, only slower.
+    pub fn resume(&self, path: &Path) -> super::Parsed {
         let Some((inode, len)) = identity(path) else {
-            return Resume::Fresh;
+            return super::Parsed::default();
         };
         let key = path.to_string_lossy().to_string();
         let entries = match self.entries.lock() {
@@ -63,16 +61,16 @@ impl ChainCache {
             Err(poisoned) => poisoned.into_inner(),
         };
         match entries.get(&key) {
-            Some(entry) if entry.inode == inode && len >= entry.len => {
-                Resume::From(entry.offset, entry.steps.clone())
+            Some(entry) if entry.inode == inode && len >= entry.parsed.offset => {
+                entry.parsed.clone()
             }
-            _ => Resume::Fresh,
+            _ => super::Parsed::default(),
         }
     }
 
-    /// Record what was read, so the next poll can continue.
-    pub fn store(&self, path: &Path, offset: u64, steps: &[Step]) {
-        let Some((inode, len)) = identity(path) else {
+    /// Record what is now known, so the next poll can continue from it.
+    pub fn store(&self, path: &Path, parsed: &super::Parsed) {
+        let Some((inode, _len)) = identity(path) else {
             return;
         };
         let key = path.to_string_lossy().to_string();
@@ -84,9 +82,7 @@ impl ChainCache {
             key,
             Entry {
                 inode,
-                len,
-                offset,
-                steps: steps.to_vec(),
+                parsed: parsed.clone(),
             },
         );
     }
@@ -122,10 +118,26 @@ fn identity(path: &Path) -> Option<(u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::chain::model::Act;
+    use crate::agent::chain::model::{Act, PlanStep, Step};
+    use crate::agent::chain::Parsed;
 
-    fn steps() -> Vec<Step> {
-        vec![Step::new(Act::Verify, Some("core".into()))]
+    /// A parse state with something in every field that accumulates.
+    fn parsed(offset: u64) -> Parsed {
+        Parsed {
+            steps: vec![Step::new(Act::Verify, Some("core".into()))],
+            plan: vec![PlanStep {
+                id: "1".into(),
+                subject: "verify@local: prove it".into(),
+                status: "completed".into(),
+                blocked_by: Vec::new(),
+            }],
+            session_id: Some("abc".into()),
+            harness_version: Some("2.1.223".into()),
+            seen: 7,
+            understood: 5,
+            finished_plans: 2,
+            offset,
+        }
     }
 
     fn write(dir: &Path, body: &str) -> std::path::PathBuf {
@@ -139,25 +151,32 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = write(dir.path(), "one\n");
 
-        assert!(matches!(ChainCache::default().resume(&path), Resume::Fresh));
+        assert_eq!(ChainCache::default().resume(&path).offset, 0);
     }
 
     #[test]
-    fn a_grown_file_resumes_where_it_stopped() {
+    fn a_grown_file_resumes_with_everything_already_known() {
+        // **The regression this test exists for.** The first version cached only `steps`, so from
+        // the second poll onwards the plan and the tally were rebuilt from the few new lines alone:
+        // a session with nineteen tracked tasks reported "keeps no plan", and coverage read 173/173
+        // for a file where it was 275/392. Every accumulating field is asserted here, by name, so
+        // adding one and forgetting the cache fails loudly.
         let dir = tempfile::tempdir().expect("tempdir");
         let path = write(dir.path(), "one\n");
         let cache = ChainCache::default();
-        cache.store(&path, 4, &steps());
+        cache.store(&path, &parsed(4));
 
         std::fs::write(&path, "one\ntwo\n").expect("append");
+        let kept = cache.resume(&path);
 
-        match cache.resume(&path) {
-            Resume::From(offset, kept) => {
-                assert_eq!(offset, 4);
-                assert_eq!(kept.len(), 1, "the work already folded is kept");
-            }
-            Resume::Fresh => panic!("a file that only grew must not be re-read"),
-        }
+        assert_eq!(kept.offset, 4);
+        assert_eq!(kept.steps.len(), 1, "steps");
+        assert_eq!(kept.plan.len(), 1, "the plan — the field that was lost");
+        assert_eq!(kept.seen, 7, "the tally");
+        assert_eq!(kept.understood, 5, "and the understood half of it");
+        assert_eq!(kept.finished_plans, 2, "how many lists came before");
+        assert_eq!(kept.session_id.as_deref(), Some("abc"));
+        assert_eq!(kept.harness_version.as_deref(), Some("2.1.223"));
     }
 
     #[test]
@@ -167,11 +186,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = write(dir.path(), "one\ntwo\nthree\n");
         let cache = ChainCache::default();
-        cache.store(&path, 14, &steps());
+        cache.store(&path, &parsed(14));
 
         std::fs::write(&path, "one\n").expect("truncate");
 
-        assert!(matches!(cache.resume(&path), Resume::Fresh));
+        let fresh = cache.resume(&path);
+        assert_eq!(fresh.offset, 0);
+        assert!(fresh.plan.is_empty(), "and it starts genuinely empty");
     }
 
     #[test]
@@ -181,13 +202,14 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = write(dir.path(), "one\n");
         let cache = ChainCache::default();
-        cache.store(&path, 4, &steps());
+        cache.store(&path, &parsed(4));
 
         std::fs::remove_file(&path).expect("remove");
         std::fs::write(&path, "two\n").expect("recreate");
 
-        assert!(
-            matches!(cache.resume(&path), Resume::Fresh),
+        assert_eq!(
+            cache.resume(&path).offset,
+            0,
             "same name, same length, different file"
         );
     }
@@ -195,12 +217,9 @@ mod tests {
     #[test]
     fn a_vanished_file_asks_for_a_fresh_read_rather_than_failing() {
         let cache = ChainCache::default();
-        assert!(matches!(
-            cache.resume(Path::new("/nowhere/at/all.jsonl")),
-            Resume::Fresh
-        ));
+        assert_eq!(cache.resume(Path::new("/nowhere/at/all.jsonl")).offset, 0);
         // Storing one is a no-op rather than an error.
-        cache.store(Path::new("/nowhere/at/all.jsonl"), 0, &steps());
+        cache.store(Path::new("/nowhere/at/all.jsonl"), &parsed(0));
     }
 
     #[test]
@@ -208,10 +227,10 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = write(dir.path(), "one\n");
         let cache = ChainCache::default();
-        cache.store(&path, 4, &steps());
+        cache.store(&path, &parsed(4));
 
         cache.clear();
 
-        assert!(matches!(cache.resume(&path), Resume::Fresh));
+        assert_eq!(cache.resume(&path).offset, 0);
     }
 }

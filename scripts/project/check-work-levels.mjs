@@ -18,19 +18,19 @@ import { join } from "node:path";
 
 const ROOT = process.argv[2] ?? new URL("../..", import.meta.url).pathname;
 
-/** The five acts. Exhaustive by construction (rule:work-legibility). */
-const ACTS = ["plan", "build", "verify", "ship", "probe"];
+/** The seven acts (rule:work-legibility). */
+const ACTS = ["plan", "edit", "build", "verify", "subagent", "ship", "probe"];
 
 /**
  * The refinements each act may carry.
  *
  * `verify` takes a **depth** — how far the check reaches. `ship` takes a **step** — where the work
- * is being put. The other three take none: there is no meaningful second axis for deciding, making
- * or looking.
+ * is being put. The others take none: there is no meaningful second axis for deciding, editing,
+ * building, handing on, or looking.
  */
 const REFINEMENTS = {
   verify: ["unit", "integration", "e2e", "audit"],
-  ship: ["commit", "push", "review", "deploy", "release"],
+  ship: ["commit", "push", "review", "merge", "deploy", "release"],
 };
 
 /** Ascending reach. Anything above `local` must say where it goes. */

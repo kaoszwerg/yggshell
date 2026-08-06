@@ -48,21 +48,23 @@ act                               build
 Order is fixed, everything after `act` is optional, separators never change: `/` refines, `@`
 locates, `#` scopes.
 
-**Act — what is being done.** Five, exhaustive by construction: every command either decides, makes,
-checks, delivers, or looks.
+**Act — what is being done.** Seven, exhaustive by construction: every command either decides, changes
+the source, produces an artefact, checks, hands work on, delivers, or looks.
 
 | Act      | Means                                                             |
 | -------- | ----------------------------------------------------------------- |
 | `plan`   | deciding what to do: designing, specifying, recording a decision  |
-| `build`  | making the thing: code, config, content, migration                |
+| `edit`   | changing the source: code, config, content, a migration           |
+| `build`  | producing an artefact from it: a compile, a bundle, generated code |
 | `verify` | finding out whether it is right: tests, gates, linters, audits    |
+| `subagent`| handing work to a subagent, whose own steps live elsewhere    |
 | `ship`   | putting it where it counts: commit, push, review, deploy, release |
 | `probe`  | finding out how things stand: reading, measuring, diagnosing      |
 
 **`probe` is the default** — anything undeclared is a probe, the honest answer for a search or a
 status check.
 
-**Refinement — what kind, within the act.** Two acts take one; the other three do not.
+**Refinement — what kind, within the act.** Two acts take one; the others do not.
 
 - **`verify`** takes a *depth*, and the ordering is the point — each is slower, more realistic and
   less isolated than the one above:
@@ -76,7 +78,7 @@ status check.
 
   `smoke` is not a depth — it is a **short** run at one of these. Say `e2e` and keep it short.
 
-- **`ship`** takes a *step*: `commit`, `push`, `review`, `deploy`, `release`. These are not depths and
+- **`ship`** takes a *step*: `commit`, `push`, `review`, `merge`, `deploy`, `release`. These are not depths and
   carry no ordering.
 
 **Target — what it runs against.** The axis that cannot be guessed and the one that hurts when it is

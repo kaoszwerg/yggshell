@@ -51,7 +51,10 @@ pub fn version_is_verified(version: Option<&str>) -> bool {
 }
 
 /// Everything parsed out of one transcript, before folding.
-#[derive(Debug, Default)]
+///
+/// `Clone` because this **is** the cache entry: every field accumulates across polls, and keeping
+/// only some of them is the defect described on `parse_onto`.
+#[derive(Debug, Default, Clone)]
 pub struct Parsed {
     pub steps: Vec<Step>,
     pub plan: Vec<PlanStep>,
@@ -59,6 +62,9 @@ pub struct Parsed {
     pub harness_version: Option<String>,
     pub seen: u32,
     pub understood: u32,
+    /// How many complete plans came before this one. Kept so the tool can say "the fourth list of
+    /// the day" rather than pretending the earlier ones never existed.
+    pub finished_plans: u32,
     /// Byte offset one past the last complete line consumed.
     pub offset: u64,
 }
@@ -71,9 +77,21 @@ pub struct Parsed {
 /// command that returned a *delta* would be destructive on call and this frontend loses deltas four
 /// different ways (StrictMode, retry, remount, two tabs).
 pub fn parse_transcript(path: &Path, from: u64) -> Parsed {
+    parse_onto(path, from, Parsed::default())
+}
+
+/// Continue a previous pass: read from `from` and fold the result into what is already known.
+///
+/// **The plan and the counters accumulate exactly as the steps do, and getting that wrong is not a
+/// detail.** The first build cached only `steps`, so from the second poll onwards the plan was
+/// rebuilt from the handful of new lines alone — a session with nineteen tracked tasks reported
+/// "this session keeps no plan", and the coverage figure read `173/173` for a file where it was
+/// `275/392`. The invariant is the one this module claims: **a cache, not a consumption counter**,
+/// and it holds everything derived, not the part that was convenient.
+pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
     let mut out = Parsed {
         offset: from,
-        ..Default::default()
+        ..prior
     };
     let Some(text) = read_from(path, from) else {
         return out;
@@ -123,6 +141,16 @@ pub fn parse_transcript(path: &Path, from: u64) -> Parsed {
 
                     // Plan bookkeeping, captured on the way past.
                     if name == "TaskCreate" {
+                        // **A finished list is replaced, not extended.** The harness clears its task
+                        // store the moment nothing is open, so the next `TaskCreate` starts a new
+                        // list — and a reader that kept appending would show a plan the harness no
+                        // longer has, which is exactly the inconsistency this was reported for:
+                        // "19/19 done" here against an empty list there.
+                        if !out.plan.is_empty() && out.plan.iter().all(|s| s.status == "completed")
+                        {
+                            out.finished_plans += 1;
+                            out.plan.clear();
+                        }
                         if let (Some(id), Some(subject)) = (
                             str_at(part, "id"),
                             input.and_then(|i| i.get("subject")).and_then(Value::as_str),
@@ -232,17 +260,13 @@ fn read_from(path: &Path, offset: u64) -> Option<String> {
 pub fn read(home: &Path, cwd: &Path, store: &cache::ChainCache) -> Option<Chain> {
     let transcript = super::newest_transcript(home, cwd)?;
 
-    let (from, mut steps) = match store.resume(&transcript) {
-        cache::Resume::From(offset, kept) => (offset, kept),
-        cache::Resume::Fresh => (0, Vec::new()),
-    };
-    let mut parsed = parse_transcript(&transcript, from);
-    // Delegated work lives in a sibling directory the transcript never mentions again.
-    let delegated = delegated_steps(&transcript);
+    let known = store.resume(&transcript);
+    let mut parsed = parse_onto(&transcript, known.offset, known);
+    store.store(&transcript, &parsed);
 
-    steps.append(&mut parsed.steps);
-    store.store(&transcript, parsed.offset, &steps);
-    parsed.steps = steps;
+    // Delegated work lives in a sibling directory the transcript never mentions again. Added after
+    // the cache is written, because it is re-counted on every poll rather than accumulated.
+    let delegated = delegated_steps(&transcript);
     parsed.seen += delegated;
     parsed.understood += delegated;
 
@@ -313,6 +337,17 @@ pub fn expectation(links: &[ChainLink]) -> Vec<Round> {
         .collect()
 }
 
+/// How long a session may be quiet before the chain stops calling anything "running".
+///
+/// **Ninety seconds, and the bound is what makes the display honest.** A tool call takes seconds; a
+/// long test run writes its result the moment it finishes. A gap of more than a minute and a half
+/// means the agent is waiting for a person, not working — and saying "running" then is the failure
+/// `rule:attention-signals` documents: a state that never ages stops carrying information.
+///
+/// It errs long on purpose. Calling a working agent idle for a moment is a cosmetic slip; calling an
+/// idle one busy is the tool inventing activity.
+const IDLE_AFTER_SECS: u64 = 90;
+
 /// Build the chain a tab should show.
 pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>) -> Chain {
     let elapsed = parsed
@@ -328,13 +363,42 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
         })
         .map_or(0, |(a, b)| seconds_between(&a, &b));
 
+    // How long ago the last thing happened. This is the only clock the chain has of its own.
+    let idle = parsed
+        .steps
+        .last()
+        .and_then(|s| s.at.as_deref())
+        .map_or(0, seconds_since);
+    let working = idle < IDLE_AFTER_SECS;
+    // Which of the two silences this is comes from the caller, which can see the hook events. The
+    // transcript cannot tell them apart: an agent blocked on a prompt and one that finished both
+    // write nothing at all.
+    let standing = if working {
+        model::Standing::Working
+    } else {
+        model::Standing::Idle
+    };
+
     let mut links = fold::fold(parsed.steps);
     if let Some(levels) = declaration {
         for link in &mut links {
             levels.apply(link);
         }
     }
-    let expected = expectation(&links);
+    // A quiet session has nothing running and nothing coming: the last link stopped being live, and
+    // predicting a next step for an agent that has been asked for nothing is inventing activity.
+    if !working {
+        if let Some(last) = links.last_mut() {
+            if last.outcome == model::Outcome::Live {
+                last.outcome = model::Outcome::Unknown;
+            }
+        }
+    }
+    let expected = if working {
+        expectation(&links)
+    } else {
+        Vec::new()
+    };
     let plan_done = !parsed.plan.is_empty() && parsed.plan.iter().all(|s| s.status == "completed");
 
     Chain {
@@ -343,12 +407,24 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
         plan_done,
         expected,
         elapsed,
+        idle,
+        standing,
+        waiting_for: None,
         steps_seen: parsed.seen,
         steps_understood: parsed.understood,
         home: home.to_string(),
         session_id: parsed.session_id,
         harness_version: parsed.harness_version,
     }
+}
+
+/// Seconds between an ISO timestamp and now, or 0 when it cannot be read.
+fn seconds_since(at: &str) -> u64 {
+    chrono::DateTime::parse_from_rfc3339(at).map_or(0, |then| {
+        (chrono::Utc::now() - then.with_timezone(&chrono::Utc))
+            .num_seconds()
+            .max(0) as u64
+    })
 }
 
 fn seconds_between(from: &str, to: &str) -> u64 {
@@ -384,7 +460,7 @@ mod tests {
 
         assert_eq!(parsed.steps.len(), 3);
         assert_eq!(parsed.steps[0].act, Act::Verify);
-        assert_eq!(parsed.steps[1].act, Act::Build);
+        assert_eq!(parsed.steps[1].act, Act::Edit);
         assert_eq!(parsed.session_id.as_deref(), Some("abc"));
         assert_eq!(parsed.harness_version.as_deref(), Some("2.1.223"));
         assert_eq!(parsed.seen, 3);
@@ -494,6 +570,59 @@ mod tests {
         let chain = assemble(parse_transcript(&path, 0), "/h", None);
         assert!(chain.plan_done, "finished, not absent");
         assert_eq!(chain.plan.len(), 1);
+    }
+
+    #[test]
+    fn a_quiet_session_has_nothing_running_and_nothing_coming() {
+        // Reported from the running app: the agent had been asked for nothing for a long while, and
+        // the chain still showed a link as running plus three expected steps. A file's last line is
+        // not "now" — an agent waiting for a person writes nothing, and so does one that finished
+        // an hour ago. Same failure `rule:attention-signals` records: a state that does not age
+        // becomes a lie that looks like information.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write(dir.path(), "t.jsonl", TRANSCRIPT); // timestamps from 2026-08-06
+
+        let chain = assemble(parse_transcript(&path, 0), "/h", None);
+
+        assert_ne!(
+            chain.standing,
+            model::Standing::Working,
+            "an old transcript is not a working agent"
+        );
+        assert!(chain.idle > IDLE_AFTER_SECS);
+        assert!(
+            chain.expected.is_empty(),
+            "nothing is predicted for an idle agent"
+        );
+        assert_ne!(
+            chain.links.last().map(|l| l.outcome),
+            Some(model::Outcome::Live),
+            "and nothing is running"
+        );
+    }
+
+    #[test]
+    fn a_finished_list_is_replaced_by_the_next_one_rather_than_extended() {
+        // The inconsistency this was reported for: the harness clears its store the moment nothing
+        // is open, so it showed no plan at all while the tool showed "19/19 done". A finished list
+        // is history; the next `TaskCreate` starts a new one.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let body = r#"{"type":"assistant","timestamp":"2026-08-06T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"c1","name":"TaskCreate","input":{"subject":"first"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c1","content":"Task #1 created successfully: first"}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:01:00.000Z","message":{"content":[{"type":"tool_use","id":"u1","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:02:00.000Z","message":{"content":[{"type":"tool_use","id":"c2","name":"TaskCreate","input":{"subject":"second"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c2","content":"Task #2 created successfully: second"}]}}
+"#;
+        let path = write(dir.path(), "t.jsonl", body);
+
+        let parsed = parse_transcript(&path, 0);
+
+        assert_eq!(parsed.plan.len(), 1, "only the list being kept now");
+        assert_eq!(parsed.plan[0].subject, "second");
+        assert_eq!(
+            parsed.finished_plans, 1,
+            "the earlier one is counted, not shown"
+        );
     }
 
     #[test]

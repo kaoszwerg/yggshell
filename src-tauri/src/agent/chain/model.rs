@@ -21,12 +21,27 @@ pub enum Act {
     Probe = 0,
     /// Deciding what to do — and, in a transcript, maintaining the task list.
     Plan = 1,
-    /// Making the thing: code, config, content.
-    Build = 2,
+    /// Changing the source: code, config, content, a migration.
+    ///
+    /// **Separate from [`Act::Build`], and the separation was reported rather than designed.** The
+    /// first version called this `build`, which is what a compiler does — so the chain said
+    /// "build" while the agent was editing a test file, and the maintainer read it as a compile
+    /// that was not happening. Editing is what an agent spends its day doing; it deserves its own
+    /// word, and the word has to be the one everybody already uses for it.
+    Edit = 2,
+    /// Producing an artefact from the source: a compile, a bundle, generated bindings.
+    Build = 3,
     /// Finding out whether it is right.
-    Verify = 3,
+    Verify = 4,
+    /// Handing work to a subagent.
+    ///
+    /// **Its own act rather than a marker on another one.** It was first recorded as a `build` that
+    /// happened to be flagged — which meant the chain said "build" about the one step where this
+    /// transcript contains no work at all. Launching a subagent is a distinct thing a person watching
+    /// wants to see by name, and the work it does lives in a different file (`subagents/`).
+    Delegate = 5,
     /// Putting it where it counts.
-    Ship = 4,
+    Ship = 6,
 }
 
 impl Act {
@@ -35,8 +50,10 @@ impl Act {
         match self {
             Act::Probe => "probe",
             Act::Plan => "plan",
+            Act::Edit => "edit",
             Act::Build => "build",
             Act::Verify => "verify",
+            Act::Delegate => "subagent",
             Act::Ship => "ship",
         }
     }
@@ -137,6 +154,29 @@ pub enum Outcome {
     Unknown,
 }
 
+/// What the agent is doing, when it is not doing anything.
+///
+/// **There are exactly two ways for a chain to be quiet, and conflating them is the difference
+/// between a useful panel and a decorative one** — the maintainer put it plainly: either nothing is
+/// outstanding, or it is waiting for a person. "Quiet" alone leaves the reader to open the terminal
+/// and find out, which is the work the panel exists to save.
+///
+/// The distinction is not inferred from the transcript, which cannot express it: an agent waiting on
+/// a permission prompt and one that finished write exactly the same thing — nothing. It comes from
+/// the hook events (`agent::hooks`), which already separate a request that blocks from a turn that
+/// ended, and which this app already installs for the attention bell (ADR-CORE-005: one source).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+#[serde(rename_all = "lowercase")]
+pub enum Standing {
+    /// Steps are arriving: it is working.
+    Working,
+    /// It asked for something and stopped. **This is the one that needs you.**
+    Waiting,
+    /// Nothing is outstanding and nothing has been asked for.
+    Idle,
+}
+
 /// Where a run reaches. Shown always, even when it cannot be interpreted — `verify e2e → dev-backend`
 /// is informative with no configuration, and the day it reads `→ app.example.com` the difference is
 /// visible without anybody having defined "live" (chain-tool.md §8).
@@ -216,6 +256,19 @@ pub struct Chain {
     pub expected: Vec<Round>,
     /// Seconds since the first step of the session.
     pub elapsed: u64,
+    /// Seconds since the **last** step — how long nothing has happened.
+    ///
+    /// **The chain has no other way to know the present.** It reads a file and would otherwise treat
+    /// the end of it as "now": an agent that stopped an hour ago still showed a link as running and
+    /// three more as expected, while nobody had asked it for anything. That is the same failure
+    /// `rule:attention-signals` records — a state that does not age becomes a lie, and the lie looks
+    /// exactly like information.
+    pub idle: u64,
+    /// What the agent is doing right now — the question the tool exists to answer.
+    pub standing: Standing,
+    /// What it is waiting for, when it is waiting. The harness's own words, because a request names
+    /// what it wants and nothing we could write would be more accurate.
+    pub waiting_for: Option<String>,
     /// Tool calls seen, and how many were understood. A shorter chain and a genuinely shorter chain
     /// look identical, so the reader reports its own coverage instead of going quiet (ADR-PROJ-005).
     pub steps_seen: u32,
@@ -239,17 +292,26 @@ mod tests {
         // so this ordering decides that `lint && git push` is a ship rather than a verify.
         assert!(Act::Ship > Act::Verify);
         assert!(Act::Verify > Act::Build);
-        assert!(Act::Build > Act::Plan);
+        assert!(Act::Build > Act::Edit);
+        assert!(Act::Edit > Act::Plan);
         assert!(Act::Plan > Act::Probe);
     }
 
     #[test]
     fn every_act_has_a_word_and_they_are_all_different() {
-        let acts = [Act::Probe, Act::Plan, Act::Build, Act::Verify, Act::Ship];
+        let acts = [
+            Act::Probe,
+            Act::Plan,
+            Act::Edit,
+            Act::Build,
+            Act::Verify,
+            Act::Delegate,
+            Act::Ship,
+        ];
         let mut words: Vec<&str> = acts.iter().map(|a| a.as_str()).collect();
         words.sort_unstable();
         words.dedup();
-        assert_eq!(words.len(), 5, "two acts share a word");
+        assert_eq!(words.len(), 7, "two acts share a word");
     }
 
     #[test]

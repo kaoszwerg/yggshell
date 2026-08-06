@@ -47,6 +47,9 @@ function chain(over: Partial<Chain> = {}): Chain {
     plan_done: false,
     expected: [],
     elapsed: 3600n as unknown as bigint,
+    idle: 5n as unknown as bigint,
+    standing: "working",
+    waiting_for: null,
     steps_seen: 100,
     steps_understood: 90,
     home: "/home/.claude",
@@ -81,6 +84,83 @@ describe("ChainTool", () => {
     const sized = container.querySelector<HTMLElement>("[style*='font-size']");
 
     expect(sized?.textContent).toContain("verify");
+  });
+
+  it("says which of the two silences this is, never just 'quiet'", () => {
+    // The maintainer's own formulation and the reason the panel exists: an agent that is not
+    // working is either waiting for a person or has nothing outstanding. One word for both would
+    // send the reader to the terminal to find out — the work this is meant to save.
+    state.chain = chain({
+      standing: "waiting",
+      waiting_for: "Claude needs permission to use Bash",
+    });
+    const { unmount } = render(<ChainTool />);
+    expect(screen.getByText(/waiting for you/i)).toBeTruthy();
+    expect(screen.getByText(/needs permission/i)).toBeTruthy();
+    unmount();
+
+    state.chain = chain({ standing: "idle", idle: 900n as unknown as bigint });
+    render(<ChainTool />);
+    expect(screen.getByText(/nothing outstanding/i)).toBeTruthy();
+  });
+
+  it("hides a finished plan entirely rather than showing struck-through lines", () => {
+    // The harness clears its list the moment nothing is open. Nineteen crossed-off lines saying
+    // "all done" is a panel asking for attention it does not need.
+    state.chain = chain({
+      plan: [{ id: "1", subject: "done thing", status: "completed", blocked_by: [] }],
+      standing: "idle",
+    });
+    render(<ChainTool />);
+
+    expect(screen.queryByText("done thing")).toBeNull();
+  });
+
+  it("keeps finished steps visible while anything is still open", () => {
+    state.chain = chain({
+      plan: [
+        { id: "1", subject: "done thing", status: "completed", blocked_by: [] },
+        { id: "2", subject: "open thing", status: "pending", blocked_by: [] },
+      ],
+    });
+    render(<ChainTool />);
+
+    expect(screen.getByText("done thing")).toBeTruthy();
+    // Twice, and both are right: once as the goal being worked towards, once in the list.
+    expect(screen.getAllByText("open thing").length).toBe(2);
+  });
+
+  it("shows one line and no chain when nothing is outstanding", () => {
+    // The maintainer, twice: "plan abgeschlossen und du bist mit allem fertig … es wird gar nichts
+    // angezeigt". Sixty-one links of finished work is a logbook, not a status — and a panel that
+    // looks equally busy whether or not anything is happening has stopped answering its question.
+    state.chain = chain({ standing: "idle", links: [link({ refinement: "some-suite" })] });
+    render(<ChainTool />);
+
+    expect(screen.getByText(/nothing outstanding/i)).toBeTruthy();
+    expect(screen.queryByText("some-suite")).toBeNull();
+    // The record is one keystroke away, not gone.
+    expect(screen.getByRole("button", { name: /show the record/i })).toBeTruthy();
+  });
+
+  it("shows the chain while work is happening", () => {
+    state.chain = chain({ standing: "working", links: [link({ refinement: "some-suite" })] });
+    render(<ChainTool />);
+
+    expect(screen.getAllByText("some-suite").length).toBeGreaterThan(0);
+  });
+
+  it("times the running step, not the session", () => {
+    // "running for 4:26 h" was shown about a step that had started a minute earlier: the number was
+    // real and answered a different question than the sentence around it asked.
+    state.chain = chain({
+      standing: "working",
+      elapsed: 16000n as unknown as bigint,
+      links: [link({ seconds: 90n as unknown as bigint })],
+    });
+    render(<ChainTool />);
+
+    expect(screen.getByText(/running for 2 min/i)).toBeTruthy();
   });
 
   it("says when no agent has run here rather than showing an empty frame", () => {
@@ -149,15 +229,17 @@ describe("ChainTool", () => {
     expect(screen.getByText("UserManagement.jsx")).toBeTruthy();
   });
 
-  it("always shows where a run reaches", () => {
+  it("shows where a run reaches, on the link itself and not only in the header", () => {
     // rule:work-legibility calls the target "the axis that hurts when it is wrong". Showing it only
-    // for production would teach people that its absence means safety.
+    // for production would teach people that its absence means safety — and showing it only in the
+    // header answers the question for one line while "am I about to hit production?" is a question
+    // about the step being read.
     state.chain = chain({
       links: [link({ reach: { target: "prod", host: "app.example.com", disputed: false } })],
     });
     render(<ChainTool />);
 
-    expect(screen.getByText(/app\.example\.com/)).toBeTruthy();
+    expect(screen.getAllByText(/app\.example\.com/).length).toBeGreaterThanOrEqual(2);
   });
 
   it("marks a guessed classification as a guess", () => {

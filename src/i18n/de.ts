@@ -163,7 +163,14 @@ export const de: Translations = {
   "chain.running": "läuft seit {duration}",
   "chain.attempt": "{n}. Anlauf",
   "chain.iterations": "{n}×",
-  "chain.probes": "+ {n} Abfragen",
+  // Ein Zeichen, das erklärt werden muss, erklärt nichts. Jedes hier wurde als unverständlich gemeldet.
+  "chain.probes": "+ {n}× nachgesehen",
+  "chain.probesExplain":
+    "Lesevorgänge, Suchen und Statusabfragen innerhalb dieses Schritts — sie bekommen keine eigene Zeile.",
+  "chain.iterationsExplain":
+    "Es ging {n}-mal im Kreis: gelaufen, etwas geändert, wieder gelaufen. Eine hohe Zahl heißt, es kommt hier nicht vorbei.",
+  "chain.roundsHeading": "Was sich zwischen den Läufen geändert hat",
+  "chain.roundsAlso": "Ebenfalls in diesem Schritt",
   "chain.expected": "erwartet · {n}× gesehen",
   "chain.guessed": "aus dem Programmnamen geraten",
   "chain.disputed": "das Projekt deklariert das näher, als es tatsächlich reicht",
@@ -174,6 +181,17 @@ export const de: Translations = {
   "chain.links": "{n} Glieder",
   "chain.underMinute": "< 1 Min",
   "chain.openDetail": "Zeigen, woraus das bestand",
+  "chain.splitLabel": "Plan und Spur",
+  // Drei Zustände, drei Sätze. Es gibt genau zwei Arten, still zu sein — auf dich wartend, oder
+  // fertig — und ein einziges „untätig" ließe den Leser das Terminal öffnen, um herauszufinden
+  // welche. Genau die Arbeit, die dieses Panel sparen soll.
+  "chain.waiting": "Wartet auf dich",
+  "chain.waitingUnspecified": "Es hat um etwas gebeten und angehalten.",
+  "chain.finished": "Nichts offen",
+  "chain.stopped": "Steht",
+  "chain.openSteps": "{n} geplante Schritte sind noch offen",
+  "chain.quietFor": "still seit {duration}",
+  "chain.showRecord": "Verlauf zeigen — {n} Glieder",
   "chain.nudgeInstall": "Den Agenten bitten, einen zu führen",
   "chain.nudgeExplain":
     "Hängt einen Satz an jede Eingabe, und nur solange keine Liste existiert. Er bittet; er blockiert nie.",

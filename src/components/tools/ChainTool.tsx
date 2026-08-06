@@ -1,4 +1,4 @@
-import { Link2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { environmentApi } from "../../api/environment";
 import { useTerminalStore } from "../../store/terminal";
@@ -10,7 +10,9 @@ import { useChain } from "../../hooks/useChain";
 import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { useT } from "../../hooks/useT";
 import { Disclosure } from "../ui/Disclosure";
+import { Splitter } from "../ui/Splitter";
 import { Tooltip } from "../ui/Tooltip";
+import { CHAIN_SPLIT_MAX, CHAIN_SPLIT_MIN, useUiStore } from "../../store/ui";
 
 /**
  * What the agent in this tab has been through, and what it is doing now.
@@ -30,6 +32,17 @@ export function ChainTool() {
   const t = useT();
   const { chain, isPending, isError, ready } = useChain();
   const fontSize = useContentFontSize();
+  const split = useUiStore((s) => s.chainSplit);
+  const setSplit = useUiStore((s) => s.setChainSplit);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // The drag reports a share of this element's height, not a pixel offset — the same reasoning as
+  // the Git tool's divider: a screen coordinate drifts the moment the window moves.
+  const toShare = (clientY: number) => {
+    const box = bodyRef.current?.getBoundingClientRect();
+    if (!box || box.height === 0) return split;
+    return ((clientY - box.top) / box.height) * 100;
+  };
 
   if (!ready) return <Empty>{t("chain.noTerminal")}</Empty>;
   if (isError) return <Empty>{t("chain.failed")}</Empty>;
@@ -37,66 +50,208 @@ export function ChainTool() {
   if (chain === null || chain.links.length === 0) return <Empty>{t("chain.none")}</Empty>;
 
   const running = chain.links.at(-1);
+  // A plan is worth its own region only while something in it is still open. Finished, it is
+  // history — the header says so in one line, and the trace below is the record.
+  const showPlan = chain.plan.some((step) => step.status !== "completed");
+  // **And when nothing is outstanding at all, the panel says one line and stops.**
+  //
+  // The maintainer, twice: *"plan abgeschlossen und du bist mit allem fertig … es wird gar nichts
+  // angezeigt, alles erledigt"*. Sixty-one links of finished work is a logbook, not a status — and
+  // a panel that looks equally busy whether or not anything is happening has stopped answering the
+  // question it was opened for. The record is still there, one keystroke away.
+  const atRest = chain.standing === "idle" && !showPlan;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="border-cyan/15 flex shrink-0 items-center gap-2 border-b px-2 py-1">
-        <Link2 size={13} className="text-cyan shrink-0" aria-hidden />
-        <span className="text-fg flex-1 font-mono text-[11px] tracking-wider uppercase">
-          {t("nav.chain")}
-        </span>
-      </header>
+    // No header of its own: the tool column already draws one with this tool's name, and two
+    // identical titles above each other is the panel telling you twice what it is.
+    // One font-size for the "now" line, the goal AND the chain — see the component doc.
+    <div
+      ref={bodyRef}
+      className="flex min-h-0 flex-1 flex-col font-mono"
+      style={{ fontSize: `${fontSize}px` }}
+    >
+      {running === undefined ? null : <Now chain={chain} link={running} />}
+      {showPlan ? <Goal chain={chain} /> : null}
 
-      {/* One font-size for header AND chain — see the component doc. */}
-      <div className="flex min-h-0 flex-1 flex-col font-mono" style={{ fontSize: `${fontSize}px` }}>
-        {running === undefined ? null : <Now link={running} elapsed={chain.elapsed} />}
-        {chain.plan.length > 0 ? <Goal chain={chain} /> : null}
+      {/* Two scrolling regions, not one. A plan is a handful of lines somebody wants to keep in
+          view; the trace grows all day. Sharing a scrollbar means the plan leaves the screen exactly
+          when the work gets long — which is when it is worth having. The boundary is the user's,
+          and where they put it is remembered (`chainSplit`).
 
+          **A finished plan is not shown at all.** The harness clears its list the moment nothing is
+          open, and nineteen struck-through lines saying "all done" is a panel asking for attention
+          it does not need. The header says everything is done; the trace below is the record. */}
+      {showPlan ? (
+        <>
+          <div
+            className="min-h-0 overflow-x-hidden overflow-y-auto px-[0.6em] pt-[0.5em]"
+            style={{ height: `${split}%` }}
+          >
+            <SectionLabel>{t("chain.plan")}</SectionLabel>
+            {chain.plan.map((step) => (
+              <PlanRow key={step.id} subject={step.subject} status={step.status} />
+            ))}
+          </div>
+          <Splitter
+            label={t("chain.splitLabel")}
+            orientation="horizontal"
+            value={split}
+            min={CHAIN_SPLIT_MIN}
+            max={CHAIN_SPLIT_MAX}
+            onChange={setSplit}
+            toValue={toShare}
+          />
+        </>
+      ) : null}
+
+      {atRest ? (
+        <RestingRecord chain={chain} />
+      ) : (
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]">
-          {chain.plan.length > 0 ? (
-            <>
-              <SectionLabel>{t("chain.plan")}</SectionLabel>
-              {chain.plan.map((step) => (
-                <PlanRow key={step.id} subject={step.subject} status={step.status} />
-              ))}
-              <SectionLabel className="mt-[1em] border-t border-white/8 pt-[0.8em]">
-                {t("chain.trace")}
-              </SectionLabel>
-            </>
-          ) : (
+          {chain.plan.length === 0 && !showPlan ? (
             <NoPlan done={chain.plan_done} />
+          ) : (
+            <SectionLabel>{t("chain.trace")}</SectionLabel>
           )}
 
-          {[...chain.links].reverse().map((link, index) => (
+          {/* Oldest first, exactly as the work happened, with what is running at the bottom and the
+            expectation below it — reversed, the expectation would hang under the oldest link and
+            read as its cause. */}
+          {chain.links.map((link, index) => (
             <Link key={`${link.act}-${link.refinement ?? ""}-${index}`} link={link} />
           ))}
+
+          {/* Between the chain and the expectation, not after it: the thing to keep in view is the
+            step that is RUNNING, and anchoring below the dashed links would push it up by however
+            many of them there happen to be. */}
+          <TailAnchor count={chain.links.length} />
 
           {chain.expected.map((round, index) => (
             <Ahead key={`${round.act}-${index}`} round={round} />
           ))}
         </div>
+      )}
 
-        <Footer chain={chain} />
-      </div>
+      <Footer chain={chain} />
     </div>
   );
 }
 
-/** The one line that answers "what is it doing" without scrolling. */
-function Now({ link, elapsed }: { link: ChainLink; elapsed: bigint }) {
+/**
+ * What the panel shows when there is nothing to show.
+ *
+ * One line, and the record behind it. The alternative — leaving sixty-one finished links on screen
+ * — makes the tool look identically busy whether or not anything is happening, which is the same
+ * defect as a signal that is always on: it stops carrying information (rule:attention-signals).
+ */
+function RestingRecord({ chain }: { chain: Chain }) {
   const t = useT();
   return (
-    <div className="shrink-0 border-b border-white/6 bg-gradient-to-r from-cyan-400/6 to-transparent px-[0.6em] py-[0.45em]">
-      <div className="text-cyan flex items-baseline gap-[0.4em] text-[1.05em]">
-        <span className="tracking-wider">{link.act}</span>
-        {link.refinement === null ? null : (
-          <span className="text-dim min-w-0 truncate text-[0.85em]">{link.refinement}</span>
+    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]">
+      <Disclosure
+        summaryClassName="text-dim"
+        summary={<span>{t("chain.showRecord", { n: String(chain.links.length) })}</span>}
+      >
+        <div className="mt-[0.6em]">
+          {chain.links.map((link, index) => (
+            <Link key={`${link.act}-${link.refinement ?? ""}-${index}`} link={link} />
+          ))}
+        </div>
+      </Disclosure>
+    </div>
+  );
+}
+
+/**
+ * Keeps the running step in view as the chain grows — **unless the reader has scrolled up.**
+ *
+ * The maintainer's requirement, and it is two rules rather than one:
+ *
+ * - **Follow by default.** The step being worked on is the reason the panel is open; having to
+ *   scroll to it after every poll would make the tool something you operate instead of something
+ *   you glance at.
+ * - **Never yank.** Scrolling up to read an earlier link and being dragged back by an arriving one
+ *   is worse than scrolling down once. So following stops the moment the reader leaves the end, and
+ *   resumes by itself when they return.
+ *
+ * The tolerance is generous on purpose: the dashed expectation sits below this anchor, so being
+ * "at the end" has to mean "the running step is in view", not "scrolled to the last pixel".
+ */
+const FOLLOW_TOLERANCE_PX = 140;
+
+function TailAnchor({ count }: { count: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+
+  useEffect(() => {
+    const node = ref.current;
+    const box = node?.parentElement;
+    if (!node || !box) return;
+
+    const atEnd = () => box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_TOLERANCE_PX;
+    const onScroll = () => {
+      following.current = atEnd();
+    };
+    box.addEventListener("scroll", onScroll, { passive: true });
+    // `scrollTop`, not `scrollIntoView`: it moves only this box (the latter can scroll every
+    // ancestor, including the window), and it is a plain property rather than a method jsdom does
+    // not implement — so the behaviour is testable rather than only observable by hand.
+    if (following.current) box.scrollTop = box.scrollHeight;
+    return () => box.removeEventListener("scroll", onScroll);
+  }, [count]);
+
+  return <div ref={ref} aria-hidden />;
+}
+
+/** The one line that answers "what is it doing" without scrolling. */
+function Now({ chain, link }: { chain: Chain; link: ChainLink }) {
+  const t = useT();
+  const waiting = chain.standing === "waiting";
+  const working = chain.standing === "working";
+  const openSteps = chain.plan.filter((s) => s.status !== "completed").length;
+
+  return (
+    <div
+      className={`shrink-0 border-b border-white/6 bg-gradient-to-r px-[0.6em] py-[0.45em] ${
+        waiting ? "from-amber-300/12" : working ? "from-cyan-400/6" : "from-transparent"
+      } to-transparent`}
+    >
+      <div
+        className={`flex items-baseline gap-[0.4em] text-[1.05em] ${
+          waiting ? "text-gold" : working ? "text-cyan" : "text-dim"
+        }`}
+      >
+        {waiting ? (
+          <span className="tracking-wider">{t("chain.waiting")}</span>
+        ) : working ? (
+          <>
+            <span className="tracking-wider">{link.act}</span>
+            {link.refinement === null ? null : (
+              <span className="text-dim min-w-0 truncate text-[0.85em]">{link.refinement}</span>
+            )}
+            <Reach link={link} />
+          </>
+        ) : (
+          <span className="tracking-wider">
+            {openSteps > 0 ? t("chain.stopped") : t("chain.finished")}
+          </span>
         )}
-        <Reach link={link} />
       </div>
-      <div className="text-dim mt-[0.1em] text-[0.85em] tabular-nums">
-        {t("chain.running", { duration: duration(Number(elapsed), t) })}
-        {link.iterations === null ? "" : ` · ${t("chain.attempt", { n: String(link.iterations) })}`}
+
+      <div className="text-dim mt-[0.1em] truncate text-[0.85em] tabular-nums">
+        {waiting
+          ? (chain.waiting_for ?? t("chain.waitingUnspecified"))
+          : working
+            ? // The RUNNING STEP's own duration, not the session's. It said "running for 4:26 h"
+              // about a step that had started a minute earlier — the number was real and answered a
+              // different question than the sentence around it asked.
+              t("chain.running", { duration: duration(Number(link.seconds), t) }) +
+              (link.iterations === null
+                ? ""
+                : ` · ${t("chain.attempt", { n: String(link.iterations) })}`)
+            : openSteps > 0
+              ? t("chain.openSteps", { n: String(openSteps) })
+              : t("chain.quietFor", { duration: duration(Number(chain.idle), t) })}
       </div>
     </div>
   );
@@ -123,7 +278,7 @@ function Reach({ link }: { link: ChainLink }) {
       }
     >
       <span
-        className={`ml-auto shrink-0 text-[0.8em] ${far ? "text-gold" : "text-dim"} ${
+        className={`min-w-0 shrink truncate text-[0.8em] ${far ? "text-gold" : "text-dim"} ${
           link.reach.disputed ? "decoration-danger underline decoration-wavy" : ""
         }`}
       >
@@ -140,7 +295,17 @@ function Goal({ chain }: { chain: Chain }) {
   return (
     <div className="shrink-0 border-b border-white/6 px-[0.6em] py-[0.45em]">
       <div className="text-purple text-[0.7em] tracking-[0.18em] uppercase">{t("chain.goal")}</div>
-      <div className="text-fg truncate text-[0.9em]">{chain.plan[0]?.subject}</div>
+      {/* The step being worked towards, not `plan[0]`. The first task is where the list started,
+          which after an hour is the least interesting line in it — and on a finished plan it made a
+          completed step masquerade as the goal. */}
+      <div className="text-fg truncate text-[0.9em]">
+        {
+          (
+            chain.plan.find((s) => s.status === "in_progress") ??
+            chain.plan.find((s) => s.status !== "completed")
+          )?.subject
+        }
+      </div>
       <div className="mt-[0.35em] flex items-center gap-[2px]">
         {chain.plan.map((step) => (
           <i
@@ -163,13 +328,30 @@ function Goal({ chain }: { chain: Chain }) {
   );
 }
 
+/**
+ * One step of the agent's plan, drawn the way the harness draws its own list.
+ *
+ * **What is finished recedes; what is running stands out.** The first version painted completed
+ * steps green, which made them the loudest thing on a list where everything eventually completes —
+ * a plan of nineteen finished tasks was nineteen bright green lines and no visible state at all.
+ * Green means "a check passed" in the trace below; using it for "done" here made it mean two things.
+ *
+ * So: done is struck through and dimmed, exactly as a crossed-off list looks; running is the only
+ * line with an accent; pending is plain, waiting its turn.
+ */
 function PlanRow({ subject, status }: { subject: string; status: string }) {
-  const colour =
-    status === "completed" ? "text-green" : status === "in_progress" ? "text-cyan" : "text-dim";
+  const done = status === "completed";
+  const running = status === "in_progress";
   return (
     <div className="flex items-baseline gap-[0.5em] pb-[0.35em]">
-      <Node state={status === "completed" ? "done" : status === "in_progress" ? "live" : "todo"} />
-      <span className={`min-w-0 flex-1 truncate ${colour}`}>{subject}</span>
+      <Node state={done ? "done" : running ? "live" : "todo"} />
+      <span
+        className={`min-w-0 flex-1 truncate ${
+          done ? "text-dim line-through" : running ? "text-cyan" : "text-fg"
+        }`}
+      >
+        {subject}
+      </span>
     </div>
   );
 }
@@ -203,22 +385,36 @@ function Link({ link }: { link: ChainLink }) {
         <span className="text-dim min-w-0 flex-1 truncate text-[0.85em]">{link.refinement}</span>
       )}
       {link.iterations === null ? null : (
-        <span className="bg-gold text-deep shrink-0 px-[0.4em] text-[0.8em] font-bold">
-          {t("chain.iterations", { n: String(link.iterations) })}
-        </span>
+        // The number carries the whole message of this link, so it says what it counts rather than
+        // leaving a bare `2×` to be decoded. Reported: "ich verstehe auch nicht das gelbe 2x badge".
+        <Tooltip content={t("chain.iterationsExplain", { n: String(link.iterations) })}>
+          <span className="bg-gold text-deep shrink-0 px-[0.4em] text-[0.8em] font-bold">
+            {t("chain.iterations", { n: String(link.iterations) })}
+          </span>
+        </Tooltip>
       )}
+      {link.guessed ? <Guessed /> : null}
+      {/* Where it reached, on the link itself and not only in the header — the header shows one
+          line, and "am I about to hit production?" is a question about the step you are reading. */}
+      <Reach link={link} />
       <span className="text-dim ml-auto shrink-0 text-[0.8em] tabular-nums">
         {duration(Number(link.seconds), t)}
       </span>
     </>
   );
 
+  // What the rounds are is stated, not implied. Without the heading a list of bare filenames under
+  // "verify unit 2×" is unreadable — reported in exactly those words.
   const detail = link.rounds.length > 0 && (
     <div className="border-gold/25 mt-[0.3em] ml-[1em] flex flex-col gap-[0.1em] border-l pl-[0.5em]">
+      <div className="text-dim/80 text-[0.78em]">
+        {link.iterations === null ? t("chain.roundsAlso") : t("chain.roundsHeading")}
+      </div>
       {link.rounds.map((round: Round, index: number) => (
         <div key={index} className="text-dim flex gap-[0.5em] text-[0.85em]">
           <span className="text-gold/80 shrink-0 tabular-nums">{index + 1}</span>
-          <span className="min-w-0 truncate">{round.refinement ?? round.act}</span>
+          <span className="shrink-0">{round.act}</span>
+          <span className="min-w-0 truncate">{round.refinement ?? ""}</span>
         </div>
       ))}
     </div>
@@ -241,24 +437,36 @@ function Link({ link }: { link: ChainLink }) {
   );
 }
 
-/** The small print under a link: folded probes, delegation, and whether the label was a guess. */
+/**
+ * The small print under a link: folded probes and delegation.
+ *
+ * **Nothing is drawn when there is nothing to say.** The guess marker used to hang here on its own,
+ * so a link whose only note was "this was guessed" got a whole line containing one tilde — which
+ * reads as a rendering fault rather than as information. It now rides beside the title, where the
+ * thing it qualifies actually is.
+ */
 function Meta({ link }: { link: ChainLink }) {
   const t = useT();
   const notes: string[] = [];
   if (link.kind === "delegated") notes.push(t("chain.delegated", { n: String(link.steps) }));
   if (link.noise > 0) notes.push(t("chain.probes", { n: String(link.noise) }));
-  if (notes.length === 0 && !link.guessed) return null;
+  if (notes.length === 0) return null;
   return (
-    <div className="text-dim flex items-baseline gap-[0.5em] text-[0.78em]">
-      <span className="min-w-0 truncate">{notes.join(" · ")}</span>
-      {link.guessed ? (
-        <Tooltip content={t("chain.guessed")}>
-          <span className="text-dim shrink-0" aria-label={t("chain.guessed")}>
-            ~
-          </span>
-        </Tooltip>
-      ) : null}
-    </div>
+    <Tooltip content={t("chain.probesExplain")}>
+      <div className="text-dim truncate text-[0.78em]">{notes.join(" · ")}</div>
+    </Tooltip>
+  );
+}
+
+/** The mark that says a classification came from the heuristic rather than from a declaration. */
+function Guessed() {
+  const t = useT();
+  return (
+    <Tooltip content={t("chain.guessed")}>
+      <span className="text-dim shrink-0 text-[0.8em]" aria-label={t("chain.guessed")}>
+        ~
+      </span>
+    </Tooltip>
   );
 }
 
@@ -303,7 +511,7 @@ function Node({
   const paint = ((): string => {
     switch (state) {
       case "done":
-        return cycle ? "border-green" : "bg-green";
+        return cycle ? "border-green" : "bg-green/70";
       case "failed":
         return cycle ? "border-danger bg-danger" : "bg-danger";
       case "live":

@@ -2,6 +2,7 @@
 import type { ChainLink } from "./ChainLink";
 import type { PlanStep } from "./PlanStep";
 import type { Round } from "./Round";
+import type { Standing } from "./Standing";
 
 /**
  * Everything the tool needs for one tab.
@@ -30,6 +31,25 @@ expected: Array<Round>,
  * Seconds since the first step of the session.
  */
 elapsed: bigint, 
+/**
+ * Seconds since the **last** step — how long nothing has happened.
+ *
+ * **The chain has no other way to know the present.** It reads a file and would otherwise treat
+ * the end of it as "now": an agent that stopped an hour ago still showed a link as running and
+ * three more as expected, while nobody had asked it for anything. That is the same failure
+ * `rule:attention-signals` records — a state that does not age becomes a lie, and the lie looks
+ * exactly like information.
+ */
+idle: bigint, 
+/**
+ * What the agent is doing right now — the question the tool exists to answer.
+ */
+standing: Standing, 
+/**
+ * What it is waiting for, when it is waiting. The harness's own words, because a request names
+ * what it wants and nothing we could write would be more accurate.
+ */
+waiting_for: string | null, 
 /**
  * Tool calls seen, and how many were understood. A shorter chain and a genuinely shorter chain
  * look identical, so the reader reports its own coverage instead of going quiet (ADR-PROJ-005).

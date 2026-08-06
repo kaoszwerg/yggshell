@@ -52,7 +52,7 @@ fn merges(open: &Block, step: &Step) -> bool {
     if open.act != step.act {
         return false;
     }
-    open.act == Act::Build || open.refinement == step.refinement
+    open.act == Act::Edit || open.refinement == step.refinement
 }
 
 fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
@@ -219,23 +219,33 @@ fn link_of(block: &Block, iterations: Option<u32>, rounds: Vec<Round>) -> ChainL
 }
 
 /// Infer each link's outcome from what followed it (see [`Outcome`]).
+///
+/// **Only a `verify` has an outcome.** Everything else merely happened: a file was edited, a commit
+/// was made, a directory was read. Painting those green says *checked and good* about work nothing
+/// checked — and a chain where every link is green is a chain that has stopped carrying the one
+/// signal it exists for. Reported from the running app, where four hours of mixed work rendered as
+/// an unbroken column of green.
+///
+/// So the palette means exactly this: **green — a check that passed. Red — a check that failed.
+/// Cyan — running now. Everything else is plain.**
 fn settle_outcomes(links: &mut [ChainLink]) {
     let len = links.len();
     for i in 0..len {
         let next_act = links.get(i + 1).map(|l| l.act);
-        links[i].outcome = match next_act {
-            // Nothing after it: this is what is running.
-            None => Outcome::Live,
-            // Something was built afterwards — the check had found something.
-            Some(Act::Build) if links[i].act == Act::Verify => Outcome::Failed,
-            // A cycle that ended in a fix rather than moving on ended red.
-            Some(next) if next > links[i].act || next == Act::Ship => Outcome::Done,
-            Some(_) => Outcome::Done,
+        links[i].outcome = match (links[i].act, next_act) {
+            // Nothing after it: this is what is running, whatever kind of act it is.
+            (_, None) => Outcome::Live,
+            // A check followed by a fix had found something.
+            (Act::Verify, Some(Act::Edit)) => Outcome::Failed,
+            // A check followed by anything else was passed and the work moved on.
+            (Act::Verify, Some(_)) => Outcome::Done,
+            // Building, shipping, probing: they happened. Nothing pronounced them good.
+            _ => Outcome::Unknown,
         };
         // A cycle whose last round was a build never resolved: it stopped mid-repair.
-        if links[i].iterations.is_some() {
+        if links[i].iterations.is_some() && links[i].act == Act::Verify {
             if let Some(last) = links[i].rounds.last() {
-                if last.act == Act::Build && links[i].act == Act::Verify {
+                if last.act == Act::Edit {
                     links[i].outcome = Outcome::Failed;
                 }
             }
@@ -292,7 +302,7 @@ mod tests {
     fn probes_before_any_work_are_dropped_rather_than_invented_into_a_block() {
         // A session that opens with twenty greps has not started working. Attaching them to the
         // first real block would date that block to the session's start.
-        let links = fold(vec![probe(), probe(), step(Act::Build, "a.rs")]);
+        let links = fold(vec![probe(), probe(), step(Act::Edit, "a.rs")]);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].noise, 0);
     }
@@ -300,9 +310,9 @@ mod tests {
     #[test]
     fn consecutive_identical_acts_are_one_block() {
         let links = fold(vec![
-            step(Act::Build, "a.rs"),
-            step(Act::Build, "a.rs"),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
+            step(Act::Edit, "a.rs"),
+            step(Act::Edit, "a.rs"),
         ]);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].steps, 3);
@@ -313,9 +323,9 @@ mod tests {
         // THE feature: `verify ⇄ build ×N` is the number that says "this is not progressing".
         let links = fold(vec![
             step(Act::Verify, "core"),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
             step(Act::Verify, "core"),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
             step(Act::Verify, "core"),
         ]);
 
@@ -330,9 +340,9 @@ mod tests {
         // once would read as `×2` — stagnation — when it is two successful passes.
         let links = fold(vec![
             step(Act::Verify, "rust"),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
             step(Act::Verify, "typescript"),
-            step(Act::Build, "b.ts"),
+            step(Act::Edit, "b.ts"),
         ]);
 
         assert!(
@@ -348,16 +358,16 @@ mod tests {
         // The counter alone cannot distinguish them, so the rounds ride along.
         let links = fold(vec![
             step(Act::Verify, "core"),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
             step(Act::Verify, "core"),
-            step(Act::Build, "b.rs"),
+            step(Act::Edit, "b.rs"),
             step(Act::Verify, "core"),
         ]);
 
         let rounds = &links[0].rounds;
         let files: Vec<&str> = rounds
             .iter()
-            .filter(|r| r.act == Act::Build)
+            .filter(|r| r.act == Act::Edit)
             .filter_map(|r| r.refinement.as_deref())
             .collect();
         assert_eq!(files, vec!["a.rs", "b.rs"]);
@@ -369,17 +379,37 @@ mod tests {
         // results carry one, because agents pipe test runs through `tail`.
         let links = fold(vec![
             step(Act::Verify, "core"),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
+            step(Act::Verify, "core2"),
             step(Act::Ship, "commit"),
         ]);
 
         assert_eq!(links[0].outcome, Outcome::Failed, "a fix followed it");
-        assert_eq!(links[1].outcome, Outcome::Done, "it was committed");
+        assert_eq!(links[2].outcome, Outcome::Done, "this one was passed");
+    }
+
+    #[test]
+    fn only_a_check_is_ever_green() {
+        // Reported from the running app: four hours of mixed work rendered as an unbroken column of
+        // green, because every link that was not the newest was called `Done`. Building and shipping
+        // *happened* — nothing pronounced them good, and saying so drowns out the one signal the
+        // chain exists to carry.
+        let links = fold(vec![
+            step(Act::Edit, "a.rs"),
+            step(Act::Ship, "commit"),
+            step(Act::Verify, "core"),
+            step(Act::Ship, "push"),
+        ]);
+
+        assert_eq!(links[0].outcome, Outcome::Unknown, "an edit is not a pass");
+        assert_eq!(links[1].outcome, Outcome::Unknown, "nor is a commit");
+        assert_eq!(links[2].outcome, Outcome::Done, "the check is");
+        assert_eq!(links[3].outcome, Outcome::Live, "and the last is running");
     }
 
     #[test]
     fn the_last_link_is_what_is_running() {
-        let links = fold(vec![step(Act::Build, "a.rs"), step(Act::Verify, "core")]);
+        let links = fold(vec![step(Act::Edit, "a.rs"), step(Act::Verify, "core")]);
         assert_eq!(links.last().expect("a link").outcome, Outcome::Live);
     }
 
@@ -390,12 +420,12 @@ mod tests {
         // looks like content.
         let links = fold(vec![
             Step::new(Act::Plan, None).with_kind(Kind::Bookkeeping),
-            step(Act::Build, "a.rs"),
+            step(Act::Edit, "a.rs"),
             Step::new(Act::Plan, None).with_kind(Kind::Bookkeeping),
         ]);
 
         assert_eq!(links.len(), 1);
-        assert_eq!(links[0].act, Act::Build);
+        assert_eq!(links[0].act, Act::Edit);
         assert_eq!(links[0].noise, 0, "bookkeeping is not noise either");
     }
 
