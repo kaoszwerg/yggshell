@@ -179,6 +179,10 @@ export const en = {
   "chain.copyRule": "Copy the rule for the agent",
   "chain.copyRuleDone": "Copied. Paste it into the agent working here.",
   "chain.installGate": "Put the check in this repo",
+  "chain.updateGate": "Update the check in this repo",
+  "chain.gateStale": "This project's copy of the check is behind",
+  "chain.gateStaleHint":
+    "The app ships a newer one. Nothing in your repository is touched until you say so.",
   "chain.installGateDone": "Written to {path}",
   "chain.adoptionFailed": "That did not work — see the log",
   "chain.noTerminal": "This tab has no terminal running.",

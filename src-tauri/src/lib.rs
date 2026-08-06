@@ -124,7 +124,7 @@ pub fn run() {
             commands::install_plan_nudge,
             commands::agent_nudge_installed,
             commands::adoption_rule,
-            commands::adoption_declared,
+            commands::adoption_state,
             commands::adoption_install_gate,
             commands::clear_agent_attention,
             commands::list_containers,

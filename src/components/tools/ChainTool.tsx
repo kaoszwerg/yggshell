@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { environmentApi } from "../../api/environment";
 import { useTerminalStore } from "../../store/terminal";
 import { Button } from "../ui/Button";
+import type { Adoption } from "../../bindings/Adoption";
 import type { Chain } from "../../bindings/Chain";
 import type { ChainLink } from "../../bindings/ChainLink";
 import type { Round } from "../../bindings/Round";
@@ -650,26 +651,35 @@ function Legend() {
  * It sits here for the same reason the plan nudge does: this is the moment somebody notices the
  * absence — every level in the trace marked as a guess.
  */
-/** Asks whether this repository declares its levels, and offers the two channels when it does not. */
+/**
+ * Asks what this repository has of the convention, and offers what it is missing.
+ *
+ * **Also for a repository that already adopted**, which is the case the first version could not
+ * serve at all: the offer only existed where no declaration did, so once a project had one there
+ * was no way to hand it the manual again — and no way to learn that the gate it copied is behind
+ * the one this app now ships. A copy inside somebody's repository is never rewritten silently
+ * (`adoption::Adoption`); it is reported, and updating it stays a button they press.
+ */
 function Undeclared() {
   const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
-  const declared = useQuery({
-    queryKey: ["adoption-declared", cwd],
-    queryFn: () => (cwd === null ? true : environmentApi.adoptionDeclared(cwd)),
+  const state = useQuery({
+    queryKey: ["adoption", cwd],
+    queryFn: () => (cwd === null ? null : environmentApi.adoptionState(cwd)),
     enabled: cwd !== null,
   });
-  // Absent or still loading, the offer stays hidden: proposing to fix something that may not be
-  // missing is worse than proposing nothing. Its own padding, so the caller can drop it anywhere
-  // without leaving an empty box behind when there is nothing to offer.
-  if (cwd === null || declared.data !== false) return null;
+  // Absent or still loading, nothing is offered: proposing to fix something that may not be missing
+  // is worse than proposing nothing. Its own padding, so the caller can drop it anywhere without
+  // leaving an empty box behind when there is nothing to say.
+  if (cwd === null || !state.data) return null;
+  if (state.data.declared && !state.data.gate_stale) return null;
   return (
-    <div className="shrink-0 px-[0.6em] pt-[0.5em]">
-      <NoDeclaration cwd={cwd} />
+    <div className="shrink-0 px-2 pt-2">
+      <NoDeclaration cwd={cwd} state={state.data} />
     </div>
   );
 }
 
-function NoDeclaration({ cwd }: { cwd: string }) {
+function NoDeclaration({ cwd, state }: { cwd: string; state: Adoption }) {
   const t = useT();
   const [gatePath, setGatePath] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -695,23 +705,25 @@ function NoDeclaration({ cwd }: { cwd: string }) {
   };
 
   return (
-    <div className="border-dim/25 text-dim mb-[0.8em] border border-dashed px-[0.5em] py-[0.45em] text-[0.9em]">
-      <b className="text-fg mb-[0.15em] block font-medium">{t("chain.undeclared")}</b>
-      {t("chain.undeclaredHint")}
-      <div className="mt-[0.5em] flex flex-wrap gap-[0.4em]">
+    <div className="border-dim/25 text-dim mb-2 border border-dashed px-2 py-1.5 text-[11px]">
+      <b className="text-fg mb-0.5 block font-medium">
+        {state.declared ? t("chain.gateStale") : t("chain.undeclared")}
+      </b>
+      {state.declared ? t("chain.gateStaleHint") : t("chain.undeclaredHint")}
+      <div className="mt-1.5 flex flex-wrap gap-1">
         <Button variant="ghost" accent="cyan" onClick={() => void copyRule()}>
           {t("chain.copyRule")}
         </Button>
         <Button variant="ghost" accent="purple" onClick={() => void installGate()}>
-          {t("chain.installGate")}
+          {state.gate ? t("chain.updateGate") : t("chain.installGate")}
         </Button>
       </div>
       {gatePath === null ? null : (
-        <div className="text-green mt-[0.3em] break-all">
+        <div className="text-green mt-1 break-all">
           {t("chain.installGateDone", { path: gatePath })}
         </div>
       )}
-      {failed ? <div className="text-danger mt-[0.3em]">{t("chain.adoptionFailed")}</div> : null}
+      {failed ? <div className="text-danger mt-1">{t("chain.adoptionFailed")}</div> : null}
     </div>
   );
 }

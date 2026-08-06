@@ -1,5 +1,6 @@
 // Typed wrapper around the Claude-environment surface.
 import { invoke } from "@tauri-apps/api/core";
+import type { Adoption } from "../bindings/Adoption";
 import type { AgentAttention } from "../bindings/AgentAttention";
 import type { EnvironmentStatus } from "../bindings/EnvironmentStatus";
 
@@ -65,8 +66,8 @@ export const environmentApi = {
    */
   adoptionRule: () => invoke<string>("adoption_rule"),
 
-  /** Whether this directory's repository already declares its levels. */
-  adoptionDeclared: (cwd: string) => invoke<boolean>("adoption_declared", { cwd }),
+  /** What this repository has of the convention, and whether its copy of the gate is current. */
+  adoptionState: (cwd: string) => invoke<Adoption>("adoption_state", { cwd }),
 
   /** Write the grammar gate into this repository; resolves with the path it landed at. */
   adoptionInstallGate: (cwd: string) => invoke<string>("adoption_install_gate", { cwd }),

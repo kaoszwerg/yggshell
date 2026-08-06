@@ -46,19 +46,31 @@ pub struct Entry {
 /// `npx playwright test --project=admin`, and the reader reduced it to `playwright test admin`. So
 /// the comparison is on **words**, and one being a prefix of the other is enough — a declaration
 /// naming fewer words is the more general statement and should still match.
-fn same_command(declared: &str, observed: &str) -> bool {
-    let words = |s: &str| {
-        s.split_whitespace()
-            .filter(|w| !w.starts_with('-'))
-            .map(|w| w.trim_start_matches("./").to_string())
-            .filter(|w| !matches!(w.as_str(), "npx" | "bunx" | "bash" | "sh" | "env"))
-            .collect::<Vec<_>>()
-    };
+fn words(s: &str) -> Vec<String> {
+    s.split_whitespace()
+        .filter(|w| !w.starts_with('-'))
+        .map(|w| w.trim_start_matches("./").to_string())
+        .filter(|w| !matches!(w.as_str(), "npx" | "bunx" | "bash" | "sh" | "env"))
+        .collect()
+}
+
+/// How many leading words a declared `run` and an observed command share, or `None` if they are
+/// different entrypoints.
+///
+/// **The count is what makes the answer safe.** Eleven entries of the form
+/// `gh workflow run <file> -f environment=<name>` all share their first three words, so a caller
+/// that stopped at the first match reported a production deploy as the image build listed above it —
+/// measured against a real declaration. The longest agreement is the specific one, and specificity
+/// is the whole reason those entries exist separately.
+fn shared_prefix(declared: &str, observed: &str) -> Option<usize> {
     let (a, b) = (words(declared), words(observed));
     if a.is_empty() || b.is_empty() {
-        return false;
+        return None;
     }
-    a.iter().zip(b.iter()).all(|(x, y)| x == y)
+    let shared = a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count();
+    // One of the two must be a prefix of the other: a shorter declaration is the more general
+    // statement and still matches, but a disagreement inside the overlap is a different command.
+    (shared == a.len().min(b.len())).then_some(shared)
 }
 
 /// Targets in ascending order of how far they reach. The ordering is what makes "escalate only"
@@ -116,6 +128,29 @@ impl Levels {
         Some(levels)
     }
 
+    /// The act and refinement a project declares for a command, if it declares one.
+    ///
+    /// **This is what makes a declaration more than a relabelling.** The heuristic knows a fixed set
+    /// of programs, and a project's own runner is not in it: measured against lysisai-dsp, 16 of its
+    /// 59 entrypoints — every `python3 scripts/…`, every `node scripts/…`, and the whole `./heimdal`
+    /// vocabulary — produced no step at all, so there was no link for `apply` to label and a
+    /// correctly written declaration changed nothing. The file exists to name what cannot be
+    /// guessed; until this, it could only rename what already had been.
+    pub fn classify(&self, command: &str) -> Option<(super::model::Act, Option<String>)> {
+        let entry = self
+            .entrypoints
+            .iter()
+            .filter_map(|e| shared_prefix(&e.run, command).map(|shared| (shared, e)))
+            .max_by_key(|(shared, _)| *shared)
+            .map(|(_, e)| e)?;
+        let head = entry.is.split(['@', '#']).next().unwrap_or(&entry.is);
+        let (act, refinement) = match head.split_once('/') {
+            Some((act, refinement)) => (act, Some(refinement.to_string())),
+            None => (head, None),
+        };
+        super::model::Act::parse(act).map(|act| (act, refinement))
+    }
+
     /// Name a link from the declaration, and widen its reach — never narrow it.
     pub fn apply(&self, link: &mut ChainLink) {
         // **Matched on the command, not on the refinement.** A refinement is a category — `cargo
@@ -129,7 +164,9 @@ impl Levels {
         let Some(entry) = self
             .entrypoints
             .iter()
-            .find(|e| same_command(&e.run, &signature))
+            .filter_map(|e| shared_prefix(&e.run, &signature).map(|shared| (shared, e)))
+            .max_by_key(|(shared, _)| *shared)
+            .map(|(_, e)| e)
         else {
             return;
         };
@@ -226,6 +263,38 @@ mod tests {
         assert_eq!(reach.target, "dev");
         assert_eq!(reach.host.as_deref(), Some("localhost:3000"));
         assert!(!reach.disputed);
+    }
+
+    #[test]
+    fn the_most_specific_declaration_wins_not_the_first_one_listed() {
+        // **The defect this module exists to prevent, found in a real declaration.** Eleven entries
+        // of the form `gh workflow run <file> -f environment=<name>` share their first three words;
+        // taking the first match reported a deploy to a production host as the image build listed
+        // above it. `reaches` is the one field that can hurt somebody when it is wrong.
+        let l = levels(
+            r#"{"entrypoints":[
+                {"run":"gh workflow run build-images.yml","is":"build@local"},
+                {"run":"gh workflow run deploy.yml -f environment=staging","is":"ship/deploy@staging","reaches":"testing.example.com"},
+                {"run":"gh workflow run deploy.yml -f environment=prod","is":"ship/deploy@prod","reaches":"portal.example.com"}
+            ]}"#,
+        );
+        let mut link = link("gh workflow run deploy.yml environment=prod", None);
+
+        l.apply(&mut link);
+
+        let reach = link.reach.expect("a reach");
+        assert_eq!(reach.target, "prod");
+        assert_eq!(reach.host.as_deref(), Some("portal.example.com"));
+    }
+
+    #[test]
+    fn a_command_that_disagrees_inside_the_overlap_is_a_different_entrypoint() {
+        let l = levels(r#"{"entrypoints":[{"run":"npm run test:e2e","is":"verify/e2e@local"}]}"#);
+        let mut link = link("npm run test:unit", None);
+
+        l.apply(&mut link);
+
+        assert!(link.guessed, "no declaration claimed this one");
     }
 
     #[test]

@@ -166,6 +166,10 @@ export const de: Translations = {
   "chain.copyRule": "Regel für den Agenten kopieren",
   "chain.copyRuleDone": "Kopiert. Füge sie dem Agenten ein, der hier arbeitet.",
   "chain.installGate": "Prüfung in dieses Repo legen",
+  "chain.updateGate": "Prüfung in diesem Repo erneuern",
+  "chain.gateStale": "Die Kopie der Prüfung in diesem Projekt ist veraltet",
+  "chain.gateStaleHint":
+    "Die App liefert eine neuere. In deinem Repo wird nichts angefasst, bevor du es sagst.",
   "chain.installGateDone": "Abgelegt unter {path}",
   "chain.adoptionFailed": "Das hat nicht geklappt — siehe Log",
   "chain.noTerminal": "In diesem Tab läuft kein Terminal.",

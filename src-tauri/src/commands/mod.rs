@@ -992,10 +992,11 @@ pub fn adoption_rule(app: tauri::AppHandle) -> Result<String> {
     )
 }
 
-/// Whether this repository already declares its levels — what the offer is shown for.
+/// What this repository has of the convention, and whether its copy is current.
 #[tauri::command]
-pub fn adoption_declared(cwd: String) -> Result<bool> {
-    Ok(crate::adoption::declares_levels(std::path::Path::new(&cwd)))
+pub fn adoption_state(app: tauri::AppHandle, cwd: String) -> Result<crate::adoption::Adoption> {
+    let gate = bundled_adoption(&app, crate::adoption::GATE)?;
+    Ok(crate::adoption::adoption(std::path::Path::new(&cwd), &gate))
 }
 
 /// Put the grammar gate into this repository and say where it landed.

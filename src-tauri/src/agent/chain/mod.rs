@@ -410,7 +410,32 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
     // place the answer actually exists.
     let standing = model::Standing::Unknown;
 
-    let mut links = fold::fold(parsed.steps);
+    // **The declaration is consulted BEFORE the fold, or it arrives too late.** A command the
+    // heuristic cannot name is a probe, and a probe is absorbed into whatever block is open — so by
+    // the time links exist there is nothing left for `apply` to label. This is what made 16 of one
+    // real declaration's 59 entrypoints inert: `python3 scripts/…`, `node scripts/…` and every
+    // `./heimdal …` produced no link at all, however correctly the project had written them down.
+    //
+    // Done here rather than during parsing on purpose: parsing is cached, and a project editing
+    // `work-levels.json` must see the effect within one poll rather than after an app restart.
+    let mut steps = parsed.steps;
+    if let Some(levels) = declaration {
+        for step in &mut steps {
+            if step.recognised {
+                continue;
+            }
+            let Some(signature) = step.signature.clone() else {
+                continue;
+            };
+            if let Some((act, refinement)) = levels.classify(&signature) {
+                step.act = act;
+                step.refinement = refinement;
+                step.recognised = true;
+            }
+        }
+    }
+
+    let mut links = fold::fold(steps);
     if let Some(levels) = declaration {
         for link in &mut links {
             levels.apply(link);

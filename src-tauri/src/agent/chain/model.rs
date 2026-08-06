@@ -66,6 +66,27 @@ impl Act {
             Act::Ship => "ship",
         }
     }
+
+    /// The act a declaration names, or `None` for a word outside the vocabulary.
+    ///
+    /// The inverse of [`as_str`](Self::as_str), and it exists so a project can name work this
+    /// reader's heuristic does not recognise: `./heimdal plugins build` is a build because the
+    /// project says so, and nothing about the command could have said it.
+    ///
+    /// `compact` is deliberately absent: it is an event at the agent, not a level of work anybody
+    /// declares, and accepting it would let a declaration claim one.
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "probe" => Some(Act::Probe),
+            "plan" => Some(Act::Plan),
+            "edit" => Some(Act::Edit),
+            "build" => Some(Act::Build),
+            "verify" => Some(Act::Verify),
+            "subagent" => Some(Act::Delegate),
+            "ship" => Some(Act::Ship),
+            _ => None,
+        }
+    }
 }
 
 /// What kind of thing a step is, beyond its act.

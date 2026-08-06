@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -183,6 +183,32 @@ describe("the script", () => {
     expect(out).toMatch(/not valid JSON/);
   });
 
+  it("finds the declaration from the placement the rule recommends, with no argument", () => {
+    // **The defect the first adopting project reported, and the worst kind there is.** The root
+    // used to be derived from this file's own location (`../..`), true only for the layout that
+    // wrote it. Placed at `scripts/check-work-levels.mjs` — what the rule recommends — that resolves
+    // ABOVE the repository, so the gate found no declaration, printed "nothing to check" and exited
+    // 0 while a `@prod` entry with no `reaches` sat unread. A gate that passes silently is worse
+    // than no gate.
+    const root = fixture({ entrypoints: [{ run: "deploy", is: "ship/deploy@prod" }] });
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    const placed = join(root, "scripts", "check-work-levels.mjs");
+    writeFileSync(placed, readFileSync(SCRIPT, "utf8"));
+
+    let code = 0;
+    let out = "";
+    try {
+      out = execFileSync("node", [placed], { encoding: "utf8", cwd: root });
+    } catch (error) {
+      code = error.status ?? 1;
+      out = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+    }
+    rmSync(root, { recursive: true, force: true });
+
+    expect(code).toBe(1);
+    expect(out).toMatch(/needs `reaches`/);
+  });
+
   it("passes a project that declares nothing", () => {
     // Not every project has one, and a missing declaration is not a failure — the reader falls back
     // to its heuristic and says it is guessing.
@@ -219,6 +245,25 @@ describe("the script", () => {
     // whole sentence, not on the bare word: the failure output also prints the target list, which
     // contains `dev`, and asserting on the word passed for the wrong reason.
     expect(out).not.toMatch(/`npm run dev` is a level of work/);
+  });
+
+  it("does not count a script as declared because its name appears inside another", () => {
+    // Declaring `npm run test:e2e` used to satisfy a script called `test`, because the check asked
+    // whether the name appeared anywhere in the joined run strings. Reported by the first adopting
+    // project — a false negative in the check whose job is finding what is missing.
+    const root = fixture({
+      version: 1,
+      entrypoints: [{ run: "npm run test:e2e", is: "verify/e2e@local" }],
+    });
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ scripts: { test: "vitest run", "test:e2e": "playwright test" } }),
+    );
+    const { code, out } = run(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(code).toBe(1);
+    expect(out).toMatch(/`npm run test` is a level of work/);
   });
 
   it("says nothing about a package script that is not a level of work", () => {

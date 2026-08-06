@@ -13,10 +13,36 @@
  * a database is a lie no parser can see. That is the rule's business and the reader's caution
  * (ADR-PROJ-005 §4: the declaration may name and escalate, never reassure).
  */
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = process.argv[2] ?? new URL("../..", import.meta.url).pathname;
+/**
+ * The repository this is checking.
+ *
+ * **Found by walking up, never derived from where this file happens to sit.** It used to be
+ * `new URL("../..", import.meta.url)` — two levels above the script — which is true only for the
+ * layout of the project that wrote it. At the placement the rule itself recommends
+ * (`scripts/check-work-levels.mjs`, one level) that resolves *above* the repository, finds no
+ * declaration, prints "nothing to check" and exits 0. Reported by the first project to adopt it:
+ * a gate that passes silently is worse than no gate, and this one passed a `@prod` entry with no
+ * `reaches` — the single thing it exists to refuse.
+ *
+ * It was also `.pathname` on a `file://` URL, which is not a filesystem path: on Windows that yields
+ * `/C:/…`, and a space in a path stays percent-escaped. The walk below takes real paths only, so the
+ * question no longer arises.
+ */
+function repositoryRoot(start) {
+  let dir = resolve(start);
+  for (;;) {
+    if (existsSync(join(dir, "work-levels.json"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return resolve(start);
+    dir = parent;
+  }
+}
+
+const ROOT = process.argv[2] ?? repositoryRoot(process.cwd());
 
 /** The seven acts (rule:work-legibility). */
 const ACTS = ["plan", "edit", "build", "verify", "subagent", "ship", "probe"];
@@ -133,12 +159,19 @@ const LEVEL_SHAPED = /^(test|e2e|verify|check|lint|audit|security|deploy|release
  * `scripts/` directory is not covered, and that is honest — the rule says so rather than pretending.
  */
 export function undeclaredScripts(declaration, scripts) {
-  const declared = (declaration?.entrypoints ?? [])
-    .map((entry) => (typeof entry?.run === "string" ? entry.run : ""))
-    .join("\n");
+  // **Whole words, not a substring of everything concatenated.** It used to join every `run` into
+  // one string and ask whether the script's name appeared anywhere in it — so declaring
+  // `npm run test:e2e` made a script called `test` count as declared, and a repository could satisfy
+  // this check without declaring the entrypoint it actually runs. A false negative in the one check
+  // whose whole job is finding what is missing.
+  const declared = new Set(
+    (declaration?.entrypoints ?? []).flatMap((entry) =>
+      typeof entry?.run === "string" ? entry.run.split(/[\s/=]+/) : [],
+    ),
+  );
   return Object.keys(scripts ?? {})
     .filter((name) => LEVEL_SHAPED.test(name))
-    .filter((name) => !declared.includes(name));
+    .filter((name) => !declared.has(name));
 }
 
 /**
@@ -219,6 +252,16 @@ function main() {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
+// **Compared whole, and through symlinks.** The old form split on `/` (wrong separator on Windows)
+// and matched any script with the same file name — so a project's own wrapper called
+// `check-work-levels-<project>.mjs` could make this module run `main()` merely by importing it.
+// Adopting by wrapping is a supported path (a delivered file cannot hold local adaptation), so the
+// import must be inert by construction rather than by luck of naming.
+//
+// `realpathSync` on both sides is not belt-and-braces: `import.meta.url` is already resolved while
+// `process.argv[1]` is whatever was typed, so on macOS — where `/tmp` and `/var` are symlinks — the
+// two never matched and the script did nothing at all. Its own test caught that within a minute.
+const invokedAs = process.argv[1] ? realpathSync(process.argv[1]) : null;
+if (invokedAs && realpathSync(fileURLToPath(import.meta.url)) === invokedAs) {
   process.exit(main());
 }

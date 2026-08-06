@@ -29,7 +29,7 @@ vi.mock("../../store/terminal", () => ({
 
 vi.mock("../../api/environment", () => ({
   environmentApi: {
-    adoptionDeclared: () => Promise.resolve(declared),
+    adoptionState: () => Promise.resolve({ declared, gate: declared, gate_stale: false }),
     adoptionRule: () => Promise.resolve("the rule"),
     adoptionInstallGate: () => Promise.resolve("/repo/scripts/check-work-levels.mjs"),
     nudgeInstalled: () => Promise.resolve(true),

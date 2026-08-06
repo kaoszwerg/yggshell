@@ -174,7 +174,33 @@ fn classify_command(command: &str) -> Step {
         .into_iter()
         .filter_map(classify_segment)
         .max_by_key(|step| step.act as u8)
-        .unwrap_or_else(Step::unrecognised)
+        .unwrap_or_else(|| Step::unrecognised().with_signature(unknown_signature(command)))
+}
+
+/// The command as a person would write it down, for a program this reader does not know.
+///
+/// **An unrecognised step still carries its signature, and that is the point.** A project's own
+/// runner — `./heimdal plugins build`, `python3 scripts/lint-jsx.py` — is not in `RUNNERS` and never
+/// will be; what names it is the project's declaration, and a declaration cannot be looked up
+/// against a step that threw its command away. Measured: 16 of one real declaration's 59 entrypoints
+/// were unreachable for exactly this reason.
+///
+/// The **last** segment that runs anything: `cd repo && ./heimdal build` is the build, and the
+/// significance ordering that picks the interesting half of a compound command is unavailable here
+/// precisely because nothing was recognised.
+fn unknown_signature(command: &str) -> Option<String> {
+    let (name, args) = segments(command)
+        .into_iter()
+        .rfind(|segment| program(segment).is_some_and(|(name, _)| name != "cd"))
+        .and_then(program)?;
+    Some(format!(
+        "{name}{}",
+        args.iter()
+            .copied()
+            .filter(|a| is_plain_argument(a))
+            .map(|a| format!(" {a}"))
+            .collect::<String>()
+    ))
 }
 
 /// One segment, or `None` if it runs nothing recognisable.
@@ -258,14 +284,17 @@ fn classify_segment(segment: &str) -> Option<Step> {
     if !RUNNERS.contains(&name) {
         return None;
     }
-    // What  is matched against: the command as a person would write it down.
+    // What a declaration is matched against: the command as a person would write it down.
+    //
+    // **Every plain word, not the first two.** Truncating collapsed eleven entries of the form
+    // `gh workflow run <file> -f environment=<name>` onto one key, and the first of them won — so a
+    // production deploy to `portal.lysis.ai` was labelled `build`, reaching `ghcr.io`. Measured
+    // against a real declaration (lysisai-dsp, 59 entrypoints, five production targets). Two levels
+    // of work that differ only in a flag are exactly what `rule:work-legibility` says must be two
+    // entrypoints, so the reader has to be able to tell them apart.
     let signature = format!(
         "{name}{}",
-        plain
-            .iter()
-            .take(2)
-            .map(|a| format!(" {a}"))
-            .collect::<String>()
+        plain.iter().map(|a| format!(" {a}")).collect::<String>()
     );
     Some(step.with_signature(Some(signature)))
 }

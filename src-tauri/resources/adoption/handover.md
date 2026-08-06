@@ -37,4 +37,28 @@ rename anything; a project declares what it has. The one field to get right is `
 whose target is not `local` says where it actually goes, and that is the only part of the file that
 can hurt somebody when it is wrong.
 
+Five things the first project to adopt this got wrong or had to ask, in the order they cost time:
+
+1. **Your everyday git and `gh` commands are not `local`.** `git push`, `gh pr create`, `gh pr
+   merge`, `gh run view`, `gh workflow run` all reach a service that is not this machine, and pushed
+   history is public and permanent. Declare them with a target and a `reaches` — the first adopter
+   declared eight deployments at `@prod` perfectly and left every one of these at the default, which
+   is the same mistake one floor down. Only what genuinely never leaves the machine is `@local`.
+2. **`run` is the identifying portion — as long as it needs to be, flags included.** Where two levels
+   of work differ only in an argument, that argument belongs in `run`:
+   `gh workflow run deploy.yml -f environment=prod` and `… environment=staging` are two entrypoints
+   with two `reaches`, and writing them as one would be the thing this convention exists to refuse.
+   A reader takes the **longest** matching declaration, so a general entry and a specific one can
+   both be listed.
+3. **Declare what you actually type, not only the tidy alias.** If the project has
+   `npm run test:e2e` but you habitually run `npx playwright test`, declare both — a reader can only
+   recognise what is written down.
+4. **Static gates are `verify/unit@local`.** Linters, type checks, secret scanners, i18n parity —
+   none of them start an external process, and `unit` is the depth for that. It reads oddly the
+   first time; every project asks, and answering it differently in each one is what would make the
+   vocabulary useless.
+5. **Do not declare the harness's own tools.** Editing a file, reading one, searching, keeping your
+   task list — those are read directly and named without any help. `work-levels.json` is for
+   commands you run in a shell, and only for those.
+
 ---

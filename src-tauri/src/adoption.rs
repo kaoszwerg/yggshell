@@ -90,6 +90,40 @@ fn gate_destination(repo: &Path) -> PathBuf {
     repo.join("scripts/check-work-levels.mjs")
 }
 
+/// What this repository has of the convention, and whether it is current.
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/bindings/")]
+pub struct Adoption {
+    /// A `work-levels.json` was found, here or above.
+    pub declared: bool,
+    /// The gate is present in this repository.
+    pub gate: bool,
+    /// The gate is present and differs from the one this app ships.
+    ///
+    /// **Not acted on, only reported.** A file inside somebody's repository is theirs; rewriting it
+    /// because a newer one shipped would produce a diff they did not make and cannot explain. The
+    /// hook script in the user's own home is refreshed silently for exactly the opposite reason —
+    /// nobody reviews `~/.local/bin` (rule:attention-signals).
+    pub gate_stale: bool,
+}
+
+/// What this repository has, and whether the copy it has is current.
+pub fn adoption(repo: &Path, bundled_gate: &Path) -> Adoption {
+    let installed = gate_destination(repo);
+    let gate = installed.is_file();
+    let gate_stale = gate
+        && match (std::fs::read(&installed), std::fs::read(bundled_gate)) {
+            (Ok(theirs), Ok(ours)) => theirs != ours,
+            // Unreadable either way: claiming "stale" would nag about something nobody can act on.
+            _ => false,
+        };
+    Adoption {
+        declared: declares_levels(repo),
+        gate,
+        gate_stale,
+    }
+}
+
 /// Whether this repository already declares its levels.
 ///
 /// **Walks up, exactly as the reader does** (`chain::levels::Levels::load`). A tab sitting in
@@ -194,6 +228,15 @@ mod tests {
         assert!(
             text.contains("reaches"),
             "the one field that can hurt somebody when it is wrong"
+        );
+        assert!(
+            text.contains("`git push`"),
+            "that the everyday git and gh commands are not local — the first adopter got the loud \
+             case right and left every quiet one at the default"
+        );
+        assert!(
+            text.contains("longest"),
+            "how two entries that differ only in a flag are told apart"
         );
         assert!(
             text.ends_with("# Every piece of work says what it is\n"),
@@ -308,6 +351,32 @@ mod tests {
         assert!(
             !declares_levels(repo.path()),
             "a directory of that name is not a declaration"
+        );
+    }
+
+    #[test]
+    fn a_repository_that_already_adopted_is_told_its_copy_is_behind() {
+        // **The question the first adopter asked before installing anything:** does a new app update
+        // the script it put in my repository? It does not, and it must not — that file is theirs.
+        // What it can do is notice and say so, which is the difference between a stale copy and an
+        // invisible one.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let repo = tempfile::tempdir().expect("repo");
+        let old = bundled(dir.path(), "old.mjs", "// version one\n");
+        let new = bundled(dir.path(), "new.mjs", "// version two\n");
+
+        let before = adoption(repo.path(), &new);
+        assert!(!before.gate, "nothing installed yet");
+        assert!(!before.gate_stale, "and nothing to be stale about");
+
+        install_gate(repo.path(), &old).expect("installed");
+
+        let after = adoption(repo.path(), &new);
+        assert!(after.gate);
+        assert!(after.gate_stale, "the app ships a different one now");
+        assert!(
+            !adoption(repo.path(), &old).gate_stale,
+            "and not when they match"
         );
     }
 
