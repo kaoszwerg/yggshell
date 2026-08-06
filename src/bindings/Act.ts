@@ -7,4 +7,4 @@
  * compound command (`cd x && npm run lint && git push` is an act of shipping). Do not reorder
  * without reading `classify::classify_command`.
  */
-export type Act = "probe" | "plan" | "edit" | "build" | "verify" | "delegate" | "ship";
+export type Act = "probe" | "compact" | "plan" | "edit" | "build" | "verify" | "delegate" | "ship";

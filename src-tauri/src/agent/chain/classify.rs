@@ -186,8 +186,9 @@ fn classify_segment(segment: &str) -> Option<Step> {
     // more specific than any tool we could name.
     if name.ends_with(".sh") || name.ends_with(".mjs") || name.ends_with(".py") {
         let sub = args.iter().copied().find(|a| is_plain_argument(a));
+        let signature = format!("{name}{}", sub.map(|a| format!(" {a}")).unwrap_or_default());
         return Some(
-            Step::new(Act::Verify, sub.map(str::to_string)).with_script(basename(Some(name))),
+            Step::new(Act::Verify, sub.map(str::to_string)).with_signature(Some(signature)),
         );
     }
 
@@ -257,7 +258,16 @@ fn classify_segment(segment: &str) -> Option<Step> {
     if !RUNNERS.contains(&name) {
         return None;
     }
-    Some(step)
+    // What  is matched against: the command as a person would write it down.
+    let signature = format!(
+        "{name}{}",
+        plain
+            .iter()
+            .take(2)
+            .map(|a| format!(" {a}"))
+            .collect::<String>()
+    );
+    Some(step.with_signature(Some(signature)))
 }
 
 /// `npm run <script>` and friends: the script name is the refinement.

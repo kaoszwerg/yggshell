@@ -151,12 +151,27 @@ export const en = {
   "env.wrote": "Wrote and allowed {path}.",
   "nav.agent": "Agent",
   // ── The Chain tool ────────────────────────────────────────────────────────────────────────────
-  //
-  // What is NOT here, deliberately: the act names (`verify`, `build`, `ship`, `probe`, `plan`) and
-  // their refinements. Those are identifiers from `rule:work-legibility`, the same words that appear
-  // in `work-levels.json` and in the commands the agent types. A German interface showing `PRÜFEN`
-  // beside a declaration saying `verify` would be three names for one thing (rule:i18n).
   "nav.chain": "Chain",
+  // **The acts are translated; their refinements are not.**
+  //
+  // They were first left as raw identifiers, reasoning that they are the words `work-levels.json`
+  // uses and that translating them would make three names for one thing. That is a developer's
+  // argument. What a person actually saw was English verbs scattered through a German panel, and it
+  // reads as a fault — reported in exactly those terms. rule:i18n leaves `tmux`, `Git` and `Commit`
+  // alone because everybody meets those words in their tools all day; `verify` and `edit` are this
+  // project's own vocabulary, and vocabulary is prose.
+  //
+  // The refinements stay: `commit`, `push`, `e2e`, `unit`, `check:all` are either terms of art or the
+  // project's own script names, and renaming them would cut the link to the declaration and to what
+  // the agent actually typed.
+  "chain.act.plan": "plan",
+  "chain.act.edit": "edit",
+  "chain.act.build": "build",
+  "chain.act.verify": "verify",
+  "chain.act.subagent": "subagent",
+  "chain.act.ship": "ship",
+  "chain.act.probe": "look",
+  "chain.act.compact": "compact",
   "chain.noTerminal": "This tab has no terminal running.",
   "chain.reading": "Reading the session…",
   "chain.none": "No agent has run in this directory.",
@@ -199,6 +214,19 @@ export const en = {
   "chain.openSteps": "{n} planned steps are still open",
   "chain.quietFor": "quiet for {duration}",
   "chain.showRecord": "Show the record — {n} links",
+  // What every mark means. Asked outright — "was sagen die grauen rechtecke und die anderen
+  // zeichen?" — which is the answer to whether a shape can carry meaning on its own. It cannot.
+  "chain.mark.done": "A check that passed",
+  "chain.mark.failed": "A check that found something — a fix followed it",
+  "chain.mark.live": "Running now",
+  "chain.mark.happened": "This happened. Nothing checked it — it is neither good nor bad news",
+  "chain.mark.todo": "Still to come",
+  "chain.mark.ahead": "Expected, from what this session has done before. Not a plan",
+  "chain.mark.cycle": "Went round more than once",
+  "chain.legend": "What the marks mean",
+  "chain.legend.trace": "In the trace",
+  "chain.legend.plan": "In the plan",
+  "chain.legend.ahead": "Below the trace",
   "chain.nudgeInstall": "Ask the agent to keep one",
   "chain.nudgeExplain":
     "Adds one sentence to each prompt, and only while no list exists. It asks; it never blocks.",

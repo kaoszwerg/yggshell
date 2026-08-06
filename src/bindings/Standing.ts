@@ -13,4 +13,4 @@
  * the hook events (`agent::hooks`), which already separate a request that blocks from a turn that
  * ended, and which this app already installs for the attention bell (ADR-CORE-005: one source).
  */
-export type Standing = "working" | "waiting" | "idle";
+export type Standing = "working" | "waiting" | "idle" | "unknown";

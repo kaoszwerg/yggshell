@@ -115,6 +115,17 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
         }
 
         let timestamp = str_at(&value, "timestamp");
+
+        // A compact is the one thing in a session that changes what the agent knows, and it leaves
+        // no tool call behind — only this flag. Measured: three of them in one 26 MB session, each
+        // otherwise invisible. Recorded as a step of its own so the chain can explain why an agent
+        // starts repeating itself.
+        if value.get("isCompactSummary").and_then(Value::as_bool) == Some(true) {
+            out.seen += 1;
+            out.understood += 1;
+            out.steps
+                .push(Step::new(Act::Compact, None).at(timestamp.clone()));
+        }
         let content = value
             .get("message")
             .and_then(|m| m.get("content"))
@@ -337,17 +348,6 @@ pub fn expectation(links: &[ChainLink]) -> Vec<Round> {
         .collect()
 }
 
-/// How long a session may be quiet before the chain stops calling anything "running".
-///
-/// **Ninety seconds, and the bound is what makes the display honest.** A tool call takes seconds; a
-/// long test run writes its result the moment it finishes. A gap of more than a minute and a half
-/// means the agent is waiting for a person, not working — and saying "running" then is the failure
-/// `rule:attention-signals` documents: a state that never ages stops carrying information.
-///
-/// It errs long on purpose. Calling a working agent idle for a moment is a cosmetic slip; calling an
-/// idle one busy is the tool inventing activity.
-const IDLE_AFTER_SECS: u64 = 90;
-
 /// Build the chain a tab should show.
 pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>) -> Chain {
     let elapsed = parsed
@@ -363,21 +363,17 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
         })
         .map_or(0, |(a, b)| seconds_between(&a, &b));
 
-    // How long ago the last thing happened. This is the only clock the chain has of its own.
+    // How long ago the last thing happened. Reported as a fact, never turned into a verdict: the
+    // gap between two tool calls is routinely a minute while an agent thinks or writes a reply, so
+    // no threshold over it can distinguish "busy" from "finished" (see `Standing::Unknown`).
     let idle = parsed
         .steps
         .last()
         .and_then(|s| s.at.as_deref())
         .map_or(0, seconds_since);
-    let working = idle < IDLE_AFTER_SECS;
-    // Which of the two silences this is comes from the caller, which can see the hook events. The
-    // transcript cannot tell them apart: an agent blocked on a prompt and one that finished both
-    // write nothing at all.
-    let standing = if working {
-        model::Standing::Working
-    } else {
-        model::Standing::Idle
-    };
+    // **Nobody has said yet.** The caller fills this in from the hook events, which is the only
+    // place the answer actually exists.
+    let standing = model::Standing::Unknown;
 
     let mut links = fold::fold(parsed.steps);
     if let Some(levels) = declaration {
@@ -385,20 +381,9 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
             levels.apply(link);
         }
     }
-    // A quiet session has nothing running and nothing coming: the last link stopped being live, and
-    // predicting a next step for an agent that has been asked for nothing is inventing activity.
-    if !working {
-        if let Some(last) = links.last_mut() {
-            if last.outcome == model::Outcome::Live {
-                last.outcome = model::Outcome::Unknown;
-            }
-        }
-    }
-    let expected = if working {
-        expectation(&links)
-    } else {
-        Vec::new()
-    };
+    // Whether the last link is live and whether anything is expected both depend on the standing,
+    // which only the caller knows — so both are decided there, by `settle_standing`.
+    let expected = expectation(&links);
     let plan_done = !parsed.plan.is_empty() && parsed.plan.iter().all(|s| s.status == "completed");
 
     Chain {
@@ -416,6 +401,27 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
         session_id: parsed.session_id,
         harness_version: parsed.harness_version,
     }
+}
+
+/// Apply the standing the hook reported, and make the rest of the chain agree with it.
+///
+/// Kept here rather than at the call site so the consequences of a standing live in one place: a
+/// chain that is not working has nothing running and predicts nothing, whoever worked that out.
+pub fn settle_standing(chain: &mut Chain, standing: model::Standing, waiting_for: Option<String>) {
+    chain.standing = standing;
+    chain.waiting_for = waiting_for;
+
+    if standing == model::Standing::Working {
+        return;
+    }
+    // Not working: the last link is not running, and predicting the next step for an agent nobody
+    // has asked for anything is inventing activity.
+    if let Some(last) = chain.links.last_mut() {
+        if last.outcome == model::Outcome::Live {
+            last.outcome = model::Outcome::Unknown;
+        }
+    }
+    chain.expected.clear();
 }
 
 /// Seconds between an ISO timestamp and now, or 0 when it cannot be read.
@@ -573,31 +579,55 @@ mod tests {
     }
 
     #[test]
-    fn a_quiet_session_has_nothing_running_and_nothing_coming() {
-        // Reported from the running app: the agent had been asked for nothing for a long while, and
-        // the chain still showed a link as running plus three expected steps. A file's last line is
-        // not "now" — an agent waiting for a person writes nothing, and so does one that finished
-        // an hour ago. Same failure `rule:attention-signals` records: a state that does not age
-        // becomes a lie that looks like information.
+    fn the_reader_never_decides_whether_the_agent_is_working() {
+        // **The principle, and it was hard-won**: "das darf kein geratener Zustand sein, das muss
+        // ein gewollt herbeigeführter Status sein". A threshold on the age of the last line was
+        // tried at ninety seconds and at twenty, and flickered at both — the gap between two tool
+        // calls is routinely longer than either, because an agent thinking or writing a reply
+        // writes nothing at all. So the transcript reader reports the age and declines the verdict.
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = write(dir.path(), "t.jsonl", TRANSCRIPT); // timestamps from 2026-08-06
+        let path = write(dir.path(), "t.jsonl", TRANSCRIPT);
 
         let chain = assemble(parse_transcript(&path, 0), "/h", None);
 
-        assert_ne!(
-            chain.standing,
-            model::Standing::Working,
-            "an old transcript is not a working agent"
-        );
-        assert!(chain.idle > IDLE_AFTER_SECS);
+        assert_eq!(chain.standing, model::Standing::Unknown);
+        assert!(chain.idle > 0, "the age is a fact and is reported");
+    }
+
+    #[test]
+    fn a_settled_standing_makes_the_rest_of_the_chain_agree() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write(dir.path(), "t.jsonl", TRANSCRIPT);
+        let mut chain = assemble(parse_transcript(&path, 0), "/h", None);
+        chain.expected = vec![Round {
+            act: Act::Ship,
+            refinement: Some("2".into()),
+        }];
+
+        settle_standing(&mut chain, model::Standing::Idle, None);
+
         assert!(
             chain.expected.is_empty(),
-            "nothing is predicted for an idle agent"
+            "nothing is predicted for an agent nobody has asked for anything"
         );
         assert_ne!(
             chain.links.last().map(|l| l.outcome),
             Some(model::Outcome::Live),
             "and nothing is running"
+        );
+    }
+
+    #[test]
+    fn a_working_standing_leaves_the_chain_alone() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write(dir.path(), "t.jsonl", TRANSCRIPT);
+        let mut chain = assemble(parse_transcript(&path, 0), "/h", None);
+
+        settle_standing(&mut chain, model::Standing::Working, None);
+
+        assert_eq!(
+            chain.links.last().map(|l| l.outcome),
+            Some(model::Outcome::Live)
         );
     }
 
@@ -737,6 +767,7 @@ mod tests {
         ChainLink {
             act,
             refinement: None,
+            signature: Some("npm run test".into()),
             outcome: model::Outcome::Done,
             kind: model::Kind::Normal,
             reach: None,

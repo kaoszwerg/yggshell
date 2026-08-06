@@ -145,10 +145,20 @@ export const de: Translations = {
   "nav.agent": "Agent",
   // ── Das Kettenwerkzeug ────────────────────────────────────────────────────────────────────────
   //
-  // Die Akte (`verify`, `build`, `ship`, `probe`, `plan`) stehen bewusst NICHT hier: sie sind
-  // Bezeichner aus rule:work-legibility und stehen wortgleich in `work-levels.json` und in den
-  // Kommandos, die der Agent tippt. Ein übersetztes `PRÜFEN` daneben wären drei Namen für eine Sache.
+  // **Die Akte werden übersetzt, ihre Verfeinerungen nicht.** Zuerst standen sie als Bezeichner da,
+  // mit der Begründung, sie seien wortgleich mit `work-levels.json`. Das ist ein Entwicklerargument:
+  // zu sehen waren englische Verben verstreut in einer deutschen Oberfläche, und das liest sich als
+  // Fehler. `commit`, `push`, `e2e`, `unit`, `check:all` bleiben — das sind Fachbegriffe oder die
+  // Skriptnamen des Projekts, und sie zu übersetzen würde die Verbindung zur Deklaration kappen.
   "nav.chain": "Kette",
+  "chain.act.plan": "planen",
+  "chain.act.edit": "ändern",
+  "chain.act.build": "bauen",
+  "chain.act.verify": "prüfen",
+  "chain.act.subagent": "Subagent",
+  "chain.act.ship": "ausliefern",
+  "chain.act.probe": "nachsehen",
+  "chain.act.compact": "Kontext gekürzt",
   "chain.noTerminal": "In diesem Tab läuft kein Terminal.",
   "chain.reading": "Sitzung wird gelesen…",
   "chain.none": "In diesem Verzeichnis lief noch kein Agent.",
@@ -192,6 +202,19 @@ export const de: Translations = {
   "chain.openSteps": "{n} geplante Schritte sind noch offen",
   "chain.quietFor": "still seit {duration}",
   "chain.showRecord": "Verlauf zeigen — {n} Glieder",
+  // Was jedes Zeichen bedeutet. Direkt gefragt — „was sagen die grauen rechtecke und die anderen
+  // zeichen?" — und damit beantwortet, ob eine Form für sich allein Bedeutung tragen kann. Nein.
+  "chain.mark.done": "Eine Prüfung, die durchlief",
+  "chain.mark.failed": "Eine Prüfung, die etwas gefunden hat — danach wurde repariert",
+  "chain.mark.live": "Läuft gerade",
+  "chain.mark.happened": "Das ist passiert. Nichts hat es geprüft — weder gut noch schlecht",
+  "chain.mark.todo": "Steht noch aus",
+  "chain.mark.ahead": "Erwartet, aus dem bisherigen Muster dieser Sitzung. Kein Plan",
+  "chain.mark.cycle": "Ging mehrfach im Kreis",
+  "chain.legend": "Was die Zeichen bedeuten",
+  "chain.legend.trace": "In der Spur",
+  "chain.legend.plan": "Im Plan",
+  "chain.legend.ahead": "Unter der Spur",
   "chain.nudgeInstall": "Den Agenten bitten, einen zu führen",
   "chain.nudgeExplain":
     "Hängt einen Satz an jede Eingabe, und nur solange keine Liste existiert. Er bittet; er blockiert nie.",

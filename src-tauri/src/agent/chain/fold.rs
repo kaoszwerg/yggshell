@@ -28,6 +28,7 @@ pub fn fold(steps: Vec<Step>) -> Vec<ChainLink> {
 struct Block {
     act: Act,
     refinement: Option<String>,
+    signature: Option<String>,
     /// Further refinements folded into this block — the other files of a run of edits.
     also: Vec<String>,
     kind: Kind,
@@ -91,6 +92,7 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
             _ => blocks.push(Block {
                 act: step.act,
                 refinement: step.refinement,
+                signature: step.signature,
                 also: Vec::new(),
                 kind: step.kind,
                 steps: 1,
@@ -164,6 +166,7 @@ fn collapse_cycles(blocks: Vec<Block>) -> Vec<ChainLink> {
         let merged = Block {
             act: blocks[i].act,
             refinement: blocks[i].refinement.clone(),
+            signature: blocks[i].signature.clone(),
             also: Vec::new(),
             kind: blocks[i].kind,
             steps: blocks[i..=end].iter().map(|b| b.steps).sum(),
@@ -206,6 +209,7 @@ fn link_of(block: &Block, iterations: Option<u32>, rounds: Vec<Round>) -> ChainL
     ChainLink {
         act: block.act,
         refinement: block.refinement.clone(),
+        signature: block.signature.clone(),
         outcome: Outcome::Unknown,
         kind: block.kind,
         reach: None,
@@ -242,8 +246,11 @@ fn settle_outcomes(links: &mut [ChainLink]) {
             // Building, shipping, probing: they happened. Nothing pronounced them good.
             _ => Outcome::Unknown,
         };
-        // A cycle whose last round was a build never resolved: it stopped mid-repair.
-        if links[i].iterations.is_some() && links[i].act == Act::Verify {
+        // A cycle whose last round was an edit never resolved: it stopped mid-repair. Not applied to
+        // the newest link — that one is still going, and "running" outranks any verdict about how
+        // its last round happened to end.
+        let is_newest = i + 1 == len;
+        if !is_newest && links[i].iterations.is_some() && links[i].act == Act::Verify {
             if let Some(last) = links[i].rounds.last() {
                 if last.act == Act::Edit {
                     links[i].outcome = Outcome::Failed;

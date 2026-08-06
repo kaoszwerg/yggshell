@@ -8,7 +8,12 @@ import type { Round } from "./Round";
 /**
  * One link of the chain, as the tool draws it.
  */
-export type ChainLink = { act: Act, refinement: string | null, outcome: Outcome, kind: Kind, reach: Reach | null, 
+export type ChainLink = { act: Act, refinement: string | null, 
+/**
+ * The command that produced it, as a person would write it down — what `work-levels.json` is
+ * looked up by.
+ */
+signature: string | null, outcome: Outcome, kind: Kind, reach: Reach | null, 
 /**
  * Seconds from the first to the last step folded into this link.
  */

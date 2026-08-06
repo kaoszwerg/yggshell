@@ -141,7 +141,7 @@
     },
     {
       "run": "gh pr merge",
-      "is": "ship/review@prod",
+      "is": "ship/merge@prod",
       "reaches": "github.com/…/lysisai-dsp"
     },
     {

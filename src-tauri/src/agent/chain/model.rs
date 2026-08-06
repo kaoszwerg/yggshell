@@ -19,8 +19,16 @@ use ts_rs::TS;
 pub enum Act {
     /// Reading, measuring, diagnosing. The default: anything undeclared is a probe.
     Probe = 0,
+    /// The context was compacted.
+    ///
+    /// Not something the agent *does* — the harness does it — but the most consequential thing that
+    /// can happen to a long session: everything before it is a summary now, and an agent that
+    /// repeats itself afterwards is doing so because it genuinely does not remember. Measured: three
+    /// in one 26 MB session, each invisible in the transcript except for one flag. Worth a line
+    /// precisely because nothing else in the chain explains what changed.
+    Compact = 1,
     /// Deciding what to do — and, in a transcript, maintaining the task list.
-    Plan = 1,
+    Plan = 2,
     /// Changing the source: code, config, content, a migration.
     ///
     /// **Separate from [`Act::Build`], and the separation was reported rather than designed.** The
@@ -28,20 +36,20 @@ pub enum Act {
     /// "build" while the agent was editing a test file, and the maintainer read it as a compile
     /// that was not happening. Editing is what an agent spends its day doing; it deserves its own
     /// word, and the word has to be the one everybody already uses for it.
-    Edit = 2,
+    Edit = 3,
     /// Producing an artefact from the source: a compile, a bundle, generated bindings.
-    Build = 3,
+    Build = 4,
     /// Finding out whether it is right.
-    Verify = 4,
+    Verify = 5,
     /// Handing work to a subagent.
     ///
     /// **Its own act rather than a marker on another one.** It was first recorded as a `build` that
     /// happened to be flagged — which meant the chain said "build" about the one step where this
     /// transcript contains no work at all. Launching a subagent is a distinct thing a person watching
     /// wants to see by name, and the work it does lives in a different file (`subagents/`).
-    Delegate = 5,
+    Delegate = 6,
     /// Putting it where it counts.
-    Ship = 6,
+    Ship = 7,
 }
 
 impl Act {
@@ -49,6 +57,7 @@ impl Act {
     pub fn as_str(self) -> &'static str {
         match self {
             Act::Probe => "probe",
+            Act::Compact => "compact",
             Act::Plan => "plan",
             Act::Edit => "edit",
             Act::Build => "build",
@@ -84,9 +93,16 @@ pub struct Step {
     /// The subtype a person recognises: a suite name, a script, a filename.
     pub refinement: Option<String>,
     pub kind: Kind,
-    /// The project script this came from, when it was one — used to look the step up in
-    /// `work-levels.json`.
-    pub script: Option<String>,
+    /// The command this came from, reduced to what identifies it: `cargo test`, `npm run check:all`,
+    /// `scripts/run-tests.sh backend`.
+    ///
+    /// **This is what `work-levels.json` is matched against, and matching the refinement instead was
+    /// a real defect.** A refinement is a *category* — `cargo test` becomes `unit` — so a declaration
+    /// listing `npm run test` matched nothing, and almost every link in a project that had bothered
+    /// to write one still displayed as guessed. Only entries whose refinement happened to be a
+    /// script name (`check:all`) worked, which made the failure look like an inconsistency rather
+    /// than a bug.
+    pub signature: Option<String>,
     /// ISO timestamp from the transcript line. `None` for a line that carried none.
     pub at: Option<String>,
     /// Whether this was *recognised* rather than merely defaulted to a probe.
@@ -103,7 +119,7 @@ impl Step {
             act,
             refinement,
             kind: Kind::Normal,
-            script: None,
+            signature: None,
             at: None,
             recognised: true,
         }
@@ -122,8 +138,8 @@ impl Step {
         self
     }
 
-    pub fn with_script(mut self, script: Option<String>) -> Self {
-        self.script = script;
+    pub fn with_signature(mut self, signature: Option<String>) -> Self {
+        self.signature = signature;
         self
     }
 
@@ -169,12 +185,22 @@ pub enum Outcome {
 #[ts(export, export_to = "../../src/bindings/")]
 #[serde(rename_all = "lowercase")]
 pub enum Standing {
-    /// Steps are arriving: it is working.
+    /// A turn is open: the agent is working on something for you.
     Working,
     /// It asked for something and stopped. **This is the one that needs you.**
     Waiting,
-    /// Nothing is outstanding and nothing has been asked for.
+    /// The turn ended and nothing was asked. Finished.
     Idle,
+    /// **Nobody said.** No hook is installed for this account, so there is no report — and the tool
+    /// says so rather than inferring one.
+    ///
+    /// An earlier version guessed from the age of the last transcript line: quiet for N seconds
+    /// meant finished. It flickered, because the gap between two tool calls is routinely longer than
+    /// any threshold worth setting — an agent thinking, or writing a reply, writes nothing. The
+    /// maintainer named the principle: *"das darf kein geratener Zustand sein, das muss ein gewollt
+    /// herbeigeführter Status sein"*, which is ADR-CORE-004 applied to a panel. A state nobody
+    /// declared is not a state; it is a guess wearing one's clothes.
+    Unknown,
 }
 
 /// Where a run reaches. Shown always, even when it cannot be interpreted — `verify e2e → dev-backend`
@@ -206,6 +232,9 @@ pub struct Round {
 pub struct ChainLink {
     pub act: Act,
     pub refinement: Option<String>,
+    /// The command that produced it, as a person would write it down — what `work-levels.json` is
+    /// looked up by.
+    pub signature: Option<String>,
     pub outcome: Outcome,
     pub kind: Kind,
     pub reach: Option<Reach>,

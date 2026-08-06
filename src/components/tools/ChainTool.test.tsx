@@ -224,7 +224,9 @@ describe("ChainTool", () => {
     });
     render(<ChainTool />);
 
-    fireEvent.click(screen.getByRole("button"));
+    // By its own count, not "the button": the legend at the foot is one too, and a test that breaks
+    // when a second control appears was never asserting what it claimed to.
+    fireEvent.click(screen.getByText(/3×/));
 
     expect(screen.getByText("UserManagement.jsx")).toBeTruthy();
   });
@@ -273,6 +275,33 @@ describe("ChainTool", () => {
 
     expect(container.textContent).not.toMatch(/\b0 min\b/);
     expect(container.textContent).toContain("< 1 min");
+  });
+
+  it("explains the marks on demand, and says which region each one belongs to", () => {
+    // A flat list of six shapes answers "how did that go?" and leaves "what is still outstanding?"
+    // unanswered — which is the question that was actually asked. The headings are the answer.
+    state.chain = chain({ links: [link()] });
+    render(<ChainTool />);
+
+    fireEvent.click(screen.getByText(/what the marks mean/i));
+
+    expect(screen.getByText(/^in the trace$/i)).toBeTruthy();
+    expect(screen.getByText(/^in the plan$/i)).toBeTruthy();
+    expect(screen.getByText(/^below the trace$/i)).toBeTruthy();
+    // The one that only ever appears ahead of the trace, and is not a plan.
+    expect(screen.getByText(/not a plan/i)).toBeTruthy();
+  });
+
+  it("keeps the legend out of the scrolling trace", () => {
+    // A legend that scrolls away is unreachable exactly when the trace is long enough to want one.
+    state.chain = chain({ links: Array.from({ length: 40 }, () => link()) });
+    const { container } = render(<ChainTool />);
+
+    const summary = screen.getByText(/what the marks mean/i);
+    const scroller = container.querySelector("[data-chain-trace]");
+
+    expect(scroller).not.toBeNull();
+    expect(scroller?.contains(summary)).toBe(false);
   });
 
   it("uses no native disclosure element", () => {

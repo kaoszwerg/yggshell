@@ -40,6 +40,27 @@ pub struct Entry {
     pub reaches: Option<String>,
 }
 
+/// Whether a declared `run` and an observed command are the same entrypoint.
+///
+/// Neither string is canonical: a project writes `npm run test:e2e`, the agent typed
+/// `npx playwright test --project=admin`, and the reader reduced it to `playwright test admin`. So
+/// the comparison is on **words**, and one being a prefix of the other is enough — a declaration
+/// naming fewer words is the more general statement and should still match.
+fn same_command(declared: &str, observed: &str) -> bool {
+    let words = |s: &str| {
+        s.split_whitespace()
+            .filter(|w| !w.starts_with('-'))
+            .map(|w| w.trim_start_matches("./").to_string())
+            .filter(|w| !matches!(w.as_str(), "npx" | "bunx" | "bash" | "sh" | "env"))
+            .collect::<Vec<_>>()
+    };
+    let (a, b) = (words(declared), words(observed));
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    a.iter().zip(b.iter()).all(|(x, y)| x == y)
+}
+
 /// Targets in ascending order of how far they reach. The ordering is what makes "escalate only"
 /// expressible.
 fn rank(target: &str) -> u8 {
@@ -97,13 +118,18 @@ impl Levels {
 
     /// Name a link from the declaration, and widen its reach — never narrow it.
     pub fn apply(&self, link: &mut ChainLink) {
-        let Some(refinement) = link.refinement.clone() else {
+        // **Matched on the command, not on the refinement.** A refinement is a category — `cargo
+        // test` becomes `unit` — so matching on it meant a declaration listing `npm run test` found
+        // nothing, and a project that had written one still saw almost every link marked as guessed.
+        // Only entries whose refinement happened to also be a script name worked, which made the
+        // bug look like an inconsistency.
+        let Some(signature) = link.signature.clone() else {
             return;
         };
         let Some(entry) = self
             .entrypoints
             .iter()
-            .find(|e| e.run.contains(refinement.as_str()))
+            .find(|e| same_command(&e.run, &signature))
         else {
             return;
         };
@@ -154,10 +180,18 @@ mod tests {
         format!("\\u{:04x}", bel() as u32)
     }
 
-    fn link(refinement: &str, reach: Option<Reach>) -> ChainLink {
+    /// A link as the reader actually produces one: the command it ran, and a refinement that is a
+    /// **category** rather than that command.
+    ///
+    /// The gap between the two arguments is the point. `apply` once matched on the refinement, so a
+    /// project that had written a declaration still saw nearly every link marked as a guess —
+    /// `cargo test` becomes `unit`, and no entry lists `unit` as its `run`. Keeping them different
+    /// here means a return to that would fail every test below.
+    fn link(command: &str, reach: Option<Reach>) -> ChainLink {
         ChainLink {
             act: Act::Verify,
-            refinement: Some(refinement.to_string()),
+            refinement: Some("unit".to_string()),
+            signature: Some(command.to_string()),
             outcome: Outcome::Done,
             kind: Kind::Normal,
             reach,
@@ -179,7 +213,10 @@ mod tests {
         let l = levels(
             r#"{"entrypoints":[{"run":"npm run test:e2e","is":"verify/e2e@dev","reaches":"localhost:3000"}]}"#,
         );
-        let mut link = link("test:e2e", None);
+        // Verbatim what `classify_segment` writes for this command (`classify.rs`): the program plus
+        // its first two plain arguments. The fixture is that string and not a prettier one, because a
+        // declaration is matched against exactly this.
+        let mut link = link("npm run test:e2e", None);
 
         l.apply(&mut link);
 
@@ -193,10 +230,10 @@ mod tests {
     #[test]
     fn a_declaration_may_widen_the_reach() {
         let l = levels(
-            r#"{"entrypoints":[{"run":"deploy","is":"ship/deploy@prod","reaches":"app.example.com"}]}"#,
+            r#"{"entrypoints":[{"run":"npm run deploy","is":"ship/deploy@prod","reaches":"app.example.com"}]}"#,
         );
         let mut link = link(
-            "deploy",
+            "npm run deploy",
             Some(Reach {
                 target: "local".into(),
                 host: None,
@@ -213,9 +250,9 @@ mod tests {
     fn a_declaration_may_never_narrow_it_and_the_contradiction_is_kept() {
         // THE rule of this module. A cloned repository claiming that its deploy is local must not
         // be able to turn a production run green in somebody's sidebar (ADR-PROJ-005 §4).
-        let l = levels(r#"{"entrypoints":[{"run":"deploy","is":"verify/unit@local"}]}"#);
+        let l = levels(r#"{"entrypoints":[{"run":"npm run deploy","is":"verify/unit@local"}]}"#);
         let mut link = link(
-            "deploy",
+            "npm run deploy",
             Some(Reach {
                 target: "prod".into(),
                 host: Some("app.example.com".into()),

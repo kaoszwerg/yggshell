@@ -220,12 +220,23 @@ pub fn agent_chain(
     // (ADR-CORE-005), rather than a second mechanism that would eventually disagree in front of the
     // user.
     if let Some(chain) = chain.as_mut() {
-        if chain.standing == crate::agent::chain::model::Standing::Idle {
-            if let Some(asking) = waiting_here(&app, &cwd) {
-                chain.standing = crate::agent::chain::model::Standing::Waiting;
-                chain.waiting_for = asking;
-            }
-        }
+        use crate::agent::chain::model::Standing;
+        // **Only the hook says.** `UserPromptSubmit` opens a turn, `Stop` closes it, `Notification`
+        // means it is blocked on a person — three declared states, from the harness itself.
+        //
+        // An earlier version inferred "finished" from the age of the last transcript line, and it
+        // flickered: the gap between two tool calls is routinely longer than any usable threshold,
+        // because an agent thinking or writing a reply writes nothing. Without a hook the answer is
+        // `Unknown`, and the tool says so rather than picking one (ADR-CORE-004).
+        let (standing, waiting_for) = match turn_open(&app, &cwd) {
+            Some(true) => (Standing::Working, None),
+            Some(false) => match waiting_here(&app, &cwd) {
+                Some(asking) => (Standing::Waiting, asking),
+                None => (Standing::Idle, None),
+            },
+            None => (Standing::Unknown, None),
+        };
+        crate::agent::chain::settle_standing(chain, standing, waiting_for);
     }
     tracing::debug!(
         found = chain.is_some(),
@@ -235,6 +246,22 @@ pub fn agent_chain(
         "agent_chain ok"
     );
     Ok(chain)
+}
+
+/// Whether a turn is open in this directory — `None` when no hook has reported from there.
+///
+/// The three states this app already distinguishes for the activity line (`hooks::turn_state`), read
+/// here for the one question the panel exists to answer. `None` matters as much as the other two: it
+/// means nothing is known, and the chain then keeps whatever its own clock concluded rather than
+/// being told "not working" by an absence of evidence.
+fn turn_open(app: &tauri::AppHandle, cwd: &str) -> Option<bool> {
+    use tauri::Manager;
+    let data = app.path().app_data_dir().ok()?;
+    let events = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 200);
+    // Every pid, because the chain is about the directory rather than about one tab's process tree —
+    // `turn_state` filters by pid for the activity line, which is a question about a tab.
+    let pids: Vec<u32> = events.iter().filter_map(|e| e.agent_pid).collect();
+    crate::agent::hooks::turn_state(events, cwd, &pids)
 }
 
 /// Whether the agent in this directory is blocked on the user, and on what.

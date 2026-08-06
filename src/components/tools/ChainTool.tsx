@@ -107,7 +107,10 @@ export function ChainTool() {
       {atRest ? (
         <RestingRecord chain={chain} />
       ) : (
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]">
+        <div
+          data-chain-trace
+          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]"
+        >
           {chain.plan.length === 0 && !showPlan ? (
             <NoPlan done={chain.plan_done} />
           ) : (
@@ -132,6 +135,7 @@ export function ChainTool() {
         </div>
       )}
 
+      <LegendBar />
       <Footer chain={chain} />
     </div>
   );
@@ -225,7 +229,7 @@ function Now({ chain, link }: { chain: Chain; link: ChainLink }) {
           <span className="tracking-wider">{t("chain.waiting")}</span>
         ) : working ? (
           <>
-            <span className="tracking-wider">{link.act}</span>
+            <span className="tracking-wider">{actWord(link.act, t)}</span>
             {link.refinement === null ? null : (
               <span className="text-dim min-w-0 truncate text-[0.85em]">{link.refinement}</span>
             )}
@@ -359,6 +363,9 @@ function PlanRow({ subject, status }: { subject: string; status: string }) {
 /** One chain link, with its cycle detail behind a disclosure. */
 function Link({ link }: { link: ChainLink }) {
   const t = useT();
+  // `unknown` is its own mark, not "todo". A finished `ship commit` was drawn with the hollow
+  // outline that means *still to come* — reported as an icon nobody could read, and it was saying
+  // the opposite of the truth. It happened; nothing pronounced it good or bad.
   const state =
     link.outcome === "failed"
       ? "failed"
@@ -366,7 +373,7 @@ function Link({ link }: { link: ChainLink }) {
         ? "live"
         : link.outcome === "done"
           ? "done"
-          : "todo";
+          : "happened";
   const colour =
     state === "failed"
       ? "text-danger"
@@ -379,7 +386,7 @@ function Link({ link }: { link: ChainLink }) {
   const head = (
     <>
       <span className={`tracking-wider ${link.iterations === null ? colour : "text-gold"}`}>
-        {link.act}
+        {actWord(link.act, t)}
       </span>
       {link.refinement === null ? null : (
         <span className="text-dim min-w-0 flex-1 truncate text-[0.85em]">{link.refinement}</span>
@@ -413,7 +420,7 @@ function Link({ link }: { link: ChainLink }) {
       {link.rounds.map((round: Round, index: number) => (
         <div key={index} className="text-dim flex gap-[0.5em] text-[0.85em]">
           <span className="text-gold/80 shrink-0 tabular-nums">{index + 1}</span>
-          <span className="shrink-0">{round.act}</span>
+          <span className="shrink-0">{actWord(round.act, t)}</span>
           <span className="min-w-0 truncate">{round.refinement ?? ""}</span>
         </div>
       ))}
@@ -476,7 +483,7 @@ function Ahead({ round }: { round: Round }) {
   return (
     <div className="flex items-baseline gap-[0.5em] pb-[0.5em] opacity-70">
       <Node state="ahead" />
-      <span className="text-dim tracking-wider">{round.act}</span>
+      <span className="text-dim tracking-wider">{actWord(round.act, t)}</span>
       <span className="text-dim text-[0.8em]">
         {t("chain.expected", { n: round.refinement ?? "1" })}
       </span>
@@ -496,9 +503,10 @@ function Node({
   state,
   cycle = false,
 }: {
-  state: "done" | "failed" | "live" | "todo" | "ahead";
+  state: "done" | "failed" | "live" | "todo" | "ahead" | "happened";
   cycle?: boolean;
 }) {
+  const t = useT();
   const shape = cycle
     ? "rounded-full border-[0.16em] bg-transparent"
     : state === "failed"
@@ -516,6 +524,10 @@ function Node({
         return cycle ? "border-danger bg-danger" : "bg-danger";
       case "live":
         return cycle ? "border-cyan" : "bg-cyan motion-safe:animate-pulse";
+      // Filled, so it reads as "this is behind us", but in the neutral colour, so it does not claim
+      // to have been checked. Hollow would mean the opposite — still to come.
+      case "happened":
+        return cycle ? "border-dim" : "bg-dim";
       case "todo":
         return "border border-dim bg-transparent";
       case "ahead":
@@ -523,13 +535,91 @@ function Node({
     }
   })();
 
+  // The label is for a screen reader, not a tooltip: a hint on every mark fires constantly while
+  // reading the chain, which is noise. What a mark means is looked up **on demand**, in the legend
+  // at the foot — asked for in those words.
   return (
     <span
       className={`mt-[0.3em] size-[0.75em] shrink-0 ${shape} ${paint}`}
       role="img"
-      aria-label={state}
+      aria-label={stateMeaning(state, cycle, t)}
     />
   );
+}
+
+/**
+ * The marks and what they mean, folded away until somebody asks.
+ *
+ * **Grouped by where a mark can appear, not by colour.** The same six shapes serve two different
+ * questions — *"how did that go?"* about the trace, and *"what is still outstanding?"* about the
+ * plan — and a flat list of six answers neither. Asked in exactly those terms: *"was sagt mir jetzt
+ * was noch geplant ist und was noch aussteht?"*. So each group is headed by the region it belongs
+ * to, and a mark that appears in both regions is listed in both.
+ */
+function Legend() {
+  const t = useT();
+  const groups: {
+    heading: "chain.legend.trace" | "chain.legend.plan" | "chain.legend.ahead";
+    marks: ("done" | "failed" | "live" | "todo" | "ahead" | "happened")[];
+    cycle?: boolean;
+  }[] = [
+    { heading: "chain.legend.trace", marks: ["live", "failed", "done", "happened"], cycle: true },
+    { heading: "chain.legend.plan", marks: ["live", "todo", "done"] },
+    { heading: "chain.legend.ahead", marks: ["ahead"] },
+  ];
+
+  return (
+    <Disclosure
+      summaryClassName="text-dim text-[0.75em]"
+      summary={<span>{t("chain.legend")}</span>}
+      contentClassName="mt-[0.4em] flex flex-col gap-[0.55em] pb-[0.3em]"
+    >
+      {groups.map((group) => (
+        <div key={group.heading} className="flex flex-col gap-[0.25em]">
+          <div className="text-dim/70 text-[0.7em] tracking-[0.12em] uppercase">
+            {t(group.heading)}
+          </div>
+          {group.marks.map((mark) => (
+            <div key={mark} className="text-dim flex items-baseline gap-[0.6em] text-[0.8em]">
+              <Node state={mark} />
+              <span className="min-w-0">{stateMeaning(mark, false, t)}</span>
+            </div>
+          ))}
+          {group.cycle === true ? (
+            <div className="text-dim flex items-baseline gap-[0.6em] text-[0.8em]">
+              <Node state="failed" cycle />
+              <span className="min-w-0">{t("chain.mark.cycle")}</span>
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </Disclosure>
+  );
+}
+
+/** What a mark means, as a sentence. */
+function stateMeaning(
+  state: "done" | "failed" | "live" | "todo" | "ahead" | "happened",
+  cycle: boolean,
+  t: ReturnType<typeof useT>,
+): string {
+  const base = (() => {
+    switch (state) {
+      case "done":
+        return t("chain.mark.done");
+      case "failed":
+        return t("chain.mark.failed");
+      case "live":
+        return t("chain.mark.live");
+      case "happened":
+        return t("chain.mark.happened");
+      case "todo":
+        return t("chain.mark.todo");
+      case "ahead":
+        return t("chain.mark.ahead");
+    }
+  })();
+  return cycle ? `${t("chain.mark.cycle")} · ${base}` : base;
 }
 
 /**
@@ -612,12 +702,55 @@ function Footer({ chain }: { chain: Chain }) {
 }
 
 /**
+ * The legend, at the very foot of the tool.
+ *
+ * It sits **outside** the scrolling trace: a legend that scrolled away with the content would be
+ * unreachable exactly when the trace is long enough to need one.
+ */
+function LegendBar() {
+  return (
+    <div className="shrink-0 border-t border-white/6 px-[0.6em] py-[0.2em]">
+      <Legend />
+    </div>
+  );
+}
+
+/**
  * Harness versions this reader has been checked against — mirrored from `agent::chain`.
  *
  * Duplicated deliberately and minimally: the alternative is another IPC round trip for a boolean.
  * If they drift, the tool warns when it need not, which is the harmless direction.
  */
 const VERIFIED = ["2.1.220", "2.1.221", "2.1.223"];
+
+/**
+ * The word for an act, from the catalogue.
+ *
+ * A `switch` rather than a template key, so a new act is a compile error here instead of a missing
+ * translation somebody notices in production — and so `no-restricted-syntax` never has to argue
+ * about an indexed lookup.
+ */
+function actWord(act: ChainLink["act"], t: ReturnType<typeof useT>): string {
+  switch (act) {
+    case "plan":
+      return t("chain.act.plan");
+    case "edit":
+      return t("chain.act.edit");
+    case "build":
+      return t("chain.act.build");
+    case "verify":
+      return t("chain.act.verify");
+    // The wire value is the Rust variant name; the word a person reads is "subagent".
+    case "delegate":
+      return t("chain.act.subagent");
+    case "ship":
+      return t("chain.act.ship");
+    case "compact":
+      return t("chain.act.compact");
+    case "probe":
+      return t("chain.act.probe");
+  }
+}
 
 /** `0 min` reads as "did not run", so anything under a minute says so instead. */
 function duration(seconds: number, t: ReturnType<typeof useT>): string {
