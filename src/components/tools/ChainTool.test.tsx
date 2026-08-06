@@ -312,6 +312,21 @@ describe("ChainTool", () => {
     expect(screen.getByText(/put the check in this repo/i)).toBeTruthy();
   });
 
+  it("offers the convention while the agent is at rest, and with no chain at all", async () => {
+    // **The state a foreign repository is actually in when you open it**, and the one the offer was
+    // invisible in: it lived inside the trace, which an idle agent never renders. Measured on
+    // lysisai-dsp — 62 links, nothing outstanding, neither file present, nothing offered.
+    declared = false;
+    state.chain = chain({ links: [link()], standing: "idle", plan: [] });
+    render(<ChainTool />);
+    expect(await screen.findByText(/does not declare its runs/i)).toBeTruthy();
+
+    // And before the agent has written anything at all here.
+    state.chain = chain({ links: [] });
+    render(<ChainTool />);
+    expect((await screen.findAllByText(/does not declare its runs/i)).length).toBeGreaterThan(0);
+  });
+
   it("explains the marks on demand, and says which region each one belongs to", () => {
     // A flat list of six shapes answers "how did that go?" and leaves "what is still outstanding?"
     // unanswered — which is the question that was actually asked. The headings are the answer.

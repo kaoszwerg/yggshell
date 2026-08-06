@@ -48,7 +48,19 @@ export function ChainTool() {
   if (!ready) return <Empty>{t("chain.noTerminal")}</Empty>;
   if (isError) return <Empty>{t("chain.failed")}</Empty>;
   if (isPending) return <Empty>{t("chain.reading")}</Empty>;
-  if (chain === null || chain.links.length === 0) return <Empty>{t("chain.none")}</Empty>;
+  // **The offer comes before the chain does, and that is the whole point.** It was nested in the
+  // busy rendering path, so a repository with no transcript yet — or an agent at rest — showed
+  // "nothing here" and no offer: it was invisible in exactly the situation it exists for, which is
+  // opening a project that has never heard of the convention. Measured on lysisai-dsp, which has
+  // neither file and was offered neither.
+  if (chain === null || chain.links.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col font-mono" style={{ fontSize: `${fontSize}px` }}>
+        <Undeclared />
+        <Empty>{t("chain.none")}</Empty>
+      </div>
+    );
+  }
 
   const running = chain.links.at(-1);
   // A plan is worth its own region only while something in it is still open. Finished, it is
@@ -73,6 +85,12 @@ export function ChainTool() {
     >
       {running === undefined ? null : <Now chain={chain} link={running} />}
       {showPlan ? <Goal chain={chain} /> : null}
+
+      {/* **Outside every branch below, deliberately.** This is about the repository, not about the
+          chain, and it was first written inside the trace — where an agent at rest never reaches it.
+          Measured on lysisai-dsp: 62 links, nothing outstanding, neither file present, and no offer
+          shown. The one state a foreign project is usually in was the one state it was invisible. */}
+      <Undeclared />
 
       {/* Two scrolling regions, not one. A plan is a handful of lines somebody wants to keep in
           view; the trace grows all day. Sharing a scrollbar means the plan leaves the screen exactly
@@ -112,7 +130,6 @@ export function ChainTool() {
           data-chain-trace
           className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]"
         >
-          <Undeclared />
           {chain.plan.length === 0 && !showPlan ? (
             <NoPlan done={chain.plan_done} />
           ) : (
@@ -632,9 +649,14 @@ function Undeclared() {
     enabled: cwd !== null,
   });
   // Absent or still loading, the offer stays hidden: proposing to fix something that may not be
-  // missing is worse than proposing nothing.
+  // missing is worse than proposing nothing. Its own padding, so the caller can drop it anywhere
+  // without leaving an empty box behind when there is nothing to offer.
   if (cwd === null || declared.data !== false) return null;
-  return <NoDeclaration cwd={cwd} />;
+  return (
+    <div className="shrink-0 px-[0.6em] pt-[0.5em]">
+      <NoDeclaration cwd={cwd} />
+    </div>
+  );
 }
 
 function NoDeclaration({ cwd }: { cwd: string }) {

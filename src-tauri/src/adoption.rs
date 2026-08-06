@@ -91,8 +91,20 @@ fn gate_destination(repo: &Path) -> PathBuf {
 }
 
 /// Whether this repository already declares its levels.
-pub fn declares_levels(repo: &Path) -> bool {
-    repo.join("work-levels.json").is_file()
+///
+/// **Walks up, exactly as the reader does** (`chain::levels::Levels::load`). A tab sitting in
+/// `frontend/` of a monorepo whose declaration is at the root would otherwise be told it has none,
+/// and offered a second one — two files, disagreeing, in the same repository. Two answers to one
+/// question is the defect; which answer is right matters less than that there is one.
+pub fn declares_levels(cwd: &Path) -> bool {
+    let mut dir = Some(cwd);
+    while let Some(current) = dir {
+        if current.join("work-levels.json").is_file() {
+            return true;
+        }
+        dir = current.parent();
+    }
+    false
 }
 
 /// Put the gate into `repo` and say where it went.
@@ -297,5 +309,18 @@ mod tests {
             !declares_levels(repo.path()),
             "a directory of that name is not a declaration"
         );
+    }
+
+    #[test]
+    fn a_declaration_further_up_still_counts() {
+        // The reader walks up from the working directory, so this must too. A tab in `frontend/`
+        // being offered a second declaration, while the root already has one, is two files
+        // disagreeing inside one repository.
+        let repo = tempfile::tempdir().expect("repo");
+        let deep = repo.path().join("frontend/src");
+        std::fs::create_dir_all(&deep).expect("dirs");
+        std::fs::write(repo.path().join("work-levels.json"), "{}").expect("write");
+
+        assert!(declares_levels(&deep));
     }
 }
