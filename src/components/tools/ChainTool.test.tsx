@@ -349,6 +349,43 @@ describe("ChainTool", () => {
     expect(screen.getByText("4 min")).toBeTruthy();
   });
 
+  it("draws a loop that stumbled and recovered as a red ring with a green centre", () => {
+    // The maintainer's own reading, and the one thing the old drawing could not say: a red ring used
+    // to mean the loop ended badly, so "three attempts, two red, green in the end" was indis-
+    // tinguishable from "ended red". Shape says how it ended, ring says it looped, ring colour says
+    // a round failed, centre says the outcome.
+    state.chain = chain({
+      links: [
+        link({
+          outcome: "done",
+          iterations: 3,
+          rounds: [
+            { act: "verify", refinement: "core", failed: true } as never,
+            { act: "edit", refinement: "a.rs", failed: false } as never,
+          ],
+        }),
+        link({ act: "ship", refinement: "commit" }),
+      ],
+    });
+    const { container } = render(<ChainTool />);
+    const marks = container.querySelectorAll("[role='img']");
+    const loop = [...marks].find((m) => m.className.includes("rounded-full"));
+
+    expect(loop?.className).toContain("border-danger");
+    expect(loop?.className).toContain("bg-green");
+  });
+
+  it("draws a loop that ended badly as a triangle, not as a ring", () => {
+    state.chain = chain({
+      links: [link({ outcome: "failed", iterations: 2, rounds: [] }), link({ act: "ship" })],
+    });
+    const { container } = render(<ChainTool />);
+    const marks = [...container.querySelectorAll("[role='img']")];
+
+    expect(marks.some((m) => m.className.includes("rounded-full"))).toBe(false);
+    expect(marks.some((m) => m.className.includes("polygon(50%_0,100%_100%"))).toBe(true);
+  });
+
   it("explains the marks on demand, and says which region each one belongs to", () => {
     // A flat list of six shapes answers "how did that go?" and leaves "what is still outstanding?"
     // unanswered — which is the question that was actually asked. The headings are the answer.

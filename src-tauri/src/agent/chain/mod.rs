@@ -175,8 +175,9 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                     // The status a `TaskUpdate` sets: a completion is an event in the trace, every
                     // other move is bookkeeping (see `classify`).
                     let status = input.and_then(|i| i.get("status")).and_then(Value::as_str);
-                    let step =
-                        classify::classify(&name, command, file, status).at(timestamp.clone());
+                    let step = classify::classify(&name, command, file, status)
+                        .at(timestamp.clone())
+                        .from_tool(str_at(part, "id"));
 
                     // A backgrounded call: remembered by tool-use id, because what it *is* is known
                     // here and what it is *called* only arrives with its result.
@@ -226,6 +227,22 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                 }
                 Some("tool_result") => {
                     if let Some(id) = str_at(part, "tool_use_id") {
+                        // **What the run actually did, from the harness rather than from a guess.**
+                        // Searched backwards and bounded: a result follows its call closely, and an
+                        // unbounded scan would make every poll cost the whole session again.
+                        let failed = part.get("is_error").and_then(Value::as_bool);
+                        if let Some(step) = out
+                            .steps
+                            .iter_mut()
+                            .rev()
+                            .take(RESULT_LOOKBACK)
+                            .find(|s| s.tool_id.as_deref() == Some(id.as_str()))
+                        {
+                            // `false` matters as much as `true`: it is the difference between "this
+                            // passed" and "nobody said", and the second is what the edge heuristic
+                            // is still allowed to answer.
+                            step.failed = Some(failed == Some(true));
+                        }
                         // The result names the task, which is what a completion will name later.
                         if let Some(run) = pending_background.remove(&id) {
                             if let Some(task) = background_id(part) {
@@ -250,6 +267,12 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
     }
     out
 }
+
+/// How far back a tool result will look for the call it belongs to.
+///
+/// A result follows its call within a handful of lines; a bound keeps a poll from re-scanning the
+/// whole session for every one of them. Generous enough that interleaved calls still find theirs.
+const RESULT_LOOKBACK: usize = 64;
 
 /// How long an unfinished background run is still believed.
 ///
@@ -513,6 +536,7 @@ pub fn expectation(links: &[ChainLink]) -> Vec<Round> {
         .map(|(act, seen)| Round {
             act,
             refinement: Some(format!("{seen}")),
+            failed: false,
         })
         .collect()
 }
@@ -804,6 +828,7 @@ mod tests {
         chain.expected = vec![Round {
             act: Act::Ship,
             refinement: Some("2".into()),
+            failed: false,
         }];
 
         settle_standing(&mut chain, model::Standing::Idle, None);
@@ -1082,6 +1107,7 @@ mod tests {
             steps: 1,
             noise: 0,
             compacts: 0,
+            reported: None,
             iterations: None,
             rounds: Vec::new(),
             guessed: true,

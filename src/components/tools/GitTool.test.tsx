@@ -10,6 +10,9 @@ vi.mock("../../api/git", () => ({
   gitApi: { snapshot: vi.fn() },
 }));
 
+// A fixed, unusual size so the assertion cannot pass by coincidence (rule:content-size).
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
+
 import { gitApi } from "../../api/git";
 
 const SNAPSHOT: GitSnapshot = {
@@ -71,6 +74,19 @@ describe("GitTool", () => {
     terminalIn("/repo");
     Element.prototype.setPointerCapture = vi.fn();
     Element.prototype.releasePointerCapture = vi.fn();
+  });
+
+  it("draws its content at the tool's font size", async () => {
+    // **The test rule:content-size requires per tool, and the one this tool never had.** Its sizes
+    // were written in `rem` — resolved against the document root — so it followed the WebView zoom
+    // and nothing else, while the other seven followed the terminal. Missed on two separate rounds
+    // because a search for the hook could not find the one file that never imported it.
+    const { container } = renderTool();
+    await screen.findByLabelText("Changed files");
+
+    const sized = [...container.querySelectorAll<HTMLElement>("[style*='font-size']")];
+    expect(sized.length).toBeGreaterThan(0);
+    for (const region of sized) expect(region.style.fontSize).toBe("17px");
   });
 
   it("waits, visibly, until a terminal has said where it is", () => {

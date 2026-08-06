@@ -266,6 +266,44 @@ describe("the script", () => {
     expect(out).toMatch(/`npm run test` is a level of work/);
   });
 
+  it("reads the package.json files the declaration points at, not only the root one", () => {
+    // **A monorepo has no root package.json**, so the completeness half reported nothing at all in
+    // the first project to adopt this — its level-shaped scripts live in three sub-packages. Asked
+    // for twice; it deletes about half of that project's wrapper.
+    const root = fixture({
+      version: 1,
+      scriptSources: ["core/frontend/package.json"],
+      entrypoints: [{ run: "npm run test", is: "verify/unit@local" }],
+    });
+    mkdirSync(join(root, "core/frontend"), { recursive: true });
+    writeFileSync(
+      join(root, "core/frontend/package.json"),
+      JSON.stringify({ scripts: { test: "vitest run", "test:e2e": "playwright test" } }),
+    );
+    const { code, out } = run(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(code).toBe(1);
+    expect(out).toMatch(/test:e2e/);
+  });
+
+  it("asks for the runners the project says must be named", () => {
+    // A prefix list cannot request `scripts/run-tests.sh` — it begins with "run". It is the central
+    // entrypoint of the first adopting project, and the one an outside reader most needs named.
+    const root = fixture({
+      version: 1,
+      requiredRunners: ["scripts/run-tests.sh", "./heimdal"],
+      entrypoints: [{ run: "bash scripts/run-tests.sh e2e", is: "verify/e2e@local" }],
+    });
+    const { code, out } = run(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(code).toBe(1);
+    expect(out).toMatch(/`\.\/heimdal` is listed in `requiredRunners`/);
+    // The one that IS declared, under a longer command, is not demanded again.
+    expect(out).not.toMatch(/`scripts\/run-tests\.sh` is listed/);
+  });
+
   it("says nothing about a package script that is not a level of work", () => {
     const root = fixture({ version: 1, entrypoints: [] });
     writeFileSync(

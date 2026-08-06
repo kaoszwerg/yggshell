@@ -39,8 +39,23 @@ struct Block {
     /// alternation, so a loop that spanned a compact lost its iteration count at exactly the moment
     /// the count became interesting.
     compacts: u32,
+    /// What the harness said about the steps in this block: `Some(true)` if any of them failed,
+    /// `Some(false)` if some said so and none did, `None` if nobody said anything.
+    ///
+    /// Three states rather than two, because "passed" and "nobody reported" are different facts and
+    /// only the second may be answered by the edge heuristic (see `settle_outcomes`).
+    failed: Option<bool>,
     first_at: Option<String>,
     last_at: Option<String>,
+}
+
+/// Fold one step's reported result into a block's.
+fn merge_failed(open: Option<bool>, step: Option<bool>) -> Option<bool> {
+    match (open, step) {
+        (Some(true), _) | (_, Some(true)) => Some(true),
+        (Some(false), _) | (_, Some(false)) => Some(false),
+        _ => None,
+    }
 }
 
 /// Whether a step continues the block that is open.
@@ -136,6 +151,7 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
                         }
                     }
                 }
+                open.failed = merge_failed(open.failed, step.failed);
                 if step.at.is_some() {
                     open.last_at = step.at;
                 }
@@ -150,6 +166,7 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
                     steps: 1,
                     noise: 0,
                     compacts: std::mem::take(&mut pending_compacts),
+                    failed: step.failed,
                     first_at: step.at.clone(),
                     last_at: step.at,
                 });
@@ -165,6 +182,15 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
 /// build(a)` is one cycle; changing either side ends it and starts a new link, because that is a
 /// different piece of work and reporting it as another turn of the same wheel would say the
 /// opposite of what happened.
+/// One turn of a cycle, carrying whether it went badly.
+fn round_of(block: &Block) -> Round {
+    Round {
+        act: block.act,
+        refinement: block.refinement.clone(),
+        failed: block.failed == Some(true),
+    }
+}
+
 fn collapse_cycles(blocks: Vec<Block>) -> Vec<ChainLink> {
     let mut out: Vec<ChainLink> = Vec::new();
     let mut i = 0usize;
@@ -183,16 +209,7 @@ fn collapse_cycles(blocks: Vec<Block>) -> Vec<ChainLink> {
 
         let mut end = i + 2;
         let mut iterations = 2u32;
-        let mut rounds = vec![
-            Round {
-                act: blocks[i].act,
-                refinement: blocks[i].refinement.clone(),
-            },
-            Round {
-                act: blocks[i + 1].act,
-                refinement: blocks[i + 1].refinement.clone(),
-            },
-        ];
+        let mut rounds = vec![round_of(&blocks[i]), round_of(&blocks[i + 1])];
 
         // Extend while the alternation holds: the anchor must stay identical, the other side only
         // has to stay the same *act*.
@@ -201,19 +218,13 @@ fn collapse_cycles(blocks: Vec<Block>) -> Vec<ChainLink> {
             && end + 2 < blocks.len()
             && same_anchor(&blocks[end + 2], &blocks[i])
         {
-            rounds.push(Round {
-                act: blocks[end + 1].act,
-                refinement: blocks[end + 1].refinement.clone(),
-            });
+            rounds.push(round_of(&blocks[end + 1]));
             end += 2;
             iterations += 1;
         }
         // A trailing half-turn still counts as one more round.
         if end + 1 < blocks.len() && blocks[end + 1].act == blocks[i + 1].act {
-            rounds.push(Round {
-                act: blocks[end + 1].act,
-                refinement: blocks[end + 1].refinement.clone(),
-            });
+            rounds.push(round_of(&blocks[end + 1]));
             end += 1;
         }
 
@@ -226,6 +237,10 @@ fn collapse_cycles(blocks: Vec<Block>) -> Vec<ChainLink> {
             steps: blocks[i..=end].iter().map(|b| b.steps).sum(),
             noise: blocks[i..=end].iter().map(|b| b.noise).sum(),
             compacts: blocks[i..=end].iter().map(|b| b.compacts).sum(),
+            // **The LAST round decides the cycle, not the worst one.** A loop that failed twice and
+            // then went green ended green; carrying the failures up here would paint the whole thing
+            // red and lose exactly the distinction the rounds are kept for.
+            failed: blocks[end].failed,
             first_at: blocks[i].first_at.clone(),
             last_at: blocks[end].last_at.clone(),
         };
@@ -256,6 +271,7 @@ fn link_of(block: &Block, iterations: Option<u32>, rounds: Vec<Round>) -> ChainL
             .map(|refinement| Round {
                 act: block.act,
                 refinement: Some(refinement.clone()),
+                failed: false,
             })
             .collect()
     } else {
@@ -273,6 +289,7 @@ fn link_of(block: &Block, iterations: Option<u32>, rounds: Vec<Round>) -> ChainL
         steps: block.steps,
         noise: block.noise,
         compacts: block.compacts,
+        reported: block.failed,
         iterations,
         rounds,
         guessed: true,
@@ -293,21 +310,37 @@ fn settle_outcomes(links: &mut [ChainLink]) {
     let len = links.len();
     for i in 0..len {
         let next_act = links.get(i + 1).map(|l| l.act);
-        links[i].outcome = match (links[i].act, next_act) {
+        let reported = links[i].reported;
+        links[i].outcome = match (reported, links[i].act, next_act) {
             // Nothing after it: this is what is running, whatever kind of act it is.
-            (_, None) => Outcome::Live,
-            // A check followed by a fix had found something.
-            (Act::Verify, Some(Act::Edit)) => Outcome::Failed,
-            // A check followed by anything else was passed and the work moved on.
-            (Act::Verify, Some(_)) => Outcome::Done,
+            (_, _, None) => Outcome::Live,
+            // **What the harness said, whenever it said anything.** Every tool result carries
+            // `is_error`; using it turns the commonest mark in this panel from an inference into a
+            // fact, for every act rather than only for a check.
+            (Some(true), _, _) => Outcome::Failed,
+            (Some(false), Act::Verify, _) => Outcome::Done,
+            // A check followed by a fix had found something — the fallback, and only where nobody
+            // reported: a shell line that swallows the status (`… ; echo "EXIT=$?"`) exits 0
+            // whatever the gate did, so the edge is still the best available answer there.
+            (None, Act::Verify, Some(Act::Edit)) => Outcome::Failed,
+            (None, Act::Verify, Some(_)) => Outcome::Done,
             // Building, shipping, probing: they happened. Nothing pronounced them good.
             _ => Outcome::Unknown,
         };
         // A cycle whose last round was an edit never resolved: it stopped mid-repair. Not applied to
         // the newest link — that one is still going, and "running" outranks any verdict about how
         // its last round happened to end.
+        //
+        // **And only where nobody reported.** This inference used to overrule the harness's own
+        // answer: a loop that failed twice and then went green was still painted red, because its
+        // last recorded round was the fix that made it green. An inference that beats a fact is the
+        // defect this whole change is about.
         let is_newest = i + 1 == len;
-        if !is_newest && links[i].iterations.is_some() && links[i].act == Act::Verify {
+        if reported.is_none()
+            && !is_newest
+            && links[i].iterations.is_some()
+            && links[i].act == Act::Verify
+        {
             if let Some(last) = links[i].rounds.last() {
                 if last.act == Act::Edit {
                     links[i].outcome = Outcome::Failed;
@@ -405,6 +438,75 @@ mod tests {
 
     fn compact() -> Step {
         Step::new(Act::Compact, None)
+    }
+
+    /// A step the harness pronounced on, rather than one the reader has to guess about.
+    fn reported(act: Act, refinement: &str, failed: bool) -> Step {
+        let mut step = step(act, refinement);
+        step.failed = Some(failed);
+        step
+    }
+
+    #[test]
+    fn a_reported_result_beats_the_guess_from_the_next_step() {
+        // **The commonest mark in this panel stops being an inference.** A check followed by an edit
+        // was called failed — right when a gate goes red, wrong every time a green check is simply
+        // followed by the next piece of work, and both were drawn identically. Every tool result
+        // carries `is_error`; 20 of 1356 in the session this was written in.
+        let links = fold(vec![
+            reported(Act::Verify, "core", false),
+            step(Act::Edit, "a.rs"),
+            step(Act::Ship, "commit"),
+        ]);
+
+        assert_eq!(
+            links[0].outcome,
+            Outcome::Done,
+            "it passed, and what followed says nothing about that"
+        );
+
+        // And the other direction, where the guess happened to agree.
+        let links = fold(vec![
+            reported(Act::Verify, "core", true),
+            step(Act::Edit, "a.rs"),
+            step(Act::Ship, "commit"),
+        ]);
+        assert_eq!(links[0].outcome, Outcome::Failed);
+    }
+
+    #[test]
+    fn the_edge_still_answers_where_nobody_reported() {
+        // The fallback has to stay: `npm run check:all > log; echo "EXIT=$?"` exits 0 whatever the
+        // gate did, so nothing is reported and the following step is the best available answer.
+        let links = fold(vec![
+            step(Act::Verify, "core"),
+            step(Act::Edit, "a.rs"),
+            step(Act::Ship, "commit"),
+        ]);
+
+        assert_eq!(links[0].outcome, Outcome::Failed);
+        assert_eq!(links[0].reported, None, "and it says nobody pronounced it");
+    }
+
+    #[test]
+    fn a_cycle_ends_where_its_last_round_ended() {
+        // "Three attempts, two of them red, green in the end" is the sentence a counter exists for.
+        // Carrying the failures up would paint the whole loop red and lose it.
+        let links = fold(vec![
+            reported(Act::Verify, "core", true),
+            step(Act::Edit, "a.rs"),
+            reported(Act::Verify, "core", true),
+            step(Act::Edit, "b.rs"),
+            reported(Act::Verify, "core", false),
+            step(Act::Ship, "commit"),
+        ]);
+
+        assert_eq!(links[0].iterations, Some(3));
+        assert_eq!(links[0].outcome, Outcome::Done, "green in the end");
+        assert!(
+            links[0].rounds.iter().any(|r| r.failed),
+            "and the red rounds are still on the record"
+        );
     }
 
     #[test]

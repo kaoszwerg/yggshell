@@ -4,4 +4,11 @@ import type { Act } from "./Act";
 /**
  * One iteration inside a folded cycle.
  */
-export type Round = { act: Act, refinement: string | null, };
+export type Round = { act: Act, refinement: string | null, 
+/**
+ * Whether this round failed, as the harness reported it. `false` also covers "nobody said".
+ *
+ * It is what lets a cycle say *"three attempts, two of them red, green in the end"* rather than
+ * carrying a single colour for the whole thing.
+ */
+failed: boolean, };

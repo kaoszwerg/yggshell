@@ -150,6 +150,19 @@ pub struct Step {
     pub signature: Option<String>,
     /// ISO timestamp from the transcript line. `None` for a line that carried none.
     pub at: Option<String>,
+    /// The tool call this came from, so its result can find it again.
+    ///
+    /// A call and its result are separate lines and can land in separate reads, which is why the
+    /// step carries the id rather than the reader keeping a map alive across polls.
+    pub tool_id: Option<String>,
+    /// Whether it failed — **as the harness reported it**, not as anything inferred.
+    ///
+    /// `None` means nobody said: no result seen yet, or a shell line that swallowed the status
+    /// (`npm run check:all > log; echo "EXIT=$?"` exits 0 whatever the gate did). That third state
+    /// is the point: red used to be guessed from the *following* step — a check followed by an edit
+    /// was called failed — which is right when a gate goes red and wrong every time a green check is
+    /// simply followed by the next piece of work. The panel drew both identically.
+    pub failed: Option<bool>,
     /// Whether this was *recognised* rather than merely defaulted to a probe.
     ///
     /// A `Read` is a probe and is fully understood; an unknown program is a probe because we could
@@ -166,6 +179,8 @@ impl Step {
             kind: Kind::Normal,
             signature: None,
             at: None,
+            tool_id: None,
+            failed: None,
             recognised: true,
         }
     }
@@ -190,6 +205,11 @@ impl Step {
 
     pub fn at(mut self, at: Option<String>) -> Self {
         self.at = at;
+        self
+    }
+
+    pub fn from_tool(mut self, id: Option<String>) -> Self {
+        self.tool_id = id;
         self
     }
 }
@@ -269,6 +289,12 @@ pub struct Reach {
 pub struct Round {
     pub act: Act,
     pub refinement: Option<String>,
+    /// Whether this round failed, as the harness reported it. `false` also covers "nobody said".
+    ///
+    /// It is what lets a cycle say *"three attempts, two of them red, green in the end"* rather than
+    /// carrying a single colour for the whole thing.
+    #[serde(default)]
+    pub failed: bool,
 }
 
 /// One link of the chain, as the tool draws it.
@@ -305,6 +331,13 @@ pub struct ChainLink {
     pub compacts: u32,
     /// `Some` when this link is a folded cycle: how many times it went round.
     pub iterations: Option<u32>,
+    /// What the harness reported about this link's own steps, before anything was inferred.
+    ///
+    /// `None` means nobody said — the only case in which the following step is allowed to decide
+    /// (see `settle_outcomes`). Carried into the DTO because the interface distinguishes the two:
+    /// a mark that is *known* red and one that is *assumed* red should not look identical, which is
+    /// the same reasoning `guessed` already applies to the classification.
+    pub reported: Option<bool>,
     /// The distinct refinements seen inside a cycle. **The reading is opposite** depending on this:
     /// 16 iterations over 16 files is a list being worked through, over 1 file it is stuck.
     pub rounds: Vec<Round>,

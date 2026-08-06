@@ -49,6 +49,15 @@ compacts: number,
  */
 iterations: number | null, 
 /**
+ * What the harness reported about this link's own steps, before anything was inferred.
+ *
+ * `None` means nobody said — the only case in which the following step is allowed to decide
+ * (see `settle_outcomes`). Carried into the DTO because the interface distinguishes the two:
+ * a mark that is *known* red and one that is *assumed* red should not look identical, which is
+ * the same reasoning `guessed` already applies to the classification.
+ */
+reported: boolean | null, 
+/**
  * The distinct refinements seen inside a cycle. **The reading is opposite** depending on this:
  * 16 iterations over 16 files is a list being worked through, over 1 file it is stuck.
  */

@@ -230,7 +230,9 @@ export const de: Translations = {
   "chain.mark.happened": "Das ist passiert. Nichts hat es geprüft — weder gut noch schlecht",
   "chain.mark.todo": "Steht noch aus",
   "chain.mark.ahead": "Erwartet, aus dem bisherigen Muster dieser Sitzung. Kein Plan",
-  "chain.mark.cycle": "Ging mehrfach im Kreis",
+  "chain.mark.cycle": "Ging mehrfach im Kreis, unterwegs ging nichts schief",
+  "chain.mark.cycleStumbled":
+    "Ging mehrfach im Kreis, unterwegs war eine Runde rot — die Mitte sagt, wie es ausging",
   "chain.legend": "Was die Zeichen bedeuten",
   "chain.legend.trace": "In der Spur",
   "chain.legend.plan": "Im Plan",

@@ -159,9 +159,46 @@ on. Everything else about the placement is the adopting project's decision, and 
 convention that demanded a directory layout would be refused by every repository that already has
 one.
 
-`run` is the identifying prefix, not the full line with its flags. `is` is the vocabulary above.
+**`run` is the identifying portion — as long as it needs to be, flags included.** Write the shortest
+thing that tells this level apart from every other, and no shorter: where two levels differ only in
+an argument, that argument belongs in `run`. Eight deployments distinguished solely by
+`-f environment=<name>` are eight entrypoints with eight `reaches`, and writing them as one prefix
+would be exactly what this convention refuses. A reader takes the **longest** matching declaration,
+so a general entry and a specific one can both be listed and the specific one wins.
+
+*(This sentence used to say "the identifying prefix, not the full line with its flags", four
+paragraphs after the adopter notes said the opposite. The first project to adopt the rule followed
+the notes, correctly, and had to work out which of the two to believe — a document that contradicts
+itself makes every reader decide privately.)*
+
+`is` is the vocabulary above.
 **`reaches` is required whenever the target is not `local`** — the host, cluster or account actually
 touched. It is what makes *"am I about to hit production?"* answerable without reading three files.
+
+**A leading environment assignment is not part of the command.** `COVERAGE=on scripts/run-tests.sh
+core` is the same level as `scripts/run-tests.sh core`: the variable shifts neither depth, target nor
+area. A reader strips them before matching, so do not declare the combinations — there is no end to
+them. Same for the wrappers a shell needs and nobody means: `bash`, `sh`, `env`, `npx`.
+
+**A code host is `@prod`.** Pushing, opening a review, merging, or triggering a workflow reaches
+something that is not this machine, and pushed history is public and permanent — there is no undoing
+it quietly. `prod` reads oddly for a repository the first time, which is why this sentence exists:
+the alternative was every project deciding privately, and then two declarations meaning different
+things by the same word. `git commit` stays `@local`; a commit reaches nothing until it is pushed.
+
+**Two optional fields, for the shapes a checker cannot guess:**
+
+```json
+"scriptSources": ["core/frontend/package.json", "plugins/package.json"],
+"requiredRunners": ["scripts/run-tests.sh", "./heimdal"]
+```
+
+`scriptSources` says which `package.json` files hold this project's scripts — a monorepo often has
+none at the root, and a completeness check reading only the root one reports nothing at all there.
+`requiredRunners` names entrypoints that must be declared whatever they are called: a heuristic
+looking for `test`/`lint`/`deploy` prefixes can never ask for `scripts/run-tests.sh`, and that is
+exactly the command an outside reader most needs named. Both come from the first project to adopt
+this rule, which had to write its own wrapper for want of them.
 
 **Declaring is not renaming.** An existing project fills this in without moving a single script, which
 is why adoption costs an afternoon rather than a quarter.
@@ -218,6 +255,31 @@ something is *active* is answered where activity is: the task list and the branc
 No narration per command, no status file to keep current, no tool. Everything above is a name, a
 file, or a branch — a project adopting this needs nothing installed, and benefits even if nobody ever
 reads it mechanically.
+
+## Where a declaration enumerates, the gate re-derives
+
+**Anything the project discovers at runtime and the declaration lists by hand is stale on the next
+commit.** A test runner that takes a plugin name, a build that takes a package, a deploy that takes
+an environment: each of those instances needs its own entry, because each carries its own `#area`
+and its own `reaches` — and that is exactly what guarantees the file falls behind. The next plugin
+has no line, no area, and renders as a bare `verify/integration@local`, which reads as a fact.
+
+So the gate does not trust the file for these. It **re-derives the list from the same source the
+project itself uses** — the plugin directory, the workspace list, the environments file — and
+requires an entry per instance. Measured by the first project to do it: nine genuine gaps in a
+declaration one hour old, seven of them builds nobody had thought of.
+
+The same shape, twice more:
+
+- **A manually-triggerable delivery workflow is an unnamed level.** A `workflow_dispatch` job called
+  `deploy`, `release`, `publish` or `mirror` is a command a person types and it reaches a registry, a
+  cloud or the public. Require those. **Not** the ones that only run on push — demanding an entry for
+  every CI gate is the noise that gets a checker switched off within a week (ADR-CORE-039).
+- **The reverse direction:** an entry naming a script that no longer exists. A declaration outliving
+  reality is the same defect from the other end, and it found a dispatchable deploy here whose
+  environments had been gone for months.
+
+This is the `reaches` principle applied to the file itself: **what rots is what nobody re-reads.**
 
 ## Why this is a rule and not (only) a lint
 

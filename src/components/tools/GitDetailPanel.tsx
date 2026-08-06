@@ -9,7 +9,7 @@ import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
 import { useUiStore, type PaneDetail } from "../../store/ui";
-import { useSettings } from "../../hooks/useSettings";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { useDetailScheme } from "../../hooks/useDetailScheme";
 import { surfaceStyle } from "../../lib/schemeSurface";
 import { isMarkdown, languageFor, tokenize } from "../../lib/highlight";
@@ -37,9 +37,14 @@ import type { GitFileStat } from "../../bindings/GitFileStat";
  * Undivided by the UI scale, unlike the emulator's: this is ordinary DOM and the WebView zoom already
  * applies. Dividing would shrink a diff as the rest of the interface grew.
  */
+/// A diff is tool content like any other, so it follows the tool's own size.
+///
+/// **This used to be a private copy of `useContentFontSize` reading `terminal_font_size`** — written
+/// before either the shared hook or a separate tool size existed. Left alone it would have made the
+/// Git panel the one surface in the tool column that ignored the new control, which is the same
+/// inconsistency the control was added to end (ADR-CORE-005: one source per cross-cutting concern).
 function useDetailFontSize(): number {
-  const settings = useSettings();
-  return settings.data?.terminal_font_size ?? 13;
+  return useToolFontSize();
 }
 
 // `useDetailScheme` moved to `hooks/useDetailScheme` when the notes view became its third and fourth

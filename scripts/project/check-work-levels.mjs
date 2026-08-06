@@ -190,15 +190,49 @@ export function undeclaredExamples(manual) {
     .filter((checked) => checked.error);
 }
 
-function packageScripts(root) {
-  const path = join(root, "package.json");
-  if (!existsSync(path)) return {};
-  try {
-    return JSON.parse(readFileSync(path, "utf8")).scripts ?? {};
-  } catch {
-    // Not this gate's business to report — the project's own tooling will.
-    return {};
+/**
+ * Every `package.json` whose scripts count, as the declaration says.
+ *
+ * **`scriptSources` exists because a monorepo has no root `package.json`.** Reading only the root
+ * one made the completeness half — the important half, by this file's own description — report
+ * nothing at all in the first project to adopt this: its level-shaped scripts live in three
+ * sub-packages. Asked for twice, and it deletes about half of that project's wrapper.
+ */
+function packageScripts(root, declaration) {
+  const sources = Array.isArray(declaration?.scriptSources)
+    ? declaration.scriptSources
+    : ["package.json"];
+  const scripts = {};
+  for (const source of sources.slice(0, 64)) {
+    if (typeof source !== "string") continue;
+    const path = join(root, source);
+    if (!existsSync(path)) continue;
+    try {
+      Object.assign(scripts, JSON.parse(readFileSync(path, "utf8")).scripts ?? {});
+    } catch {
+      // Not this gate's business to report — the project's own tooling will.
+    }
   }
+  return scripts;
+}
+
+/**
+ * Runners the project says must be declared, whatever they are called.
+ *
+ * **Because a prefix list cannot ask for `scripts/run-tests.sh`.** That is the central entrypoint of
+ * the first adopting project — all four verify depths go through it, and calling the underlying
+ * runners directly is forbidden there — and it begins with `run`, so `LEVEL_SHAPED` will never
+ * request it. Lengthening the prefix list is a race against every project's naming; letting the
+ * project name its own is not.
+ */
+export function missingRunners(declaration) {
+  const required = Array.isArray(declaration?.requiredRunners) ? declaration.requiredRunners : [];
+  const declared = (declaration?.entrypoints ?? [])
+    .map((entry) => (typeof entry?.run === "string" ? entry.run : ""))
+    .join("\n");
+  return required
+    .filter((runner) => typeof runner === "string" && runner.length > 0)
+    .filter((runner) => !declared.includes(runner));
 }
 
 function main() {
@@ -219,7 +253,13 @@ function main() {
     return 1;
   }
   const problems = checkDeclaration(declaration);
-  for (const name of undeclaredScripts(declaration, packageScripts(ROOT))) {
+  for (const runner of missingRunners(declaration)) {
+    problems.push(
+      `\`${runner}\` is listed in \`requiredRunners\` and declared nowhere — ` +
+        `the project itself says this one has to be named`,
+    );
+  }
+  for (const name of undeclaredScripts(declaration, packageScripts(ROOT, declaration))) {
     problems.push(
       `\`npm run ${name}\` is a level of work and is declared nowhere — ` +
         `add it to work-levels.json, or rename it if it is not one`,

@@ -242,7 +242,9 @@ export const en = {
   "chain.mark.happened": "This happened. Nothing checked it — it is neither good nor bad news",
   "chain.mark.todo": "Still to come",
   "chain.mark.ahead": "Expected, from what this session has done before. Not a plan",
-  "chain.mark.cycle": "Went round more than once",
+  "chain.mark.cycle": "Went round more than once, nothing failed on the way",
+  "chain.mark.cycleStumbled":
+    "Went round more than once and a round failed — the centre says how it ended",
   "chain.legend": "What the marks mean",
   "chain.legend.trace": "In the trace",
   "chain.legend.plan": "In the plan",

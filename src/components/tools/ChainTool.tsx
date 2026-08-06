@@ -496,7 +496,11 @@ function Link({ link }: { link: ChainLink }) {
 
   return (
     <div className="flex gap-[0.5em] pb-[0.55em]">
-      <Node state={state} cycle={link.iterations !== null} />
+      <Node
+        state={state}
+        cycle={link.iterations !== null}
+        stumbled={link.rounds.some((round) => round.failed)}
+      />
       <div className="min-w-0 flex-1">
         {detail === false ? (
           <div className="flex items-baseline gap-[0.4em]">{head}</div>
@@ -582,13 +586,22 @@ function Ahead({ round }: { round: Round }) {
 function Node({
   state,
   cycle = false,
+  stumbled = false,
 }: {
   state: "done" | "failed" | "live" | "todo" | "ahead" | "happened";
   cycle?: boolean;
+  /** A round inside this cycle failed, whatever the whole thing came to in the end. */
+  stumbled?: boolean;
 }) {
   const t = useT();
-  const shape = cycle
-    ? "rounded-full border-[0.16em] bg-transparent"
+  // **A bad ending is a triangle, whether or not it looped.** How it came out is the first question
+  // and the shape answers it; that a loop happened is the ring, and how many times is the counter
+  // beside it. The maintainer's own formulation: *"roter Kreis mit grün ist multiturn mit Ergebnis
+  // grün, und nur grün ist alles gut"* — so the ring may now be red while its centre is green,
+  // which is the one thing the old drawing could not say.
+  const ring = cycle && state !== "failed";
+  const shape = ring
+    ? "rounded-full border-[0.16em]"
     : state === "failed"
       ? "[clip-path:polygon(50%_0,100%_100%,0_100%)]"
       : "[clip-path:polygon(50%_0,100%_50%,50%_100%,0_50%)]";
@@ -596,18 +609,23 @@ function Node({
   // A switch rather than an object lookup: the union already makes the lookup total, but an indexed
   // read is what `security/detect-object-injection` is there to catch and the exemption would have
   // to be argued at every future reader (rule:security — never silence a check to go green).
+  // The ring says a round went badly; the centre says how the whole thing came out.
+  const border = stumbled ? "border-danger" : "border-green";
   const paint = ((): string => {
     switch (state) {
       case "done":
-        return cycle ? "border-green" : "bg-green/70";
+        return ring ? `${border} bg-green/70` : "bg-green/70";
+      // A bad ending never draws a ring, so there is no centre to fill here.
       case "failed":
-        return cycle ? "border-danger bg-danger" : "bg-danger";
+        return "bg-danger";
       case "live":
-        return cycle ? "border-cyan" : "bg-cyan motion-safe:animate-pulse";
+        return ring
+          ? `${border} bg-cyan motion-safe:animate-pulse`
+          : "bg-cyan motion-safe:animate-pulse";
       // Filled, so it reads as "this is behind us", but in the neutral colour, so it does not claim
       // to have been checked. Hollow would mean the opposite — still to come.
       case "happened":
-        return cycle ? "border-dim" : "bg-dim";
+        return ring ? `${border} bg-dim` : "bg-dim";
       case "todo":
         return "border border-dim bg-transparent";
       case "ahead":
@@ -666,10 +684,16 @@ function Legend() {
             </div>
           ))}
           {group.cycle === true ? (
-            <div className="text-dim flex items-baseline gap-[0.6em] text-[0.8em]">
-              <Node state="failed" cycle />
-              <span className="min-w-0">{t("chain.mark.cycle")}</span>
-            </div>
+            <>
+              <div className="text-dim flex items-baseline gap-[0.6em] text-[0.8em]">
+                <Node state="done" cycle />
+                <span className="min-w-0">{t("chain.mark.cycle")}</span>
+              </div>
+              <div className="text-dim flex items-baseline gap-[0.6em] text-[0.8em]">
+                <Node state="done" cycle stumbled />
+                <span className="min-w-0">{t("chain.mark.cycleStumbled")}</span>
+              </div>
+            </>
           ) : null}
         </div>
       ))}

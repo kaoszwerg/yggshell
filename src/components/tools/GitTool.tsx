@@ -12,6 +12,7 @@ import { useT } from "../../hooks/useT";
 import { useCaptureNote } from "../../hooks/useCaptureNote";
 import { KebabMenu } from "../ui/KebabMenu";
 import { GIT_SPLIT_MAX, GIT_SPLIT_MIN, useUiStore, type PaneDetail } from "../../store/ui";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import type { GitChange } from "../../bindings/GitChange";
 import type { GitCommit } from "../../bindings/GitCommit";
 import type { GitSnapshot } from "../../bindings/GitSnapshot";
@@ -94,6 +95,11 @@ function Body({
   remoteProblem: string | null;
 }) {
   const t = useT();
+  // **The eighth tool, and it followed neither setting.** Its sizes were written in `rem`, which
+  // resolves against the document root — so it moved with the WebView zoom and with nothing else,
+  // while the other seven followed the terminal's size. It was missed on both rounds because it is
+  // the one tool that never imported the hook, so a search for the hook could not find it.
+  const fontSize = useToolFontSize();
   const split = useUiStore((s) => s.gitSplit);
   const setSplit = useUiStore((s) => s.setGitSplit);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -151,7 +157,9 @@ function Body({
       <div ref={bodyRef} data-region="body" className="flex min-h-0 flex-1 flex-col">
         <div
           className="min-h-0 overflow-y-auto p-2"
-          style={{ flex: `0 0 ${split}%` }}
+          // Content: a path and a status letter read like a terminal (rule:content-size). The tool
+          // body above keeps its own size — that is the chrome around this.
+          style={{ flex: `0 0 ${split}%`, fontSize: `${fontSize}px` }}
           aria-label={t("git.changedFiles")}
         >
           <Section label={`CHANGED · ${snapshot.changes.length}`}>
@@ -175,7 +183,11 @@ function Body({
           toValue={toShare}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-2" aria-label={t("git.commitHistory")}>
+        <div
+          className="min-h-0 flex-1 overflow-y-auto p-2"
+          style={{ fontSize: `${fontSize}px` }}
+          aria-label={t("git.commitHistory")}
+        >
           <Section label={t("git.history")}>
             <History commits={snapshot.commits} />
           </Section>
@@ -217,9 +229,7 @@ function ChangeRow({ change }: { change: GitChange }) {
           {mark}
         </span>
         <span className={`truncate ${change.staged ? "text-fg" : "text-dim"}`}>{change.path}</span>
-        {change.staged ? (
-          <span className="text-green/60 shrink-0 text-[0.55rem]">staged</span>
-        ) : null}
+        {change.staged ? <span className="text-green/60 shrink-0 text-[0.8em]">staged</span> : null}
       </Row>
     </Tooltip>
   );
@@ -293,7 +303,7 @@ function CommitRow({ row, width, last }: { row: GraphRow; width: number; last: b
       {row.commit.refs.map((ref) => (
         <span
           key={ref}
-          className="hud-clip-sm bg-elevated shrink-0 px-1 text-[0.55rem]"
+          className="hud-clip-sm bg-elevated shrink-0 px-1 text-[0.8em]"
           style={{ color: laneColour(row.lane) }}
         >
           {ref}
