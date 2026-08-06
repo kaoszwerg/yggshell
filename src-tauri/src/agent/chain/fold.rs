@@ -121,11 +121,19 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
         match blocks.last_mut() {
             Some(open) if open.kind == step.kind && merges(open, &step) => {
                 open.steps += 1;
+                // **The block is named after the file being edited NOW, not the first one.** A run
+                // of edits is one act, but its label answered the wrong question: the panel said
+                // `edit mod.rs` for minutes while the work had moved on, and the file actually
+                // being changed sat behind the expander. Reported as "that edit is not in the
+                // trace" — it was, under another name. The earlier ones move into `also`, which is
+                // where "what did this consist of" is looked up anyway.
                 if let Some(refinement) = step.refinement {
-                    if !open.also.contains(&refinement)
-                        && Some(&refinement) != open.refinement.as_ref()
-                    {
-                        open.also.push(refinement);
+                    if Some(&refinement) != open.refinement.as_ref() {
+                        if let Some(previous) = open.refinement.replace(refinement) {
+                            if !open.also.contains(&previous) {
+                                open.also.push(previous);
+                            }
+                        }
                     }
                 }
                 if step.at.is_some() {
@@ -261,6 +269,7 @@ fn link_of(block: &Block, iterations: Option<u32>, rounds: Vec<Round>) -> ChainL
         kind: block.kind,
         reach: None,
         seconds: seconds_between(block.first_at.as_deref(), block.last_at.as_deref()),
+        seconds_live: block.first_at.as_deref().map_or(0, super::seconds_since),
         steps: block.steps,
         noise: block.noise,
         compacts: block.compacts,
@@ -396,6 +405,32 @@ mod tests {
 
     fn compact() -> Step {
         Step::new(Act::Compact, None)
+    }
+
+    #[test]
+    fn a_run_of_edits_is_named_after_the_file_being_changed_now() {
+        // **Reported as "that edit is not in the trace".** It was — under the name of the file
+        // edited first, minutes earlier. A run of edits is one act, but its label has to answer
+        // "what is happening", and the answer moved on. The earlier files are not lost: they are
+        // where the panel already looks for what a block consisted of.
+        let links = fold(vec![
+            step(Act::Edit, "mod.rs"),
+            step(Act::Edit, "classify.rs"),
+            step(Act::Edit, "fold.rs"),
+        ]);
+
+        assert_eq!(links.len(), 1, "still one act");
+        assert_eq!(
+            links[0].refinement.as_deref(),
+            Some("fold.rs"),
+            "the newest"
+        );
+        let earlier: Vec<&str> = links[0]
+            .rounds
+            .iter()
+            .filter_map(|r| r.refinement.as_deref())
+            .collect();
+        assert!(earlier.contains(&"mod.rs") && earlier.contains(&"classify.rs"));
     }
 
     #[test]

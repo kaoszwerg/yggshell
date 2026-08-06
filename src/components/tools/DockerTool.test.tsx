@@ -6,7 +6,7 @@ import { useUiStore } from "../../store/ui";
 import type { ContainerInfo } from "../../bindings/ContainerInfo";
 import type { ContainerStats } from "../../bindings/ContainerStats";
 
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 vi.mock("../../api/docker", () => ({
   dockerApi: { containers: vi.fn(), logs: vi.fn(), stats: vi.fn() },
 }));

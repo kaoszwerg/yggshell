@@ -8,7 +8,7 @@ import { TextField } from "../ui/TextField";
 import { TextArea } from "../ui/TextArea";
 import { notesApi } from "../../api/notes";
 import { taskItems, type Task } from "../../lib/noteTasks";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { useNoteProject } from "../../hooks/useNoteProject";
 import { useNotesSync } from "../../hooks/useNotesSync";
 import { useT } from "../../hooks/useT";
@@ -39,7 +39,7 @@ import type { NotesStatus } from "../../bindings/NotesStatus";
  */
 export function NotesTool() {
   const t = useT();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const qc = useQueryClient();
   const project = useNoteProject();
   const setView = useUiStore((s) => s.setView);
@@ -704,7 +704,7 @@ export function NotesTool() {
                 {/* **Where the hit is**, not just which file. The search covers every project
                     regardless of which one is selected, so "release" alone is two different notes
                     in two repositories rendered as the same row. */}
-                <span className="text-dim/70 shrink-0 text-[10px]">
+                <span className="text-dim/70 shrink-0 text-[0.85em]">
                   {`${hit.project.split("/").at(-1) ?? hit.project} · ${hit.topic}`}
                 </span>
                 <span className="text-fg min-w-0 flex-1 truncate">{hit.line}</span>
@@ -853,7 +853,7 @@ export function NotesTool() {
       )}
 
       {capture.error === null && toggle.error === null ? null : (
-        <p className="text-danger px-2 py-1 font-mono text-[10px]">
+        <p className="text-danger px-2 py-1 font-mono text-[0.85em]">
           {String(capture.error ?? toggle.error)}
         </p>
       )}
@@ -864,7 +864,7 @@ export function NotesTool() {
           nothing anywhere suggesting a problem. Gold rather than red: the notes are still written
           and still readable, it is the copy elsewhere that is not happening. */}
       {sync.error === null ? null : (
-        <p className="text-gold px-2 py-1 font-mono text-[10px]">
+        <p className="text-gold px-2 py-1 font-mono text-[0.85em]">
           {t("notes.syncFailed", { reason: sync.error })}
         </p>
       )}
@@ -885,7 +885,7 @@ export function NotesTool() {
  */
 function ImportReport({ report, onDismiss }: { report: NoteImportReport; onDismiss: () => void }) {
   const t = useT();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const taken = report.entries.filter((entry) => entry.topic !== null);
   const images = report.entries.reduce((sum, entry) => sum + entry.images, 0);
 
@@ -1017,5 +1017,5 @@ function TaskRow({
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim px-2 py-1 font-mono text-[10px]">{children}</p>;
+  return <p className="text-dim px-2 py-1 font-mono text-[0.85em]">{children}</p>;
 }

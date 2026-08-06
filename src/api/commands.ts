@@ -92,6 +92,7 @@ export const api = {
   updateSettings: (opts: {
     uiScale?: number;
     terminalFontSize?: number;
+    toolFontSize?: number;
     terminalShell?: string;
     terminalTheme?: string;
     diffTheme?: string;
@@ -109,6 +110,7 @@ export const api = {
     invoke<SettingsDto>("update_settings", {
       uiScale: opts.uiScale ?? null,
       terminalFontSize: opts.terminalFontSize ?? null,
+      toolFontSize: opts.toolFontSize ?? null,
       terminalShell: opts.terminalShell ?? null,
       terminalTheme: opts.terminalTheme ?? null,
       diffTheme: opts.diffTheme ?? null,

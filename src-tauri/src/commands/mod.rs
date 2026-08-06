@@ -121,6 +121,7 @@ pub fn update_settings(
     state: State<'_, AppState>,
     ui_scale: Option<f64>,
     terminal_font_size: Option<f64>,
+    tool_font_size: Option<f64>,
     terminal_shell: Option<String>,
     terminal_theme: Option<String>,
     diff_theme: Option<String>,
@@ -160,6 +161,7 @@ pub fn update_settings(
     let next = state.settings.update(crate::settings::SettingsPatch {
         ui_scale,
         terminal_font_size,
+        tool_font_size,
         terminal_shell,
         terminal_theme,
         diff_theme,

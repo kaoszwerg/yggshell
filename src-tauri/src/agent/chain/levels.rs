@@ -232,6 +232,7 @@ mod tests {
             outcome: Outcome::Done,
             kind: Kind::Normal,
             compacts: 0,
+            seconds_live: 0,
             reach,
             seconds: 0,
             steps: 1,

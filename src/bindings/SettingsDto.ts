@@ -22,6 +22,19 @@ ui_scale: number,
  */
 terminal_font_size: number, 
 /**
+ * How big the **tools** draw what they show — the file tree, the process list, the chain.
+ *
+ * **A third question, and it took a measurement to see that it was one.** `ui_scale` is native
+ * WebView zoom and moves everything at once; `terminal_font_size` is how much output fits in
+ * the emulator. Neither answers "how big is the panel beside it", and the tools had been
+ * borrowing the terminal's answer — which is wrong in both directions: a large terminal font
+ * for readability does not mean the sidebar should eat the window, and a small one for density
+ * does not mean the sidebar should become unreadable.
+ *
+ * Defaults to the terminal's size, so nothing moves on the update that introduces it.
+ */
+tool_font_size: number, 
+/**
  * The colour scheme a terminal uses, by id. Empty means the built-in HUD palette.
  */
 terminal_theme: string, 

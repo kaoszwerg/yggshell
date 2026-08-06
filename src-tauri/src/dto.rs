@@ -41,6 +41,18 @@ pub struct SettingsDto {
     /// emulator, so the WebView zoom cannot drag it along.
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: f64,
+    /// How big the **tools** draw what they show — the file tree, the process list, the chain.
+    ///
+    /// **A third question, and it took a measurement to see that it was one.** `ui_scale` is native
+    /// WebView zoom and moves everything at once; `terminal_font_size` is how much output fits in
+    /// the emulator. Neither answers "how big is the panel beside it", and the tools had been
+    /// borrowing the terminal's answer — which is wrong in both directions: a large terminal font
+    /// for readability does not mean the sidebar should eat the window, and a small one for density
+    /// does not mean the sidebar should become unreadable.
+    ///
+    /// Defaults to the terminal's size, so nothing moves on the update that introduces it.
+    #[serde(default = "default_tool_font_size")]
+    pub tool_font_size: f64,
     /// The colour scheme a terminal uses, by id. Empty means the built-in HUD palette.
     #[serde(default)]
     pub terminal_theme: String,
@@ -745,11 +757,18 @@ fn default_terminal_font_size() -> f64 {
     13.0
 }
 
+/// The same as the terminal's, on purpose: the update that introduced this control must not move a
+/// single pixel until somebody turns it.
+fn default_tool_font_size() -> f64 {
+    default_terminal_font_size()
+}
+
 impl Default for SettingsDto {
     fn default() -> Self {
         Self {
             ui_scale: default_ui_scale(),
             terminal_font_size: default_terminal_font_size(),
+            tool_font_size: default_tool_font_size(),
             terminal_shell: String::new(),
             terminal_theme: String::new(),
             diff_theme: String::new(),
@@ -808,6 +827,9 @@ mod tests {
     fn settings_roundtrip_through_json() {
         let s = SettingsDto {
             terminal_font_size: 13.0,
+            // Deliberately different from the terminal's, so a roundtrip that dropped it or
+            // conflated the two would fail rather than pass on a coincidence.
+            tool_font_size: 15.0,
             terminal_shell: "/bin/zsh".into(),
             terminal_theme: String::new(),
             diff_theme: String::new(),

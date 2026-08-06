@@ -7,7 +7,7 @@ import { useUiStore } from "../../store/ui";
 // it also outlives a test — a mount here syncs only if the previous test's mount did not just do it.
 import { resetSyncThrottle } from "../../hooks/useNotesSync";
 
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 vi.mock("../../hooks/useNoteProject", () => ({ useNoteProject: () => "github.com/a/b" }));
 vi.mock("../../api/notes", () => ({
   notesApi: {

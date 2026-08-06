@@ -145,7 +145,11 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                         .and_then(|i| i.get("file_path"))
                         .and_then(Value::as_str);
 
-                    let step = classify::classify(&name, command, file).at(timestamp.clone());
+                    // The status a `TaskUpdate` sets: a completion is an event in the trace, every
+                    // other move is bookkeeping (see `classify`).
+                    let status = input.and_then(|i| i.get("status")).and_then(Value::as_str);
+                    let step =
+                        classify::classify(&name, command, file, status).at(timestamp.clone());
                     if step.recognised {
                         out.understood += 1;
                     }
@@ -472,6 +476,13 @@ pub fn settle_standing(chain: &mut Chain, standing: model::Standing, waiting_for
     chain.waiting_for = waiting_for;
 
     if standing == model::Standing::Working {
+        // **The running step is timed against now, not against its own last recorded step.** A
+        // command that is still running writes nothing while it runs, so the span between recorded
+        // steps stops moving and the panel showed the same "< 1 min" for a twenty-minute build,
+        // jumping to the truth only once it finished.
+        if let Some(last) = chain.links.last_mut() {
+            last.seconds = last.seconds_live;
+        }
         return;
     }
     // Not working: the last link is not running, and predicting the next step for an agent nobody
@@ -485,7 +496,7 @@ pub fn settle_standing(chain: &mut Chain, standing: model::Standing, waiting_for
 }
 
 /// Seconds between an ISO timestamp and now, or 0 when it cannot be read.
-fn seconds_since(at: &str) -> u64 {
+pub(super) fn seconds_since(at: &str) -> u64 {
     chrono::DateTime::parse_from_rfc3339(at).map_or(0, |then| {
         (chrono::Utc::now() - then.with_timezone(&chrono::Utc))
             .num_seconds()
@@ -868,6 +879,7 @@ mod tests {
             kind: model::Kind::Normal,
             reach: None,
             seconds: 0,
+            seconds_live: 0,
             steps: 1,
             noise: 0,
             compacts: 0,

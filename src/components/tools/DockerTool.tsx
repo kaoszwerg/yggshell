@@ -5,7 +5,7 @@ import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
 import { dockerApi } from "../../api/docker";
 import { useT } from "../../hooks/useT";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { stateColour } from "../../lib/containerState";
 import type { ContainerInfo } from "../../bindings/ContainerInfo";
 import type { ContainerStats } from "../../bindings/ContainerStats";
@@ -32,7 +32,7 @@ const STATS_MS = 5_000;
  */
 export function DockerTool() {
   const t = useT();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const query = useQuery({
     queryKey: ["docker"],
     queryFn: () => dockerApi.containers(),
@@ -148,25 +148,26 @@ function Container({
       <Row
         label={`${container.name} — ${container.status}`}
         onActivate={() => setShowLogs((was) => !was)}
-        className="gap-2 px-2 font-mono text-[11px]"
+        // Content: the row takes the size the scroll region carries (rule:content-size).
+        className="gap-2 px-2 font-mono"
       >
         <span className={`shrink-0 ${stateColour(container.state)}`} aria-hidden>
           ●
         </span>
         <span className="text-fg min-w-0 flex-1 truncate">{container.name}</span>
         {container.ports.map((port) => (
-          <span key={port} className="text-green shrink-0 text-[10px]">
+          <span key={port} className="text-green shrink-0 text-[0.85em]">
             {port}
           </span>
         ))}
         <ScrollText size={10} className="text-dim/50 shrink-0" aria-hidden />
       </Row>
-      <p className="text-dim/70 truncate px-2 pb-0.5 pl-7 font-mono text-[10px]">
+      <p className="text-dim/70 truncate px-2 pb-0.5 pl-7 font-mono text-[0.85em]">
         {container.status} · {container.image}
       </p>
       {usage === null ? null : <Usage usage={usage} />}
       {showLogs ? (
-        <pre className="bg-elevated text-dim mx-2 mb-1 max-h-40 overflow-auto p-1 font-mono text-[10px] whitespace-pre-wrap">
+        <pre className="bg-elevated text-dim mx-2 mb-1 max-h-40 overflow-auto p-1 font-mono text-[0.85em] whitespace-pre-wrap">
           {logs.isPending ? t("docker.readingLogs") : (logs.data ?? "") || t("docker.noLogs")}
         </pre>
       ) : null}
@@ -190,16 +191,16 @@ function Usage({ usage }: { usage: ContainerStats }) {
   return (
     <div className="flex items-center gap-2 px-2 pb-1 pl-7">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="text-dim/70 shrink-0 font-mono text-[10px]">{t("docker.cpu")}</span>
+        <span className="text-dim/70 shrink-0 font-mono text-[0.85em]">{t("docker.cpu")}</span>
         <Meter percent={usage.cpu_percent} label={t("docker.cpu")} />
-        <span className="text-dim shrink-0 font-mono text-[10px] tabular-nums">
+        <span className="text-dim shrink-0 font-mono text-[0.85em] tabular-nums">
           {usage.cpu_percent.toFixed(0)}%
         </span>
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="text-dim/70 shrink-0 font-mono text-[10px]">{t("docker.memory")}</span>
+        <span className="text-dim/70 shrink-0 font-mono text-[0.85em]">{t("docker.memory")}</span>
         <Meter percent={usage.mem_percent} label={t("docker.memory")} />
-        <span className="text-dim shrink-0 font-mono text-[10px] tabular-nums">
+        <span className="text-dim shrink-0 font-mono text-[0.85em] tabular-nums">
           {humanSize(usage.mem_used)}
         </span>
       </div>
@@ -208,5 +209,5 @@ function Usage({ usage }: { usage: ContainerStats }) {
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim p-3 text-center font-mono text-[11px]">{children}</p>;
+  return <p className="text-dim p-3 text-center font-mono text-[0.9em]">{children}</p>;
 }

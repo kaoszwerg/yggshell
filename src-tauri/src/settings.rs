@@ -26,6 +26,7 @@ pub const MAX_TERMINAL_FONT_SIZE: f64 = 32.0;
 pub struct SettingsPatch {
     pub ui_scale: Option<f64>,
     pub terminal_font_size: Option<f64>,
+    pub tool_font_size: Option<f64>,
     pub terminal_shell: Option<String>,
     pub terminal_theme: Option<String>,
     pub diff_theme: Option<String>,
@@ -118,6 +119,11 @@ impl SettingsStore {
             if let Some(size) = patch.terminal_font_size {
                 guard.terminal_font_size =
                     size.clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
+            }
+            // The same bounds: a panel that cannot be read and a panel that eats the window are the
+            // same defect the terminal's limits exist to prevent.
+            if let Some(size) = patch.tool_font_size {
+                guard.tool_font_size = size.clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
             }
             if let Some(shell) = patch.terminal_shell {
                 guard.terminal_shell = shell.trim().to_string();
@@ -216,6 +222,14 @@ fn sanitize(mut s: SettingsDto) -> SettingsDto {
     }
     s.terminal_font_size = s
         .terminal_font_size
+        .clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
+    // A settings file written before this control existed has no value here, and serde's default
+    // gives it the terminal's — which is what keeps the update from moving anything.
+    if !s.tool_font_size.is_finite() {
+        s.tool_font_size = s.terminal_font_size;
+    }
+    s.tool_font_size = s
+        .tool_font_size
         .clamp(MIN_TERMINAL_FONT_SIZE, MAX_TERMINAL_FONT_SIZE);
     s
 }

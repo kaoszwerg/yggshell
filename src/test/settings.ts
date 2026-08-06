@@ -12,6 +12,7 @@ export function settings(over: Partial<SettingsDto> = {}): SettingsDto {
   return {
     ui_scale: 1,
     terminal_font_size: 13,
+    tool_font_size: 13,
     terminal_shell: "",
     terminal_theme: "",
     diff_theme: "",

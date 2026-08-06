@@ -18,3 +18,20 @@ export function useContentFontSize(): number {
   const settings = useSettings();
   return settings.data?.terminal_font_size ?? 13;
 }
+
+/**
+ * The size a **tool** draws its content at.
+ *
+ * **Its own setting, because it is its own question.** The tools borrowed the terminal's, and that
+ * is wrong in both directions: a large terminal font chosen for readability does not mean the
+ * sidebar should eat the window, and a small one chosen for density does not mean the panels beside
+ * it should become unreadable. It starts equal to the terminal's, so introducing the control moves
+ * nothing until somebody turns it.
+ *
+ * Not divided by `ui_scale`, for the same reason as above: this is ordinary DOM, and the WebView
+ * zoom already applies to it.
+ */
+export function useToolFontSize(): number {
+  const settings = useSettings();
+  return settings.data?.tool_font_size ?? settings.data?.terminal_font_size ?? 13;
+}

@@ -8,7 +8,7 @@ import { TextField } from "../ui/TextField";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { terminalApi } from "../../api/terminal";
 import { useTerminalStore } from "../../store/terminal";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { useT } from "../../hooks/useT";
 import type { TmuxSession } from "../../bindings/TmuxSession";
 
@@ -31,7 +31,7 @@ const POLL_MS = 4_000;
  */
 export function TmuxTool() {
   const t = useT();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const qc = useQueryClient();
   const panes = useTerminalStore((s) => s.panes);
   const openPane = useTerminalStore((s) => s.openPane);
@@ -141,13 +141,13 @@ export function TmuxTool() {
       </div>
 
       {end.error === null && rename.error === null ? null : (
-        <p className="text-danger px-2 py-1 font-mono text-[10px]">
+        <p className="text-danger px-2 py-1 font-mono text-[0.85em]">
           {String(end.error ?? rename.error)}
         </p>
       )}
 
       {endMany.data === undefined || endMany.data === 0 ? null : (
-        <p className="text-danger px-2 py-1 font-mono text-[10px]">
+        <p className="text-danger px-2 py-1 font-mono text-[0.85em]">
           {t("tmux.bulk.failed", { count: endMany.data })}
         </p>
       )}
@@ -281,7 +281,7 @@ function SessionRow({
       </Row>
       {/* What is in it. Names alone are useless after a crash — `yggshell`, `yggshell-2`,
           `yggshell-3` say nothing about which one holds the build. */}
-      <p className="text-dim/70 truncate px-2 pb-0.5 pl-7 font-mono text-[10px]">
+      <p className="text-dim/70 truncate px-2 pb-0.5 pl-7 font-mono text-[0.85em]">
         {session.command || t("tmux.idle")} · {t("tmux.windows", { count: session.windows })}
       </p>
     </div>
@@ -289,5 +289,5 @@ function SessionRow({
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim p-3 text-center font-mono text-[11px]">{children}</p>;
+  return <p className="text-dim p-3 text-center font-mono text-[0.9em]">{children}</p>;
 }

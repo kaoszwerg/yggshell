@@ -1,7 +1,7 @@
 import { Bot, Clock, GitBranch, Hash, Home } from "lucide-react";
 import { useAgentSession } from "../../hooks/useAgentSession";
 import { useNow } from "../../hooks/useNow";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { AttentionPanel } from "./AttentionPanel";
 import { UsageBars } from "./UsageBars";
@@ -30,7 +30,7 @@ export function AgentTool() {
   // Ticked rather than read in the render body: two calls in one render would disagree, and a
   // static value would leave "2m ago" saying that forever.
   const now = useNow(30_000);
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
 
   if (!ready) return <Empty>{t("agent.noSession")}</Empty>;
   if (isPending) return <Empty>{t("agent.reading")}</Empty>;
@@ -89,7 +89,7 @@ export function AgentTool() {
 
       <UsageBars />
 
-      <p className="text-dim/60 px-2 pb-2 font-mono text-[9px] leading-relaxed">
+      <p className="text-dim/60 px-2 pb-2 font-mono text-[0.8em] leading-relaxed">
         {t("agent.disclaimer")}
       </p>
 
@@ -98,7 +98,7 @@ export function AgentTool() {
           and this is decided per project. */}
       <Disclosure
         className="border-cyan/15 border-t"
-        summaryClassName="text-dim px-2 py-1 font-mono text-[10px] select-none"
+        summaryClassName="text-dim px-2 py-1 font-mono text-[0.85em] select-none"
         summary={<span>{t("env.title")}</span>}
       >
         <EnvironmentPanel />
@@ -119,7 +119,8 @@ function Fact({
   hint?: string;
 }) {
   return (
-    <div className="flex items-center gap-2 py-0.5 font-mono text-[11px]">
+    // Content: takes the size the panel carries, rather than overriding it (rule:content-size).
+    <div className="flex items-center gap-2 py-0.5 font-mono">
       <Icon size={11} className="text-dim shrink-0" aria-hidden />
       <dt className="text-dim min-w-0 flex-1 truncate">{label}</dt>
       <dd className="text-fg shrink-0 truncate" aria-label={hint}>
@@ -130,5 +131,5 @@ function Fact({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim p-3 text-center font-mono text-[11px]">{children}</p>;
+  return <p className="text-dim p-3 text-center font-mono text-[0.9em]">{children}</p>;
 }

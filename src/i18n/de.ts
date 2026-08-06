@@ -167,6 +167,12 @@ export const de: Translations = {
   "chain.copyRuleDone": "Kopiert. Füge sie dem Agenten ein, der hier arbeitet.",
   "chain.installGate": "Prüfung in dieses Repo legen",
   "chain.updateGate": "Prüfung in diesem Repo erneuern",
+  "adoption.title": "Einem Projekt die Arbeitskonvention geben",
+  "adoption.description":
+    "Kopiert Handbuch und Regel, fertig zum Einfügen beim Agenten eines anderen Repositories. Darin steht, wie er für das Ketten-Tool lesbar wird und wie er die work-levels.json dieses Projekts schreibt.",
+  "settings.interface.toolSize": "Tool-Inhalte",
+  "settings.interface.toolSizeHint":
+    "Wie groß die Tools zeichnen, was sie zeigen. Getrennt vom Terminal: eine große Terminalschrift heißt nicht, dass die Seitenleiste das Fenster auffressen soll.",
   "chain.gateStale": "Die Kopie der Prüfung in diesem Projekt ist veraltet",
   "chain.gateStaleHint":
     "Die App liefert eine neuere. In deinem Repo wird nichts angefasst, bevor du es sagst.",

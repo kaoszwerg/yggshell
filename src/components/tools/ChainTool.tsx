@@ -9,7 +9,7 @@ import type { Chain } from "../../bindings/Chain";
 import type { ChainLink } from "../../bindings/ChainLink";
 import type { Round } from "../../bindings/Round";
 import { useChain } from "../../hooks/useChain";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { useT } from "../../hooks/useT";
 import { Disclosure } from "../ui/Disclosure";
 import { Splitter } from "../ui/Splitter";
@@ -33,7 +33,7 @@ import { CHAIN_SPLIT_MAX, CHAIN_SPLIT_MIN, useUiStore } from "../../store/ui";
 export function ChainTool() {
   const t = useT();
   const { chain, isPending, isError, ready } = useChain();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const split = useUiStore((s) => s.chainSplit);
   const setSplit = useUiStore((s) => s.setChainSplit);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -175,7 +175,7 @@ export function ChainTool() {
  */
 function RestingRecord({ chain }: { chain: Chain }) {
   const t = useT();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   return (
     <div
       className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2"

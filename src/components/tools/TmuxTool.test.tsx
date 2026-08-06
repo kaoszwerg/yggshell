@@ -6,7 +6,7 @@ import { useTerminalStore } from "../../store/terminal";
 import { pane } from "../../test/panes";
 import type { TmuxSession } from "../../bindings/TmuxSession";
 
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 
 vi.mock("../../api/terminal", () => ({
   terminalApi: {

@@ -64,6 +64,7 @@ export function useUpdateSettings() {
     mutationFn: (opts: {
       uiScale?: number;
       terminalFontSize?: number;
+      toolFontSize?: number;
       terminalShell?: string;
       terminalTheme?: string;
       diffTheme?: string;

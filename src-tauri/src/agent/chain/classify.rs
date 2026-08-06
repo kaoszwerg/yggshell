@@ -143,8 +143,21 @@ pub fn program(segment: &str) -> Option<(&str, Vec<&str>)> {
 ///
 /// Pure and total: every input yields a `Step`, and an unrecognised one is a `probe`. That is what
 /// lets the caller count coverage honestly instead of silently dropping lines (ADR-PROJ-005 §1).
-pub fn classify(tool: &str, command: Option<&str>, path: Option<&str>) -> Step {
+pub fn classify(
+    tool: &str,
+    command: Option<&str>,
+    path: Option<&str>,
+    status: Option<&str>,
+) -> Step {
     match tool {
+        // **Finishing something is an event; starting to track it is not.** Every task tool used to
+        // be bookkeeping — invisible in the trace on the grounds that ticking a box is not work, and
+        // that the plan panel shows it anyway. But the plan hides itself the moment nothing is
+        // outstanding, so the completions vanished with it and the trace showed hours of work with
+        // no conclusions in it. Reported: *"du hast jetzt mehrfach update tool benutzt, das steht
+        // nie in den steps"*. A move to `in_progress` stays invisible: that one really is only
+        // bookkeeping, and 61 of them in a session would bury the trace.
+        "TaskUpdate" if status == Some("completed") => Step::new(Act::Plan, Some("done".into())),
         // Editing a file IS the making of the thing, whatever else the session is doing.
         "Edit" | "Write" | "NotebookEdit" => Step::new(Act::Edit, basename(path)),
         "Read" | "Glob" | "Grep" | "WebFetch" | "WebSearch" | "ToolSearch" => {
@@ -158,7 +171,16 @@ pub fn classify(tool: &str, command: Option<&str>, path: Option<&str>) -> Step {
             Step::new(Act::Plan, None).with_kind(Kind::Bookkeeping)
         }
         "Bash" => command.map_or_else(Step::unrecognised, classify_command),
-        // A tool this reader has never met. Counted honestly rather than passed off as a probe.
+        // **A tool this reader has never met — but it named a file, so it wrote one.**
+        //
+        // The list above is a list of *names*, and a harness release renames or adds one without
+        // asking: `MultiEdit` and `Update` have both existed. A name it does not know would have
+        // silently become "unrecognised", so a session spent editing would report a coverage figure
+        // it could not explain and a trace with nothing in it. The shape is the durable signal:
+        // everything that reads a file is named above, so an unknown tool carrying a `file_path` is
+        // one that changed it.
+        _ if path.is_some() => Step::new(Act::Edit, basename(path)),
+        // Neither a name nor a shape we know. Counted honestly rather than passed off as a probe.
         _ => Step::unrecognised(),
     }
 }
@@ -363,6 +385,15 @@ fn basename(path: Option<&str>) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// `classify` without a task status, which is every case but one.
+    ///
+    /// A wrapper rather than `None` repeated twenty-one times: the status matters to a single arm,
+    /// and threading it through every unrelated assertion would make each of them look like it had
+    /// an opinion about task bookkeeping.
+    fn classify(tool: &str, command: Option<&str>, path: Option<&str>) -> Step {
+        super::classify(tool, command, path, None)
+    }
+
     #[test]
     fn a_compound_command_is_split_where_a_shell_would_split_it() {
         // 47 % of the Bash calls in this repository contain one of these. Taking the first token
@@ -398,6 +429,37 @@ mod tests {
         assert!(program("TAO=~/.cargo/bin").is_none(), "a bare assignment");
         assert!(program("").is_none());
         assert!(program("   ").is_none());
+    }
+
+    #[test]
+    fn finishing_a_task_reaches_the_trace_but_starting_to_track_one_does_not() {
+        // Every task tool used to be bookkeeping, so the plan panel was the only place a completion
+        // showed — and that panel hides itself once nothing is outstanding, taking the conclusions
+        // with it. A move to `in_progress` stays invisible on purpose: 61 of those in one session
+        // would bury the work they are about.
+        let done = super::classify("TaskUpdate", None, None, Some("completed"));
+        assert_eq!(done.act, Act::Plan);
+        assert_eq!(done.kind, Kind::Normal, "a link of its own");
+
+        let started = super::classify("TaskUpdate", None, None, Some("in_progress"));
+        assert_eq!(started.kind, Kind::Bookkeeping, "never a link");
+        assert_eq!(
+            classify("TaskCreate", None, None).kind,
+            Kind::Bookkeeping,
+            "and neither is writing the list"
+        );
+    }
+
+    #[test]
+    fn an_unknown_tool_that_names_a_file_is_still_an_edit() {
+        // The list of editing tools is a list of NAMES, and a harness release adds or renames one
+        // without asking. Everything that only *reads* is named above, so an unknown tool carrying
+        // a file path is one that changed it — reported as "we covered edit, but update is
+        // missing".
+        let step = classify("Update", None, Some("/repo/src/main.rs"));
+        assert_eq!(step.act, Act::Edit);
+        assert_eq!(step.refinement.as_deref(), Some("main.rs"));
+        assert!(step.recognised);
     }
 
     #[test]

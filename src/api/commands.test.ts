@@ -69,6 +69,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 1.25,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: null,
         diffTheme: null,
@@ -97,6 +98,9 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: 18,
+        // Untouched by a terminal-size change: the two are separate settings, and this is the test
+        // that says so on the wire.
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: null,
         diffTheme: null,
@@ -120,6 +124,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: "nord",
         diffTheme: null,
@@ -143,6 +148,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: null,
         diffTheme: null,
@@ -166,6 +172,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: "/bin/bash",
         terminalTheme: null,
         diffTheme: null,
@@ -188,6 +195,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: null,
         diffTheme: null,
@@ -214,6 +222,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: null,
         diffTheme: null,
@@ -238,6 +247,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: null,
         terminalFontSize: null,
+        toolFontSize: null,
         terminalShell: null,
         terminalTheme: null,
         diffTheme: null,
@@ -263,6 +273,7 @@ describe("api", () => {
       await api.updateSettings({
         uiScale: 0.8,
         terminalFontSize: 20,
+        toolFontSize: 15,
         terminalShell: "/bin/zsh",
         terminalTheme: "nord",
         diffTheme: "solarized-light",
@@ -271,6 +282,7 @@ describe("api", () => {
       expect(mockInvoke).toHaveBeenCalledWith("update_settings", {
         uiScale: 0.8,
         terminalFontSize: 20,
+        toolFontSize: 15,
         terminalShell: "/bin/zsh",
         terminalTheme: "nord",
         diffTheme: "solarized-light",

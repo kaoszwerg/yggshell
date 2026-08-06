@@ -7,7 +7,9 @@ import { useUiStore } from "../../store/ui";
 import { pane } from "../../test/panes";
 import type { TerminalActivity } from "../../bindings/TerminalActivity";
 
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+// A fixed, unusual size so the assertion cannot pass by coincidence (rule:content-size). A tool
+// takes the TOOL size now, not the terminal's — they are separate settings.
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 vi.mock("../../api/terminal", () => ({ terminalApi: { activity: vi.fn() } }));
 
 import { terminalApi } from "../../api/terminal";

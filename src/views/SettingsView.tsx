@@ -9,6 +9,9 @@ import { MouseReference, ShortcutEditor } from "../components/settings/ShortcutE
 import { StatusBarEditor } from "../components/settings/StatusBarEditor";
 import { ThemeControls } from "../components/settings/ThemeControls";
 import { Button } from "../components/ui/Button";
+import { environmentApi } from "../api/environment";
+import { copyText } from "../lib/clipboard";
+import { useToastStore } from "../store/toast";
 import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
@@ -184,6 +187,9 @@ function InterfaceScale() {
   const settings = useSettings();
   const update = useUpdateSettings();
   const scale = settings.data?.ui_scale ?? 1;
+  // Falls back to the terminal's, exactly as the backend's default does: the release that
+  // introduced this control must not move a pixel until somebody turns it.
+  const toolSize = settings.data?.tool_font_size ?? settings.data?.terminal_font_size ?? 13;
   const t = useT();
 
   return (
@@ -207,6 +213,30 @@ function InterfaceScale() {
             </Button>
           ))}
         </div>
+      </div>
+
+      {/* **A third size, because there are three questions.** The scale above is native WebView zoom
+          and moves the whole window at once; the terminal's own size decides how much output fits.
+          Neither answers "how big is the panel beside the terminal" — and the tools had been
+          borrowing the terminal's answer, which is wrong in both directions: a large terminal font
+          chosen for readability does not mean the sidebar should eat the window, and a small one
+          chosen for density does not mean the panels should become unreadable. It sits here rather
+          than under Terminal because it is interface, not terminal. */}
+      <div className="mt-3 flex flex-col gap-1.5">
+        <span className="text-dim text-xs">{t("settings.interface.toolSize")}</span>
+        <div className="flex flex-wrap gap-1">
+          {FONT_SIZES.map((s) => (
+            <Button
+              key={s}
+              aria-pressed={Math.abs(toolSize - s) < 0.001}
+              active={Math.abs(toolSize - s) < 0.001}
+              onClick={() => update.mutate({ toolFontSize: s })}
+            >
+              {s}px
+            </Button>
+          ))}
+        </div>
+        <span className="text-dim text-xs">{t("settings.interface.toolSizeHint")}</span>
       </div>
     </HudPanel>
   );
@@ -360,12 +390,44 @@ function KeyboardSection() {
  * every block now carrying a heading, that misfiling became visible — the panel would have had to be
  * called "Git" inside a tab called "Terminal".
  */
+/**
+ * Hand the work-legibility convention to whatever project you are looking at.
+ *
+ * **Its permanent home, because the situational one disappears when it succeeds.** The Chain tool
+ * offers this where a repository is missing the convention — and stops offering it the moment
+ * nothing is missing, which took the copy button away exactly after somebody used the other one.
+ * Here it is always reachable and costs no space in the panel beside the terminal.
+ */
+function AdoptionCopy() {
+  const t = useT();
+  return (
+    <Button
+      accent="purple"
+      onClick={() => {
+        void environmentApi.adoptionRule().then(
+          (text) => {
+            copyText(text, "chain.copyRuleDone");
+          },
+          () => {
+            useToastStore.getState().notify("chain.adoptionFailed", "error");
+          },
+        );
+      }}
+    >
+      {t("chain.copyRule")}
+    </Button>
+  );
+}
+
 function ToolsSection() {
   const t = useT();
   return (
     <>
       <HudPanel accent="cyan" label={t("cli.title")} description={t("cli.description")}>
         <CliInstaller />
+      </HudPanel>
+      <HudPanel accent="purple" label={t("adoption.title")} description={t("adoption.description")}>
+        <AdoptionCopy />
       </HudPanel>
       <HudPanel
         accent="cyan"

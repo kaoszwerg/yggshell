@@ -7,7 +7,7 @@ import { useUiStore } from "../../store/ui";
 import { pane } from "../../test/panes";
 import type { DirEntry } from "../../bindings/DirEntry";
 
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 vi.mock("../../api/files", () => ({
   filesApi: { list: vi.fn(), reveal: vi.fn(), open: vi.fn(() => Promise.resolve()) },
 }));

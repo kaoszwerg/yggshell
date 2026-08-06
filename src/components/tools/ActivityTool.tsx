@@ -5,7 +5,7 @@ import { Row } from "../ui/Row";
 import { terminalApi } from "../../api/terminal";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import type { PortInfo } from "../../bindings/PortInfo";
 import { stateColour } from "../../lib/processState";
 import { copyText } from "../../lib/clipboard";
@@ -60,7 +60,7 @@ const REFRESH_MS = 5_000;
  */
 export function ActivityTool() {
   const t = useT();
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const sessionId = useTerminalStore(
     (s) => s.panes.find((p) => p.key === s.activeKey)?.sessionId ?? null,
   );
@@ -170,12 +170,13 @@ function Port({ port }: { port: PortInfo }) {
       onActivate={() => {
         copyText(String(port.port), "clipboard.port");
       }}
-      className="gap-2 px-2 font-mono text-[11px]"
+      // The row is content: it takes the size the scroll region carries, rather than overriding it.
+      className="gap-2 px-2 font-mono"
     >
       <Network size={11} className="text-green shrink-0" aria-hidden />
       <span className="text-fg w-12 shrink-0">{port.port}</span>
       <span className="text-dim min-w-0 flex-1 truncate">{port.command}</span>
-      <span className="text-dim/60 shrink-0 text-[10px]">{port.address}</span>
+      <span className="text-dim/60 shrink-0 text-[0.85em]">{port.address}</span>
     </Row>
   );
 }
@@ -189,7 +190,7 @@ function Process({ row }: { row: ProcessRow }) {
       onActivate={() => {
         copyText(String(process.pid), "clipboard.pid");
       }}
-      className="gap-2 pr-2 pl-2 font-mono text-[11px]"
+      className="gap-2 pr-2 pl-2 font-mono"
     >
       {/* Decorative: the tree it describes is already in the reading order and in each row's label,
           so a screen reader gains nothing from the rules and loses a column of noise.
@@ -225,15 +226,15 @@ function Process({ row }: { row: ProcessRow }) {
         {process.state.slice(0, 1)}
       </span>
       <span className="text-fg min-w-0 flex-1 truncate">{process.command}</span>
-      <span className="text-dim/60 shrink-0 text-[10px]">{process.elapsed}</span>
+      <span className="text-dim/60 shrink-0 text-[0.85em]">{process.elapsed}</span>
     </Row>
   );
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim px-2 py-1 font-mono text-[10px]">{children}</p>;
+  return <p className="text-dim px-2 py-1 font-mono text-[0.85em]">{children}</p>;
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim p-3 text-center font-mono text-[11px]">{children}</p>;
+  return <p className="text-dim p-3 text-center font-mono text-[0.9em]">{children}</p>;
 }

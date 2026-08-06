@@ -5,7 +5,7 @@ import { AgentTool } from "./AgentTool";
 import { useUiStore } from "../../store/ui";
 import type { AgentSession } from "../../bindings/AgentSession";
 
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 vi.mock("../../hooks/useAgentSession", () => ({ useAgentSession: vi.fn() }));
 vi.mock("../../hooks/useAgentAttention", () => ({ useAgentAttention: vi.fn() }));
 // The account panel rides along inside the tool — the two answer one question ("what agent is here")

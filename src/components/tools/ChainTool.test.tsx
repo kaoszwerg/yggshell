@@ -39,7 +39,7 @@ vi.mock("../../api/environment", () => ({
 
 vi.mock("../../hooks/useChain", () => ({ useChain: () => state }));
 // A fixed, unusual size so the assertion cannot pass by coincidence (rule:content-size).
-vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
+vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 
 const { ChainTool } = await import("./ChainTool");
 

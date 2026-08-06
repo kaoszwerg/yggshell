@@ -261,6 +261,15 @@ pub struct ChainLink {
     pub reach: Option<Reach>,
     /// Seconds from the first to the last step folded into this link.
     pub seconds: u64,
+    /// Seconds from this link's first step until **now**.
+    ///
+    /// **Only meaningful for the one that is running, and that is why it exists.** `seconds` spans
+    /// the recorded steps, and a command that is still running has written no step since it
+    /// started — so the running link's duration froze at whatever it was when the last step landed
+    /// and jumped to the truth only after the command finished. Reported: *"`running for < 1 min`
+    /// verändert sich nie während der run läuft"*. `settle_standing` swaps this in for the last
+    /// link while a turn is open; every other link keeps the span it actually measured.
+    pub seconds_live: u64,
     /// How many tool calls it took. Not shown as such; it is what `noise` is measured against.
     pub steps: u32,
     /// Probes folded into this link — reading a log after a test run belongs *inside* the test.

@@ -180,6 +180,12 @@ export const en = {
   "chain.copyRuleDone": "Copied. Paste it into the agent working here.",
   "chain.installGate": "Put the check in this repo",
   "chain.updateGate": "Update the check in this repo",
+  "adoption.title": "Hand a project the work convention",
+  "adoption.description":
+    "Copies the manual and the rule, ready to paste into the agent working in another repository. It explains how to be legible to the Chain tool and how to write that project's work-levels.json.",
+  "settings.interface.toolSize": "Tool content",
+  "settings.interface.toolSizeHint":
+    "How big the tools draw what they show. Separate from the terminal: a large terminal font does not mean the sidebar should eat the window.",
   "chain.gateStale": "This project's copy of the check is behind",
   "chain.gateStaleHint":
     "The app ships a newer one. Nothing in your repository is touched until you say so.",

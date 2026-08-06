@@ -9,7 +9,7 @@ import { filesApi } from "../../api/files";
 import { useTerminalStore } from "../../store/terminal";
 import { useUiStore } from "../../store/ui";
 import { useT } from "../../hooks/useT";
-import { useContentFontSize } from "../../hooks/useContentFontSize";
+import { useToolFontSize } from "../../hooks/useContentFontSize";
 import { isMarkdown } from "../../lib/highlight";
 import { humanSize } from "../../lib/humanSize";
 import { copyText } from "../../lib/clipboard";
@@ -77,7 +77,7 @@ export function FilesTool() {
   const t = useT();
   const root = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
   const showHidden = useUiStore((s) => s.filesShowHidden);
-  const fontSize = useContentFontSize();
+  const fontSize = useToolFontSize();
   const toggleHidden = useUiStore((s) => s.toggleFilesHidden);
 
   if (root === null) {
@@ -311,7 +311,10 @@ function Entry({
         <Row
           label={entry.name}
           onActivate={activate}
-          className="gap-1 font-mono text-[11px]"
+          // No size of its own: the row IS the content, so it takes the one the scroll region was
+          // given. A fixed value here was what made the whole setting inert — the region carried it
+          // and every row overrode it (rule:content-size).
+          className="gap-1 font-mono"
           style={{ paddingLeft: `${depth * INDENT + 4}px` }}
         >
           {entry.directory ? (
@@ -328,7 +331,7 @@ function Entry({
             {entry.name}
           </span>
           {entry.size === null || entry.size === undefined ? null : (
-            <span className="text-dim/60 shrink-0 text-[10px]">{humanSize(entry.size)}</span>
+            <span className="text-dim/60 shrink-0 text-[0.85em]">{humanSize(entry.size)}</span>
           )}
         </Row>
       </ContextMenu>
@@ -342,7 +345,7 @@ function Entry({
 function Note({ depth, children }: { depth: number; children: React.ReactNode }) {
   return (
     <p
-      className="text-dim py-1 font-mono text-[10px]"
+      className="text-dim py-1 font-mono text-[0.85em]"
       style={{ paddingLeft: `${depth * INDENT + 20}px` }}
     >
       {children}
@@ -351,5 +354,5 @@ function Note({ depth, children }: { depth: number; children: React.ReactNode })
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-dim p-3 text-center font-mono text-[11px]">{children}</p>;
+  return <p className="text-dim p-3 text-center font-mono text-[0.9em]">{children}</p>;
 }
