@@ -1,0 +1,1234 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kettenansicht — Tool-Entwurf</title>
+    <!--
+      The confirmed UI design for the Chain tool (docs/plans/chain-tool.md).
+      Kept in the repository rather than only as an artifact: the maintainer approved this exact
+      drawing ("genau das was ich will"), and an approved design that lives only behind a URL is a
+      design nobody can diff, review or hand to the next agent (ADR-CORE-003).
+
+      Open it in a browser. Every number in it was measured against the live lysisai-dsp session
+      a478f359 — see docs/plans/chain-tool.md § "What was measured".
+    -->
+    <style>
+      /* HUD design system (ADR-APP-020, rule:theming). Deliberately single-theme:
+         the HUD is dark — that is its identity, not an omission. */
+      :root {
+        --deep: #0a0a0f;
+        --surface: #12121a;
+        --elevated: #1a1a2e;
+        --fg: #e0e0e0;
+        --dim: #9aa4b2;
+        --cyan: #00e5ff;
+        --green: #00ff88;
+        --gold: #ffd700;
+        --purple: #b44aff;
+        --danger: #ff3366;
+        --mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+        --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        /* The setting this is all about: terminal_font_size (rule:content-size). */
+        --content: 12px;
+        /* The state marker, relative to whatever text it sits beside. */
+        --node: 0.75em;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(1100px 520px at 10% -12%, #1a1a2e55, #0a0a0f 68%), var(--deep);
+        color: var(--fg);
+        font-family: var(--sans);
+        line-height: 1.55;
+        padding: 2.5rem 1.5rem 5rem;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--cyan);
+        margin: 0 0 0.75rem;
+      }
+      h1 {
+        font-size: clamp(1.5rem, 3.2vw, 2.125rem);
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        margin: 0 0 0.6rem;
+        text-wrap: balance;
+      }
+      .lede {
+        color: var(--dim);
+        max-width: 64ch;
+        margin: 0;
+        font-size: 0.9375rem;
+      }
+      .lede strong {
+        color: var(--fg);
+        font-weight: 500;
+      }
+
+      .meta {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        color: var(--dim);
+        border-left: 2px solid #00e5ff33;
+        padding-left: 0.75rem;
+        margin-top: 1.25rem;
+        max-width: 64ch;
+      }
+      .meta b {
+        color: var(--green);
+        font-weight: 500;
+      }
+
+      .sizer {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        margin-top: 1.5rem;
+        max-width: 340px;
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        color: var(--dim);
+        letter-spacing: 0.06em;
+      }
+      .sizer input {
+        flex: 1;
+        accent-color: var(--cyan);
+      }
+      .sizer output {
+        color: var(--cyan);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Stage ────────────────────────────────────────────────── */
+      .stage {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        margin-top: 2.25rem;
+        align-items: flex-start;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+      .caption {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .caption em {
+        color: var(--fg);
+        font-style: normal;
+      }
+
+      /* The tool at true sidebar width. */
+      .tool {
+        width: 340px;
+        max-width: 100%;
+        background: var(--surface);
+        border: 1px solid #00e5ff26;
+        clip-path: polygon(
+          0 0,
+          calc(100% - 10px) 0,
+          100% 10px,
+          100% 100%,
+          10px 100%,
+          0 calc(100% - 10px)
+        );
+        display: flex;
+        flex-direction: column;
+        max-height: 640px;
+      }
+
+      .tool-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.7rem;
+        border-bottom: 1px solid #00e5ff1f;
+        flex-shrink: 0;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--cyan);
+        box-shadow: 0 0 8px var(--cyan);
+        animation: breathe 2.4s ease-in-out infinite;
+        flex-shrink: 0;
+      }
+      @keyframes breathe {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .tool-head .name {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--fg);
+        flex: 1;
+      }
+      .tool-head .clock {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        color: var(--dim);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Header line: what is running NOW. */
+      .now {
+        padding: 0.55rem 0.7rem;
+        border-bottom: 1px solid #ffffff0f;
+        background: linear-gradient(90deg, #00e5ff0e, transparent 72%);
+        flex-shrink: 0;
+      }
+      .now .what {
+        font-family: var(--mono);
+        font-size: 0.8125rem;
+        color: var(--cyan);
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+      }
+      .now .sub {
+        color: var(--dim);
+        font-size: 0.75rem;
+      }
+      .now .since {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        color: var(--dim);
+        margin-top: 0.1rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* The goal — present only when the agent keeps a plan. */
+      .goal {
+        padding: 0.55rem 0.7rem;
+        border-bottom: 1px solid #ffffff0f;
+        flex-shrink: 0;
+        font-family: var(--mono);
+      }
+      .goal .label {
+        font-size: 0.5625rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--purple);
+        margin-bottom: 0.15rem;
+      }
+      .goal .text {
+        font-size: 0.75rem;
+        color: var(--fg);
+        line-height: 1.4;
+      }
+      .bar {
+        display: flex;
+        gap: 2px;
+        margin-top: 0.4rem;
+        align-items: center;
+      }
+      .bar i {
+        height: 4px;
+        flex: 1;
+        background: #ffffff14;
+        clip-path: polygon(0 0, calc(100% - 2px) 0, 100% 100%, 2px 100%);
+      }
+      .bar i.on {
+        background: var(--green);
+        box-shadow: 0 0 5px #00ff8866;
+      }
+      .bar i.now {
+        background: var(--cyan);
+        box-shadow: 0 0 6px var(--cyan);
+        animation: breathe 2.4s ease-in-out infinite;
+      }
+      .bar span {
+        font-size: 0.625rem;
+        color: var(--dim);
+        margin-left: 0.35rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* The scrolling region — the font size sits here, ONCE. */
+      .chain {
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 0.7rem 0.7rem 1rem;
+        font-family: var(--mono);
+        font-size: var(--content);
+        flex: 1;
+        scrollbar-width: thin;
+        scrollbar-color: #ffffff1f transparent;
+      }
+
+      .section-label {
+        font-size: 0.72em;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #9aa4b280;
+        margin: 0.2em 0 0.6em;
+      }
+      .section-label.second {
+        margin-top: 1.1em;
+        padding-top: 0.8em;
+        border-top: 1px solid #ffffff0f;
+      }
+
+      /* ── One chain link ───────────────────────────────────────── */
+      .link {
+        display: grid;
+        /* Relative, not px: the state marker is CONTENT and must grow with the text
+           (rule:content-size). Fixed at 9px it would shrink by 40 % relative to the
+           text at terminal_font_size 20 — the carrier of the meaning becoming the
+           smallest thing on screen is the inversion that rule exists to prevent. */
+        grid-template-columns: calc(var(--node) + 0.45em) 1fr;
+        gap: 0 0.55em;
+      }
+      .rail {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        padding-top: 0.3em;
+      }
+      .rail::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: -0.9em;
+        width: 1px;
+        background: #ffffff1a;
+      }
+      .link:last-child .rail::before {
+        display: none;
+      }
+      .node {
+        width: var(--node);
+        height: var(--node);
+        background: var(--dim);
+        position: relative;
+        z-index: 1;
+        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+      }
+      .body {
+        padding-bottom: 0.85em;
+        min-width: 0;
+      }
+      .title {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4em;
+      }
+      .kind {
+        letter-spacing: 0.09em;
+        font-size: 0.95em;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sub {
+        color: var(--dim);
+        font-size: 0.85em;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .dur {
+        color: var(--dim);
+        font-size: 0.8em;
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+      }
+
+      /* States — shape AND colour, never colour alone. */
+      .done .node {
+        background: var(--green);
+        box-shadow: 0 0 6px #00ff8880;
+      }
+      .done .kind {
+        color: var(--green);
+      }
+      .failed .node {
+        background: var(--danger);
+        box-shadow: 0 0 6px #ff336680;
+        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+      }
+      .failed .kind {
+        color: var(--danger);
+      }
+      .live .node {
+        background: var(--cyan);
+        box-shadow: 0 0 10px var(--cyan);
+        animation: breathe 2.4s ease-in-out infinite;
+      }
+      .live .kind {
+        color: var(--cyan);
+      }
+      .halt .node {
+        background: var(--gold);
+        box-shadow: 0 0 10px var(--gold);
+        clip-path: none;
+      }
+      .halt .kind {
+        color: var(--gold);
+      }
+      .todo .node {
+        background: transparent;
+        border: 1px solid var(--dim);
+      }
+      .todo .kind {
+        color: var(--dim);
+      }
+      /* Blocked: waiting on another step. */
+      .blocked .node {
+        background: transparent;
+        border: 1px solid var(--danger);
+      }
+      .blocked .kind,
+      .blocked .sub {
+        color: #ff336699;
+      }
+      /* Expectation from the trace — explicitly NOT a plan. */
+      .ahead .node {
+        background: transparent;
+        border: 1px dashed var(--dim);
+      }
+      .ahead .kind,
+      .ahead .sub {
+        color: #9aa4b290;
+      }
+      .ahead .rail::before {
+        background: repeating-linear-gradient(to bottom, #ffffff1a 0 3px, transparent 3px 7px);
+      }
+
+      /* ── Cycle: collapsed, with a counter ─────────────────────── */
+      .cycle-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4em;
+        width: 100%;
+        background: none;
+        border: 0;
+        padding: 0;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+      }
+      summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      summary::-webkit-details-marker {
+        display: none;
+      }
+      summary:focus-visible {
+        outline: 1px solid var(--cyan);
+        outline-offset: 2px;
+      }
+      .count {
+        font-size: 0.8em;
+        color: var(--deep);
+        background: var(--gold);
+        padding: 0 0.4em;
+        font-weight: 700;
+        flex-shrink: 0;
+        clip-path: polygon(
+          0 0,
+          calc(100% - 4px) 0,
+          100% 4px,
+          100% 100%,
+          4px 100%,
+          0 calc(100% - 4px)
+        );
+      }
+      /* A cycle is a circle — that is its SHAPE, and it says "this was iterated".
+         How it ended is a second statement and must not be swallowed by the first.
+         `.cycle` and `.failed` have equal specificity, so the later rule won and a failed
+         cycle rendered identically to a successful one — the one thing the cycle exists
+         to say was invisible. The state rules therefore live here, more specific, rather
+         than relying on source order. */
+      .cycle .node {
+        clip-path: none;
+        border-radius: 50%;
+        border: 0.16em solid var(--gold);
+        background: var(--surface);
+        box-shadow: 0 0 7px #ffd70066;
+      }
+      .cycle .kind {
+        color: var(--gold);
+      }
+      /* Outcome: ring colour AND fill — the filled core carries it without colour too. */
+      .cycle.done .node {
+        border-color: var(--green);
+        box-shadow: 0 0 7px #00ff8866;
+      }
+      .cycle.done .kind {
+        color: var(--green);
+      }
+      .cycle.failed .node {
+        border-color: var(--danger);
+        background: var(--danger);
+        box-shadow: 0 0 7px #ff336680;
+      }
+      .cycle.failed .kind {
+        color: var(--danger);
+      }
+      .cycle.live .node {
+        border-color: var(--cyan);
+        box-shadow: 0 0 10px var(--cyan);
+        animation: breathe 2.4s ease-in-out infinite;
+      }
+      .cycle.live .kind {
+        color: var(--cyan);
+      }
+      .chev {
+        color: var(--dim);
+        font-size: 0.8em;
+        transition: transform 0.15s;
+        flex-shrink: 0;
+      }
+      details[open] .chev {
+        transform: rotate(90deg);
+      }
+      .inner {
+        margin-top: 0.35em;
+        padding-left: 0.6em;
+        border-left: 1px solid #ffd7002e;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15em;
+      }
+      .iter {
+        display: flex;
+        gap: 0.5em;
+        font-size: 0.85em;
+        color: var(--dim);
+      }
+      .iter .n {
+        color: #ffd700aa;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .iter .f {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .noise {
+        font-size: 0.78em;
+        color: #9aa4b275;
+        margin-top: 0.1em;
+      }
+
+      /* The trace, indented under the plan step it belongs to. */
+      .trace {
+        margin-top: 0.4em;
+        padding-left: 0.5em;
+        border-left: 1px solid #00e5ff26;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+      }
+
+      .halt-banner {
+        margin: 0 0 0.9em;
+        padding: 0.5em 0.6em;
+        background: #ffd7000f;
+        border-left: 2px solid var(--gold);
+        color: var(--gold);
+        font-size: 0.9em;
+      }
+      .halt-banner .hint {
+        color: var(--dim);
+        font-size: 0.85em;
+        margin-top: 0.2em;
+      }
+      .halt-banner code {
+        color: var(--gold);
+        background: #ffd7001a;
+        padding: 0 0.25em;
+      }
+
+      /* No plan: say so, rather than being empty. */
+      .noplan {
+        margin: 0 0 0.9em;
+        padding: 0.55em 0.6em;
+        border: 1px dashed #9aa4b240;
+        color: var(--dim);
+        font-size: 0.88em;
+      }
+      .noplan b {
+        color: var(--fg);
+        font-weight: 500;
+        display: block;
+        margin-bottom: 0.2em;
+      }
+
+      .tool-foot {
+        border-top: 1px solid #ffffff0f;
+        padding: 0.45rem 0.7rem;
+        display: flex;
+        gap: 0.85rem;
+        font-family: var(--mono);
+        font-size: 0.625rem;
+        color: var(--dim);
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .tool-foot b {
+        color: var(--fg);
+        font-weight: 500;
+      }
+
+      /* ── Explanation cards ────────────────────────────────────── */
+      .notes {
+        display: grid;
+        gap: 1.25rem;
+        margin-top: 2.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      }
+      .note {
+        background: #12121a99;
+        border: 1px solid #ffffff0f;
+        padding: 0.95rem 1.05rem;
+        clip-path: polygon(
+          0 0,
+          calc(100% - 8px) 0,
+          100% 8px,
+          100% 100%,
+          8px 100%,
+          0 calc(100% - 8px)
+        );
+      }
+      .note h3 {
+        font-family: var(--mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--cyan);
+        margin: 0 0 0.55rem;
+      }
+      .note.warn h3 {
+        color: var(--gold);
+      }
+      .note p {
+        margin: 0 0 0.6rem;
+        font-size: 0.8125rem;
+        color: var(--dim);
+      }
+      .note p:last-child {
+        margin-bottom: 0;
+      }
+      .note strong {
+        color: var(--fg);
+        font-weight: 500;
+      }
+      .note code {
+        font-family: var(--mono);
+        font-size: 0.9em;
+        color: var(--fg);
+        background: #ffffff0a;
+        padding: 0.05em 0.3em;
+      }
+      .note ol {
+        margin: 0 0 0.6rem;
+        padding-left: 1.1rem;
+        font-size: 0.8125rem;
+        color: var(--dim);
+      }
+      .note li {
+        margin-bottom: 0.45rem;
+      }
+      .note li b {
+        color: var(--fg);
+        font-weight: 500;
+      }
+
+      .legend {
+        display: grid;
+        gap: 0.42rem;
+      }
+      .legend-row {
+        display: grid;
+        grid-template-columns: 16px 1fr;
+        gap: 0.6rem;
+        align-items: center;
+        font-size: 0.8125rem;
+        color: var(--dim);
+      }
+      .legend-row b {
+        color: var(--fg);
+        font-weight: 500;
+      }
+      .swatch {
+        width: 10px;
+        height: 10px;
+        justify-self: center;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <p class="eyebrow">YggShell · Sidebar-Tool · Entwurf</p>
+      <h1>Die Kette — sein Plan, und was daraus tatsächlich geworden ist</h1>
+      <p class="lede">
+        Zwei Ebenen über einer Ansicht: <strong>der Plan</strong> sagt, wohin es geht — er kommt aus
+        dem Task-Store des Agenten. <strong>Die Spur</strong> sagt, wie es läuft — sie kommt aus
+        seinem Transkript, das er ohnehin schreibt, und braucht von ihm nichts. Fehlt der Plan,
+        bleibt die Spur. Fehlt die Spur nie.
+      </p>
+
+      <p class="meta">
+        Jede Zahl unten stammt aus <b>a478f359</b> — der lysisai-dsp-Session, die während dieses
+        Entwurfs seit 4:16 h lief: <b>381 Schritte</b>, verdichtet zu <b>18 Kettengliedern</b>,
+        davon <b>50 % Rauschen</b> (Lesen, Suchen, Statusabfragen), das in seinen Block einklappt
+        statt die Kette zu fluten.
+      </p>
+
+      <div class="sizer">
+        <label for="fs">Terminal-Textgröße</label>
+        <input id="fs" type="range" min="10" max="20" value="12" step="1" />
+        <output id="fsv">12px</output>
+      </div>
+
+      <div class="stage">
+        <!-- ══════════ 1. Mit Plan ══════════ -->
+        <div class="col">
+          <p class="caption"><em>Der Regelfall</em> — Plan + Spur</p>
+          <div class="tool">
+            <div class="tool-head">
+              <span class="dot"></span><span class="name">Kette</span
+              ><span class="clock">4:16 h</span>
+            </div>
+
+            <div class="now">
+              <div class="what">TEST <span class="sub">core</span></div>
+              <div class="since">läuft seit 2 min · 3. Anlauf</div>
+            </div>
+
+            <div class="goal">
+              <div class="label">Ziel</div>
+              <div class="text">R6-Benutzerrollen bis live</div>
+              <div class="bar">
+                <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+                <i class="now"></i><i></i><i></i><i></i>
+                <span>4/8</span>
+              </div>
+            </div>
+
+            <div class="chain">
+              <div class="section-label">Plan</div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">Rollen-API korrigieren</span><span class="dur">41 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">Frontend nachziehen</span><span class="dur">22 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">Masken-Prüfung grün</span><span class="dur">18 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">PR nach next</span><span class="dur">1 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- The running plan step carries its trace with it. -->
+              <div class="link live">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">Backend-Suite grün</span><span class="dur">38 min</span>
+                  </div>
+
+                  <div class="trace">
+                    <div class="link cycle failed">
+                      <div class="rail"><div class="node"></div></div>
+                      <div class="body">
+                        <details open>
+                          <summary>
+                            <span class="cycle-head">
+                              <span class="chev">›</span>
+                              <span class="kind">TEST ⇄ FIX</span>
+                              <span class="count">16×</span>
+                              <span class="dur">38 min</span>
+                            </span>
+                          </summary>
+                          <div class="inner">
+                            <div class="iter">
+                              <span class="n">1–5</span>
+                              <span class="f">test_r6_benutzer_rolle.py</span>
+                            </div>
+                            <div class="iter">
+                              <span class="n">6–11</span>
+                              <span class="f">UserManagement.jsx</span>
+                            </div>
+                            <div class="iter">
+                              <span class="n">12–16</span>
+                              <span class="f">de.json</span>
+                            </div>
+                          </div>
+                        </details>
+                        <div class="noise">+ 35 Abfragen</div>
+                      </div>
+                    </div>
+
+                    <div class="link live">
+                      <div class="rail"><div class="node"></div></div>
+                      <div class="body">
+                        <div class="title">
+                          <span class="kind">TEST</span><span class="sub">core</span>
+                          <span class="dur">2 min</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link todo">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title"><span class="kind">Calendar-Suite grün</span></div>
+                </div>
+              </div>
+
+              <div class="link blocked">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">Auf next deployen</span>
+                    <span class="sub">wartet auf Suiten</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link todo">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title"><span class="kind">Smoke-Test live</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tool-foot">
+              <span><b>4</b>/8 Schritte</span><span><b>381</b> Aufrufe</span
+              ><span><b>7</b> Commits</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════ 2. Halt ══════════ -->
+        <div class="col">
+          <p class="caption"><em>Halt</em> — er wartet auf dich</p>
+          <div class="tool">
+            <div class="tool-head">
+              <span
+                class="dot"
+                style="background: var(--gold); box-shadow: 0 0 8px var(--gold)"
+              ></span>
+              <span class="name">Kette</span><span class="clock">4:16 h</span>
+            </div>
+
+            <div class="now" style="background: linear-gradient(90deg, #ffd7001f, transparent 72%)">
+              <div class="what" style="color: var(--gold)">
+                HALT <span class="sub">Berechtigung</span>
+              </div>
+              <div class="since">seit 3 min · die Kette steht</div>
+            </div>
+
+            <div class="goal">
+              <div class="label">Ziel</div>
+              <div class="text">R6-Benutzerrollen bis live</div>
+              <div class="bar">
+                <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+                <i class="on"></i><i class="on"></i><i></i><i></i>
+                <span>6/8</span>
+              </div>
+            </div>
+
+            <div class="chain">
+              <div class="halt-banner">
+                Bash: <code>gh pr merge --squash</code>
+                <div class="hint">Antworten kannst du rechts im Terminal.</div>
+              </div>
+
+              <div class="section-label">Plan</div>
+
+              <div class="link halt">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">PR zusammenführen</span><span class="dur">3 min</span>
+                  </div>
+                  <div class="noise">blockiert seit 3 min</div>
+                </div>
+              </div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">Calendar-Suite grün</span><span class="dur">16 min</span>
+                  </div>
+                  <div class="trace">
+                    <div class="link cycle done">
+                      <div class="rail"><div class="node"></div></div>
+                      <div class="body">
+                        <details>
+                          <summary>
+                            <span class="cycle-head">
+                              <span class="chev">›</span><span class="kind">GATE ⇄ TEST</span>
+                              <span class="count">3×</span><span class="dur">16 min</span>
+                            </span>
+                          </summary>
+                          <div class="inner">
+                            <div class="iter">
+                              <span class="n">1</span><span class="f">lint rot</span>
+                            </div>
+                            <div class="iter">
+                              <span class="n">2</span><span class="f">e2e rot</span>
+                            </div>
+                            <div class="iter">
+                              <span class="n">3</span><span class="f">beide grün</span>
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link todo">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title"><span class="kind">Auf next deployen</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tool-foot">
+              <span style="color: var(--gold)"><b style="color: var(--gold)">wartet</b> 3 min</span>
+              <span><b>6</b>/8 Schritte</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════ 3. Ohne Plan ══════════ -->
+        <div class="col">
+          <p class="caption"><em>Ohne Plan</em> — der Rückfall</p>
+          <div class="tool">
+            <div class="tool-head">
+              <span class="dot"></span><span class="name">Kette</span
+              ><span class="clock">4:16 h</span>
+            </div>
+
+            <div class="now">
+              <div class="what">TEST <span class="sub">core</span></div>
+              <div class="since">läuft seit 2 min · 3. Anlauf</div>
+            </div>
+
+            <div class="chain">
+              <div class="noplan">
+                <b>Diese Sitzung führt keinen Plan.</b>
+                Ziel und kommende Schritte sind unbekannt — unten steht, was tatsächlich geschah.
+              </div>
+
+              <div class="section-label">Spur</div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">PR</span><span class="sub">nach next</span
+                    ><span class="dur">0 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">PUSH</span><span class="sub">feature-branch</span
+                    ><span class="dur">0 min</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="link cycle done">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <details>
+                    <summary>
+                      <span class="cycle-head">
+                        <span class="chev">›</span><span class="kind">FIX ⇄ TEST</span>
+                        <span class="count">9×</span><span class="dur">18 min</span>
+                      </span>
+                    </summary>
+                    <div class="inner">
+                      <div class="iter">
+                        <span class="n">1–3</span>
+                        <span class="f">masken-vollpruefung.spec.js</span>
+                      </div>
+                      <div class="iter">
+                        <span class="n">4–6</span><span class="f">masken-inventar.js</span>
+                      </div>
+                      <div class="iter">
+                        <span class="n">7–9</span><span class="f">CHANGELOG.md</span>
+                      </div>
+                    </div>
+                  </details>
+                  <div class="noise">+ 7 Abfragen</div>
+                </div>
+              </div>
+
+              <div class="link cycle failed">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <details>
+                    <summary>
+                      <span class="cycle-head">
+                        <span class="chev">›</span><span class="kind">TEST ⇄ FIX</span>
+                        <span class="count">16×</span><span class="dur">38 min</span>
+                      </span>
+                    </summary>
+                    <div class="inner">
+                      <div class="iter">
+                        <span class="n">1–5</span>
+                        <span class="f">test_r6_benutzer_rolle.py</span>
+                      </div>
+                      <div class="iter">
+                        <span class="n">6–11</span><span class="f">UserManagement.jsx</span>
+                      </div>
+                      <div class="iter">
+                        <span class="n">12–16</span><span class="f">de.json</span>
+                      </div>
+                    </div>
+                  </details>
+                  <div class="noise">+ 35 Abfragen</div>
+                </div>
+              </div>
+
+              <div class="link live">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">TEST</span><span class="sub">core</span
+                    ><span class="dur">2 min</span>
+                  </div>
+                  <div class="noise">3 Abfragen</div>
+                </div>
+              </div>
+
+              <div class="link ahead">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">GATE</span><span class="sub">erwartet · 4× gesehen</span>
+                  </div>
+                </div>
+              </div>
+              <div class="link ahead">
+                <div class="rail"><div class="node"></div></div>
+                <div class="body">
+                  <div class="title">
+                    <span class="kind">COMMIT</span><span class="sub">erwartet · 7× gesehen</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tool-foot">
+              <span><b>18</b> Glieder</span><span><b>381</b> Aufrufe</span><span>kein Plan</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ Erklärung ══════════ -->
+      <div class="notes">
+        <div class="note">
+          <h3>Wie man es liest</h3>
+          <div class="legend">
+            <div class="legend-row">
+              <span
+                class="swatch"
+                style="
+                  background: var(--cyan);
+                  box-shadow: 0 0 8px var(--cyan);
+                  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+                "
+              ></span>
+              <span><b>Läuft</b> — pulsiert, steht auch ganz oben</span>
+            </div>
+            <div class="legend-row">
+              <span
+                class="swatch"
+                style="
+                  background: var(--green);
+                  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+                "
+              ></span>
+              <span><b>Durch</b> — bleibt stehen, die Kette wächst</span>
+            </div>
+            <div class="legend-row">
+              <span
+                class="swatch"
+                style="background: var(--danger); clip-path: polygon(50% 0, 100% 100%, 0 100%)"
+              ></span>
+              <span><b>War rot</b> — Dreieck, nicht nur Farbe</span>
+            </div>
+            <div class="legend-row">
+              <span
+                class="swatch"
+                style="
+                  border: 2px solid var(--gold);
+                  border-radius: 50%;
+                  background: var(--surface);
+                "
+              ></span>
+              <span><b>Zyklus</b> — Kreis mit Zähler, klappt auf</span>
+            </div>
+            <div class="legend-row">
+              <span class="swatch" style="background: var(--gold)"></span>
+              <span><b>Halt</b> — Quadrat, wartet auf dich</span>
+            </div>
+            <div class="legend-row">
+              <span class="swatch" style="border: 1px solid var(--danger)"></span>
+              <span><b>Blockiert</b> — hängt an einem anderen Schritt</span>
+            </div>
+            <div class="legend-row">
+              <span class="swatch" style="border: 1px dashed var(--dim)"></span>
+              <span><b>Erwartet</b> — aus der Spur, <em>kein</em> Plan</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="note">
+          <h3>Der Zyklus ist das eigentliche Feature</h3>
+          <p>
+            <strong>TEST ⇄ FIX, 16×</strong> ist die eine Zahl, die sagt, dass etwas nicht vorangeht
+            — und sie steht da, ohne dass du aufklappst. Zugeklappt ist ein Zyklus
+            <em>ein</em> Glied; aufgeklappt zeigt er, woran jede Runde ging.
+          </p>
+          <p>
+            Rot oder grün wird nicht aus Exit-Codes gelesen: gemessen trugen nur
+            <code>6 von 381</code> Schritten einen, weil der Agent durch
+            <code>| tail -60</code> pipet. Es steht in der <strong>Folgekante</strong> — auf einen
+            Test folgte ein Fix, also war der Test rot. Sprachunabhängig und unabhängig vom
+            Test-Framework.
+          </p>
+        </div>
+
+        <div class="note warn">
+          <h3>Damit der Plan wirklich da ist</h3>
+          <p>
+            Drei Stufen, von sanft nach hart. Keine davon liegt im Gedächtnis des Agenten — alle
+            drei wirken von außen:
+          </p>
+          <ol>
+            <li>
+              <b>Frischer Anstoß pro Turn.</b> Ein <code>UserPromptSubmit</code>-Hook hängt einen
+              Satz an jede Eingabe — nur wenn kein Plan existiert. Wirkt, weil er <em>frisch</em>
+              ist, während CLAUDE.md nach zwei Stunden weit hinten liegt.
+            </li>
+            <li>
+              <b>Sperre vor dem ersten Schreibzugriff.</b> Ein <code>PreToolUse</code>-Hook
+              antwortet <code>deny</code>, wenn Edit/Write ohne Plan kommt. Das ist der Moment, in
+              dem aus Nachdenken Arbeit wird — einmal pro Sitzung.
+            </li>
+            <li>
+              <b>Netz am Turn-Ende.</b> <code>Stop</code> mit Exit&nbsp;2 für Sitzungen, die nur
+              lesen; <code>stop_hook_active</code> verhindert die Endlosschleife.
+            </li>
+          </ol>
+          <p>
+            Der Hook prüft <strong>Existenz, nie Qualität</strong> — ein ratendes Gate wäre
+            schlimmer als keines.
+          </p>
+        </div>
+
+        <div class="note">
+          <h3>Was das Tool nicht behauptet</h3>
+          <p>
+            Ohne Plan gibt es <strong>keine Restzeit und kein Prozent</strong>. Die gestrichelten
+            Glieder sind Blöcke, die in dieser Sitzung schon liefen und nach ihrem Muster wieder
+            anstehen — eine Beobachtung, keine Planung. Deshalb sehen sie anders aus.
+          </p>
+          <p>
+            Der Regler oben ist kein Spielzeug: die Kette hängt an <code>terminal_font_size</code>,
+            jede Größe darin ist relativ (<code>rule:content-size</code>). Zieh ihn — der Inhalt
+            skaliert, die Kopfzeile des Tools nicht.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const fs = document.getElementById("fs");
+      const out = document.getElementById("fsv");
+      fs.addEventListener("input", () => {
+        document.documentElement.style.setProperty("--content", fs.value + "px");
+        out.textContent = fs.value + "px";
+      });
+    </script>
+  </body>
+</html>

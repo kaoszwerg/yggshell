@@ -1,0 +1,82 @@
+{
+  "$comment": "What can be run in this repository, and what each thing means (rule:work-legibility). Read by the Chain tool; useful to a person either way. `reaches` is mandatory whenever the target is not `local`. NOTE: many entries share `verify/unit@local` — that is correct, because the axis says how DEEP a run reaches, not what kind it is. The kind (lint, tests, typecheck, audit) comes from the command itself and is shown as the subtype; the declaration does not have to repeat it.",
+  "version": 1,
+  "areas": ["terminal", "tools", "ui", "governance", "shell"],
+  "entrypoints": [
+    { "run": "npm run test", "is": "verify/unit@local" },
+    { "run": "npm run test:coverage", "is": "verify/unit@local" },
+    { "run": "npm run rust:test", "is": "verify/unit@local" },
+    { "run": "npm run typecheck", "is": "verify/unit@local" },
+
+    { "run": "npm run lint", "is": "verify/unit@local" },
+    { "run": "npm run format:check", "is": "verify/unit@local" },
+    { "run": "npm run rust:fmt", "is": "verify/unit@local" },
+    { "run": "npm run rust:clippy", "is": "verify/unit@local" },
+    { "run": "npm run knip", "is": "verify/unit@local" },
+
+    { "run": "npm run secrets", "is": "verify/unit@local" },
+    { "run": "npm run security:deny", "is": "verify/unit@local" },
+    {
+      "run": "npm run security:audit",
+      "is": "verify/unit@local",
+      "$comment": "Reads a local lockfile but consults the RustSec advisory database over the network. Target stays `local`: nothing of this project leaves the machine."
+    },
+    { "run": "npm run security:audit-js", "is": "verify/unit@local" },
+
+    { "run": "npm run version:check", "is": "verify/unit@local" },
+    { "run": "npm run identity:check", "is": "verify/unit@local" },
+    { "run": "npm run governance:check", "is": "verify/unit@local" },
+    { "run": "npm run check:no-kill", "is": "verify/unit@local" },
+    { "run": "npm run check:blocking", "is": "verify/unit@local" },
+    { "run": "npm run check:git-writes", "is": "verify/unit@local" },
+    { "run": "npm run check:drag-drop", "is": "verify/unit@local" },
+
+    {
+      "run": "npm run check:all",
+      "is": "verify/integration@local",
+      "$comment": "The whole gate: every verify/unit entry above, in one run. `integration` because it crosses both runtimes — a green tsc plus a green cargo test is a statement about the pair, not about either alone."
+    },
+
+    { "run": "npm run build", "is": "build@local" },
+    { "run": "npm run gen:types", "is": "build@local" },
+    { "run": "npm run version:sync", "is": "build@local" },
+    { "run": "npm run identity:sync", "is": "build@local" },
+    { "run": "npm run governance:sync", "is": "build@local" },
+
+    {
+      "run": "npm run app:dev",
+      "is": "build@local",
+      "$comment": "The development channel. NOT a release, and never to be called one (rule:live-app)."
+    },
+    {
+      "run": "npm run app:build",
+      "is": "ship/release@local",
+      "$comment": "Produces the installable bundle. The only correct way to build a release — a bare `tauri build` inherits TAURI_CONFIG from a dev shell and silently builds against the dev identity (rule:live-app). Installing it is the maintainer's act, never an agent's."
+    },
+
+    {
+      "run": "npm run governance:update",
+      "is": "build@local",
+      "reaches": "github.com/kaoszwerg/saga-rust-template",
+      "$comment": "Pulls the pinned upstream layers. Reaches a remote, so it declares it — even though nothing of this project goes out."
+    },
+
+    {
+      "run": "git push",
+      "is": "ship/push@prod",
+      "reaches": "github.com/kaoszwerg/yggshell",
+      "$comment": "`prod` because pushed history is public and permanent. Gated by the pre-push hook running check:all (rule:automation)."
+    },
+    {
+      "run": "gh pr create",
+      "is": "ship/review@prod",
+      "reaches": "github.com/kaoszwerg/yggshell"
+    },
+    {
+      "run": "git tag",
+      "is": "ship/release@prod",
+      "reaches": "github.com/kaoszwerg/yggshell",
+      "$comment": "A tag triggers the cross-platform release build. Only on the maintainer's explicit word (rule:versioning)."
+    }
+  ]
+}

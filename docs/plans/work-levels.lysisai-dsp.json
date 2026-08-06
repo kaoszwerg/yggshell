@@ -1,0 +1,165 @@
+{
+  "$comment": "DRAFT for kaoszwerg/lysisai-dsp — belongs in that repository's root as `work-levels.json`. Kept here rather than written there on purpose: an agent is working in that repo with open commits, and an untracked file in its root could end up in someone else's `git add`. Derived by reading scripts/run-tests.sh, scripts/live-audit/run.sh, heimdal and playwright.config.js — every entry is to be confirmed by the maintainer, and the ones marked `$verify` are the ones I could not fully establish from reading alone.",
+  "version": 1,
+  "areas": [
+    "core",
+    "frontend",
+    "backend",
+    "calendar",
+    "immobilien",
+    "tickets",
+    "conversations",
+    "minicrm",
+    "documents",
+    "reaktiv2010",
+    "infra"
+  ],
+  "entrypoints": [
+    {
+      "run": "npx vitest run",
+      "is": "verify/unit@local",
+      "$comment": "core/frontend component tests. No container needed."
+    },
+    {
+      "run": "scripts/run-tests.sh frontend",
+      "is": "verify/integration@dev",
+      "reaches": "lysisai-dev-frontend",
+      "$verify": "run-tests.sh names FRONTEND_CONTAINER — confirm it runs inside the container rather than on the host."
+    },
+    {
+      "run": "scripts/run-tests.sh backend",
+      "is": "verify/integration@dev",
+      "reaches": "lysisai-dev-backend"
+    },
+    {
+      "run": "scripts/run-tests.sh core",
+      "is": "verify/integration@dev",
+      "reaches": "lysisai-dev-backend"
+    },
+    {
+      "run": "scripts/run-tests.sh all",
+      "is": "verify/integration@dev",
+      "reaches": "lysisai-dev-backend",
+      "$comment": "Every component sequentially. Explicitly does NOT include e2e — the runner says so itself."
+    },
+    {
+      "run": "docker exec lysisai-dev-backend python -m pytest",
+      "is": "verify/integration@dev",
+      "reaches": "lysisai-dev-backend",
+      "$comment": "A single suite, straight into the container — what the agent reaches for when narrowing a failure."
+    },
+
+    {
+      "run": "scripts/run-tests.sh e2e",
+      "is": "verify/e2e@dev",
+      "reaches": "http://localhost:3000",
+      "$comment": "Playwright on the HOST (Chromium needs glibc; the frontend container is Alpine/musl) against the running dev app. The runner refuses to start if E2E_BASE_URL is unreachable."
+    },
+    {
+      "run": "npx playwright test",
+      "is": "verify/e2e@dev",
+      "reaches": "http://localhost:3000",
+      "$comment": "Called directly, --project= selects a ROLE (admin/subadmin/mitarbeiter/kunde/public), never an environment. The environment comes from BASE_URL in e2e/constants.js — which is exactly the invisible level rule:work-legibility exists to end. See the note at the bottom."
+    },
+
+    {
+      "run": "scripts/lint-rules.sh",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/lint-i18n-parity.py",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/lint-async-safety.py",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/lint-jsx.py",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/check-migration-drift.py",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/check-deps-lock.py",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/check-core-plugin-bridge.mjs",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/check-docs-links.sh",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "scripts/security-scan.sh",
+      "is": "verify/unit@local",
+      "$verify": "Static scan of the repository — confirm it reaches nothing outside the machine."
+    },
+
+    {
+      "run": "scripts/live-audit/run.sh",
+      "is": "verify/audit@staging",
+      "reaches": "testing.lysis.ai",
+      "$comment": "Four-phase run against the live-deployed testing system: function, security (authz/IDOR/DAST/fuzz), load, deploy readiness. Fingerprint-based target guard, fail-closed — any other target aborts. THE entry that must never be confusable with a local run."
+    },
+
+    {
+      "run": "heimdal start",
+      "is": "build@dev",
+      "reaches": "docker compose (local)"
+    },
+    {
+      "run": "heimdal restart",
+      "is": "build@dev",
+      "reaches": "docker compose (local)"
+    },
+    {
+      "run": "heimdal deploy",
+      "is": "ship/deploy@prod",
+      "reaches": "$verify — the customer server this deploys to",
+      "$verify": "Confirm the actual target. This is the single most important `reaches` in the file: it is what the Chain tool colours as production."
+    },
+    {
+      "run": "heimdal backup",
+      "is": "ship@prod",
+      "reaches": "$verify"
+    },
+
+    {
+      "run": "git push",
+      "is": "ship/push@prod",
+      "reaches": "github.com/…/lysisai-dsp"
+    },
+    {
+      "run": "gh pr create",
+      "is": "ship/review@prod",
+      "reaches": "github.com/…/lysisai-dsp"
+    },
+    {
+      "run": "gh pr merge",
+      "is": "ship/review@prod",
+      "reaches": "github.com/…/lysisai-dsp"
+    },
+    {
+      "run": "scripts/deployment/05-trigger-deployment.sh",
+      "is": "ship/deploy@prod",
+      "reaches": "$verify — GitHub Actions → the target VM"
+    },
+
+    {
+      "run": "scripts/create_playwright_users.py",
+      "is": "build@dev",
+      "reaches": "lysisai-dev-backend",
+      "$comment": "Uses SessionLocal directly — one of the four mechanisms the live-audit plan lists as local-only and silently broken against a remote target."
+    }
+  ],
+
+  "$followup": [
+    "`npx playwright test` and `scripts/run-tests.sh e2e` both resolve their target from BASE_URL / E2E_BASE_URL. That is the exact pattern this convention forbids: the same command runs against a container or against a public host and nothing in it says which. Declaring them as @dev here is only true for the default. The real fix is a separate, named entrypoint per target — e.g. `scripts/run-tests.sh e2e-staging` with `reaches: testing.lysis.ai` — after which the declaration stops being a half-truth.",
+    "The plugin areas are taken from plugins/*/backend/tests. Confirm the list is complete and that the names are the ones the team uses."
+  ]
+}
