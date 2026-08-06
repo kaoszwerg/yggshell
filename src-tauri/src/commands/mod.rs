@@ -967,6 +967,43 @@ pub fn install_agent_hook(app: tauri::AppHandle, cwd: String) -> Result<String> 
     Ok(settings.to_string_lossy().to_string())
 }
 
+/// One of the two files this app can hand to a repository that has never heard of the convention.
+fn bundled_adoption(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathBuf> {
+    use tauri::Manager;
+    app.path()
+        .resolve(
+            format!("resources/adoption/{name}"),
+            tauri::path::BaseDirectory::Resource,
+        )
+        .map_err(|e| AppError::Other(format!("{name} is missing from the app: {e}")))
+}
+
+/// The rule, ready to paste into another agent's context.
+///
+/// **Copied rather than written, and that is the whole point** (`adoption.rs`): the repositories the
+/// maintainer works in do not consume this one's governance, so no cascade can deliver it. A
+/// clipboard crosses that boundary without a network, a dependency or write access to anyone's code.
+#[tauri::command]
+pub fn adoption_rule(app: tauri::AppHandle) -> Result<String> {
+    tracing::info!("adoption_rule");
+    crate::adoption::rule_text(&bundled_adoption(&app, "work-legibility.md")?)
+}
+
+/// Whether this repository already declares its levels — what the offer is shown for.
+#[tauri::command]
+pub fn adoption_declared(cwd: String) -> Result<bool> {
+    Ok(crate::adoption::declares_levels(std::path::Path::new(&cwd)))
+}
+
+/// Put the grammar gate into this repository and say where it landed.
+#[tauri::command]
+pub fn adoption_install_gate(app: tauri::AppHandle, cwd: String) -> Result<String> {
+    tracing::info!(%cwd, "adoption_install_gate");
+    let gate = bundled_adoption(&app, "check-work-levels.mjs")?;
+    let written = crate::adoption::install_gate(std::path::Path::new(&cwd), &gate)?;
+    Ok(written.to_string_lossy().to_string())
+}
+
 /// Where the plan-nudge script is installed.
 fn nudge_script(home: &std::path::Path) -> std::path::PathBuf {
     home.join(".local/bin/ygg-plan-nudge")

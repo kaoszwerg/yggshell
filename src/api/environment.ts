@@ -56,4 +56,18 @@ export const environmentApi = {
 
   /** Forget every attention event recorded so far. */
   clearAttention: () => invoke<void>("clear_agent_attention"),
+
+  /**
+   * The work-legibility rule, with the instruction that tells another agent what to do with it.
+   *
+   * Copied into a chat rather than written into a repository: the projects this is meant for do not
+   * consume this app's governance, and most have their own (`src-tauri/src/adoption.rs`).
+   */
+  adoptionRule: () => invoke<string>("adoption_rule"),
+
+  /** Whether this directory's repository already declares its levels. */
+  adoptionDeclared: (cwd: string) => invoke<boolean>("adoption_declared", { cwd }),
+
+  /** Write the grammar gate into this repository; resolves with the path it landed at. */
+  adoptionInstallGate: (cwd: string) => invoke<string>("adoption_install_gate", { cwd }),
 };

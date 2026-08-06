@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { copyText } from "../../lib/clipboard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { environmentApi } from "../../api/environment";
 import { useTerminalStore } from "../../store/terminal";
@@ -111,6 +112,7 @@ export function ChainTool() {
           data-chain-trace
           className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]"
         >
+          <Undeclared />
           {chain.plan.length === 0 && !showPlan ? (
             <NoPlan done={chain.plan_done} />
           ) : (
@@ -607,6 +609,78 @@ function Legend() {
         </div>
       ))}
     </Disclosure>
+  );
+}
+
+/**
+ * The offer shown to a repository that has never heard of the convention.
+ *
+ * **Two buttons because there are two channels, and they are not interchangeable**
+ * (`src-tauri/src/adoption.rs`). The gate is machinery and is *written*; the rule is text for
+ * another agent's context and is *copied*, because the repositories this is meant for do not consume
+ * this app's governance and cannot be reached by any cascade.
+ *
+ * It sits here for the same reason the plan nudge does: this is the moment somebody notices the
+ * absence — every level in the trace marked as a guess.
+ */
+/** Asks whether this repository declares its levels, and offers the two channels when it does not. */
+function Undeclared() {
+  const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
+  const declared = useQuery({
+    queryKey: ["adoption-declared", cwd],
+    queryFn: () => (cwd === null ? true : environmentApi.adoptionDeclared(cwd)),
+    enabled: cwd !== null,
+  });
+  // Absent or still loading, the offer stays hidden: proposing to fix something that may not be
+  // missing is worse than proposing nothing.
+  if (cwd === null || declared.data !== false) return null;
+  return <NoDeclaration cwd={cwd} />;
+}
+
+function NoDeclaration({ cwd }: { cwd: string }) {
+  const t = useT();
+  const [gatePath, setGatePath] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  // `copyText` already reports both outcomes as a toast — the one confirmation path in this app
+  // (rule:reusability). A second one here would eventually disagree with it.
+  const copyRule = async () => {
+    setFailed(false);
+    try {
+      copyText(await environmentApi.adoptionRule(), "chain.copyRuleDone");
+    } catch {
+      setFailed(true);
+    }
+  };
+  const installGate = async () => {
+    setFailed(false);
+    try {
+      setGatePath(await environmentApi.adoptionInstallGate(cwd));
+    } catch {
+      // Logged in the backend; the user is told here rather than in a console they cannot see.
+      setFailed(true);
+    }
+  };
+
+  return (
+    <div className="border-dim/25 text-dim mb-[0.8em] border border-dashed px-[0.5em] py-[0.45em] text-[0.9em]">
+      <b className="text-fg mb-[0.15em] block font-medium">{t("chain.undeclared")}</b>
+      {t("chain.undeclaredHint")}
+      <div className="mt-[0.5em] flex flex-wrap gap-[0.4em]">
+        <Button variant="ghost" accent="cyan" onClick={() => void copyRule()}>
+          {t("chain.copyRule")}
+        </Button>
+        <Button variant="ghost" accent="purple" onClick={() => void installGate()}>
+          {t("chain.installGate")}
+        </Button>
+      </div>
+      {gatePath === null ? null : (
+        <div className="text-green mt-[0.3em] break-all">
+          {t("chain.installGateDone", { path: gatePath })}
+        </div>
+      )}
+      {failed ? <div className="text-danger mt-[0.3em]">{t("chain.adoptionFailed")}</div> : null}
+    </div>
   );
 }
 

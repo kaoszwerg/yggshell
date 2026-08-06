@@ -4,6 +4,7 @@
 //! modules are added alongside these as the app grows — this file stays the single place where the
 //! app is assembled.
 
+pub mod adoption;
 pub mod agent;
 pub mod cli_install;
 pub mod commands;
@@ -122,6 +123,9 @@ pub fn run() {
             commands::install_agent_hook,
             commands::install_plan_nudge,
             commands::agent_nudge_installed,
+            commands::adoption_rule,
+            commands::adoption_declared,
+            commands::adoption_install_gate,
             commands::clear_agent_attention,
             commands::list_containers,
             commands::container_stats,

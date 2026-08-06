@@ -51,11 +51,13 @@
         "template": "windows/installer.nsi"
       }
     },
-    "resources": [
-      "resources/themes/*.yggtheme",
-      "resources/cli/ygg",
-      "resources/cli/ygg-hook",
-      "resources/cli/ygg-plan-nudge"
-    ]
+    "resources": {
+      "resources/themes/*.yggtheme": "resources/themes/",
+      "resources/cli/ygg": "resources/cli/ygg",
+      "resources/cli/ygg-hook": "resources/cli/ygg-hook",
+      "resources/cli/ygg-plan-nudge": "resources/cli/ygg-plan-nudge",
+      "../.claude/rules/project/work-legibility.md": "resources/adoption/work-legibility.md",
+      "../scripts/project/check-work-levels.mjs": "resources/adoption/check-work-levels.mjs"
+    }
   }
 }

@@ -17,6 +17,26 @@ function render(ui: ReactElement) {
 
 const state = { chain: null as Chain | null, isPending: false, isError: false, ready: true };
 
+/** Whether the fixture repository declares its levels. `true` is the quiet case. */
+let declared = true;
+
+// A tab that has reported where it is. Without one the offer is deliberately silent — it has no
+// repository to be about — so the fixture has to supply it or the test proves nothing.
+vi.mock("../../store/terminal", () => ({
+  useTerminalStore: (select: (s: unknown) => unknown) =>
+    select({ panes: [{ key: "a", cwd: "/repo" }], activeKey: "a" }),
+}));
+
+vi.mock("../../api/environment", () => ({
+  environmentApi: {
+    adoptionDeclared: () => Promise.resolve(declared),
+    adoptionRule: () => Promise.resolve("the rule"),
+    adoptionInstallGate: () => Promise.resolve("/repo/scripts/check-work-levels.mjs"),
+    nudgeInstalled: () => Promise.resolve(true),
+    installPlanNudge: () => Promise.resolve("/settings.json"),
+  },
+}));
+
 vi.mock("../../hooks/useChain", () => ({ useChain: () => state }));
 // A fixed, unusual size so the assertion cannot pass by coincidence (rule:content-size).
 vi.mock("../../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
@@ -275,6 +295,21 @@ describe("ChainTool", () => {
 
     expect(container.textContent).not.toMatch(/\b0 min\b/);
     expect(container.textContent).toContain("< 1 min");
+  });
+
+  it("offers the convention only to a repository that does not already declare its levels", async () => {
+    // Proposing to fix something that may not be missing is worse than proposing nothing, so the
+    // offer stays hidden until the answer is a definite "no declaration here".
+    state.chain = chain({ links: [link()] });
+    render(<ChainTool />);
+    expect(screen.queryByText(/does not declare its runs/i)).toBeNull();
+
+    declared = false;
+    render(<ChainTool />);
+    expect(await screen.findByText(/does not declare its runs/i)).toBeTruthy();
+    // Two channels, and they are not interchangeable: the gate is written, the rule is copied.
+    expect(screen.getByText(/copy the rule/i)).toBeTruthy();
+    expect(screen.getByText(/put the check in this repo/i)).toBeTruthy();
   });
 
   it("explains the marks on demand, and says which region each one belongs to", () => {

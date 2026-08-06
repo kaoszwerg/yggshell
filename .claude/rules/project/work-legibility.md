@@ -146,6 +146,19 @@ never delivered by an update, yours to write.**
 }
 ```
 
+**Where the three pieces go, and who owns each:**
+
+| Piece | Where | Whose |
+| ----- | ----- | ----- |
+| `work-levels.json` | the repository root — or a package's own directory in a monorepo; a reader walks **up** from the working directory, so the nearest one wins | the project's |
+| this rule | wherever **this project's** agents read their rules — its `CLAUDE.md`, its `AGENTS.md`, its own rules directory. It joins the project's governance and is subject to it | the project's |
+| the grammar gate | wherever this project runs its checks; it takes the repository root as its first argument, so the path is free. `scripts/check-work-levels.mjs` if there is no obvious home | optional |
+
+**The name `work-levels.json` is the one fixed thing** — a tool looking for it has nothing else to go
+on. Everything else about the placement is the adopting project's decision, and deliberately so: a
+convention that demanded a directory layout would be refused by every repository that already has
+one.
+
 `run` is the identifying prefix, not the full line with its flags. `is` is the vocabulary above.
 **`reaches` is required whenever the target is not `local`** — the host, cluster or account actually
 touched. It is what makes *"am I about to hit production?"* answerable without reading three files.
