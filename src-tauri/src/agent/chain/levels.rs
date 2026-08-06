@@ -194,6 +194,7 @@ mod tests {
             signature: Some(command.to_string()),
             outcome: Outcome::Done,
             kind: Kind::Normal,
+            compacts: 0,
             reach,
             seconds: 0,
             steps: 1,

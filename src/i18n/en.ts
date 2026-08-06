@@ -172,6 +172,7 @@ export const en = {
   "chain.act.ship": "ship",
   "chain.act.probe": "look",
   "chain.act.compact": "compact",
+  "chain.compacted": "the context was cut here, {n}×",
   "chain.noTerminal": "This tab has no terminal running.",
   "chain.reading": "Reading the session…",
   "chain.none": "No agent has run in this directory.",

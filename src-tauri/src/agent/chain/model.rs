@@ -244,6 +244,11 @@ pub struct ChainLink {
     pub steps: u32,
     /// Probes folded into this link — reading a log after a test run belongs *inside* the test.
     pub noise: u32,
+    /// Context compacts that fell inside this link. A seam rather than work: it is drawn **on** the
+    /// link instead of between two, because as a link of its own it broke every cycle it landed in —
+    /// and an agent repeating itself after losing its context is the case an iteration count exists
+    /// for.
+    pub compacts: u32,
     /// `Some` when this link is a folded cycle: how many times it went round.
     pub iterations: Option<u32>,
     /// The distinct refinements seen inside a cycle. **The reading is opposite** depending on this:

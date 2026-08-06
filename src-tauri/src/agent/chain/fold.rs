@@ -34,6 +34,11 @@ struct Block {
     kind: Kind,
     steps: u32,
     noise: u32,
+    /// Compacts that fell inside this block. **A seam, not work** — which is why it is counted here
+    /// rather than being a block of its own: as one it sat between `A` and `A` and ended the
+    /// alternation, so a loop that spanned a compact lost its iteration count at exactly the moment
+    /// the count became interesting.
+    compacts: u32,
     first_at: Option<String>,
     last_at: Option<String>,
 }
@@ -58,10 +63,24 @@ fn merges(open: &Block, step: &Step) -> bool {
 
 fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
+    // A compact met before any work has an open block to fall into. It is held rather than dropped:
+    // a resumed session opens with the summary, and that seam is what explains why the trace starts
+    // mid-thought.
+    let mut pending_compacts = 0u32;
     for step in steps {
         // Bookkeeping is how the plan is recorded, not work — it never becomes a link, and it is
         // not noise either, so it does not inflate the count of what a block consisted of.
         if step.kind == Kind::Bookkeeping {
+            continue;
+        }
+        // A compact is an event at the agent, not a piece of work, so it is absorbed exactly as a
+        // probe is — and unlike a probe it is never dropped, because losing the context is the one
+        // thing about a long session that explains everything after it.
+        if step.act == Act::Compact {
+            match blocks.last_mut() {
+                Some(open) => open.compacts += 1,
+                None => pending_compacts += 1,
+            }
             continue;
         }
         // A probe belongs inside whatever is open. Before anything is open it is dropped: a session
@@ -89,17 +108,20 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
                     open.last_at = step.at;
                 }
             }
-            _ => blocks.push(Block {
-                act: step.act,
-                refinement: step.refinement,
-                signature: step.signature,
-                also: Vec::new(),
-                kind: step.kind,
-                steps: 1,
-                noise: 0,
-                first_at: step.at.clone(),
-                last_at: step.at,
-            }),
+            _ => {
+                blocks.push(Block {
+                    act: step.act,
+                    refinement: step.refinement,
+                    signature: step.signature,
+                    also: Vec::new(),
+                    kind: step.kind,
+                    steps: 1,
+                    noise: 0,
+                    compacts: std::mem::take(&mut pending_compacts),
+                    first_at: step.at.clone(),
+                    last_at: step.at,
+                });
+            }
         }
     }
     blocks
@@ -171,6 +193,7 @@ fn collapse_cycles(blocks: Vec<Block>) -> Vec<ChainLink> {
             kind: blocks[i].kind,
             steps: blocks[i..=end].iter().map(|b| b.steps).sum(),
             noise: blocks[i..=end].iter().map(|b| b.noise).sum(),
+            compacts: blocks[i..=end].iter().map(|b| b.compacts).sum(),
             first_at: blocks[i].first_at.clone(),
             last_at: blocks[end].last_at.clone(),
         };
@@ -216,6 +239,7 @@ fn link_of(block: &Block, iterations: Option<u32>, rounds: Vec<Round>) -> ChainL
         seconds: seconds_between(block.first_at.as_deref(), block.last_at.as_deref()),
         steps: block.steps,
         noise: block.noise,
+        compacts: block.compacts,
         iterations,
         rounds,
         guessed: true,
@@ -312,6 +336,55 @@ mod tests {
         let links = fold(vec![probe(), probe(), step(Act::Edit, "a.rs")]);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].noise, 0);
+    }
+
+    fn compact() -> Step {
+        Step::new(Act::Compact, None)
+    }
+
+    #[test]
+    fn a_compact_does_not_break_the_cycle_it_lands_in() {
+        // **The case this exists for, and it is the interesting one.** An agent that loses its
+        // context and then tries the same thing again is exactly what an iteration count is meant to
+        // surface — so the seam must not be what hides it. As its own block a compact sat between
+        // `A` and `A` and ended the alternation, and a loop of five turns was reported as two
+        // unrelated pieces of work.
+        let links = fold(vec![
+            step(Act::Verify, "core"),
+            step(Act::Edit, "a.rs"),
+            compact(),
+            step(Act::Verify, "core"),
+            step(Act::Edit, "b.rs"),
+            step(Act::Verify, "core"),
+        ]);
+
+        assert_eq!(links.len(), 1, "one loop, not two");
+        assert_eq!(links[0].iterations, Some(3));
+    }
+
+    #[test]
+    fn a_compact_is_still_reported_by_the_link_that_contains_it() {
+        // It stops being a line of its own; it may not stop being visible. "The agent forgot what it
+        // was doing here" is the single most useful thing this trace can say about a long session.
+        let links = fold(vec![
+            step(Act::Edit, "a.rs"),
+            compact(),
+            compact(),
+            step(Act::Edit, "b.rs"),
+        ]);
+
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].compacts, 2, "both seams, on the link they fall in");
+    }
+
+    #[test]
+    fn a_compact_before_any_work_belongs_to_what_comes_after_it() {
+        // A resumed session opens with the summary. There is nothing behind it to attach to, and
+        // dropping it would lose the one event that explains why the trace starts mid-thought.
+        let links = fold(vec![compact(), step(Act::Edit, "a.rs")]);
+
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].compacts, 1);
     }
 
     #[test]

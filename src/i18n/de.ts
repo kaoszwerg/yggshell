@@ -159,6 +159,7 @@ export const de: Translations = {
   "chain.act.ship": "ausliefern",
   "chain.act.probe": "nachsehen",
   "chain.act.compact": "Kontext gekürzt",
+  "chain.compacted": "hier wurde der Kontext gekürzt, {n}×",
   "chain.noTerminal": "In diesem Tab läuft kein Terminal.",
   "chain.reading": "Sitzung wird gelesen…",
   "chain.none": "In diesem Verzeichnis lief noch kein Agent.",

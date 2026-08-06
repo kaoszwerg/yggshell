@@ -457,11 +457,24 @@ function Meta({ link }: { link: ChainLink }) {
   const notes: string[] = [];
   if (link.kind === "delegated") notes.push(t("chain.delegated", { n: String(link.steps) }));
   if (link.noise > 0) notes.push(t("chain.probes", { n: String(link.noise) }));
-  if (notes.length === 0) return null;
+  // **The seam gets its own line, and it is not dim.** A compact is not a tally like the others: it
+  // is the moment the agent stopped knowing what it had been doing, and everything odd below it
+  // follows from that. It is drawn here rather than as a step of its own because as a step it broke
+  // every cycle it fell into — see `ChainLink.compacts`.
+  const seam =
+    link.compacts > 0 ? (
+      <div className="text-gold/80 truncate text-[0.78em]">
+        {t("chain.compacted", { n: String(link.compacts) })}
+      </div>
+    ) : null;
+  if (notes.length === 0) return seam;
   return (
-    <Tooltip content={t("chain.probesExplain")}>
-      <div className="text-dim truncate text-[0.78em]">{notes.join(" · ")}</div>
-    </Tooltip>
+    <>
+      {seam}
+      <Tooltip content={t("chain.probesExplain")}>
+        <div className="text-dim truncate text-[0.78em]">{notes.join(" · ")}</div>
+      </Tooltip>
+    </>
   );
 }
 

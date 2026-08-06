@@ -27,6 +27,13 @@ steps: number,
  */
 noise: number, 
 /**
+ * Context compacts that fell inside this link. A seam rather than work: it is drawn **on** the
+ * link instead of between two, because as a link of its own it broke every cycle it landed in —
+ * and an agent repeating itself after losing its context is the case an iteration count exists
+ * for.
+ */
+compacts: number, 
+/**
  * `Some` when this link is a folded cycle: how many times it went round.
  */
 iterations: number | null, 

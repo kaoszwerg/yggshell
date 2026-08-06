@@ -789,6 +789,7 @@ mod tests {
             seconds: 0,
             steps: 1,
             noise: 0,
+            compacts: 0,
             iterations: None,
             rounds: Vec::new(),
             guessed: true,
