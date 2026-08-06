@@ -504,7 +504,7 @@ honest when no plan is there.
 | 8 | The tool, with the nine UI corrections | `src/components/tools/ChainTool.tsx` |
 | 9 | The nudge, its own script and its own consent | `src-tauri/resources/cli/ygg-plan-nudge` |
 | + | The grammar gate the panel asked for | `scripts/project/check-work-levels.mjs` (in `check:all`) |
-| + | Adoption package for other repositories | `docs/adoption/` |
+| + | Adoption: the app hands the convention to a foreign repo | `src-tauri/src/adoption.rs`, `resources/adoption/`; manual route in `docs/adoption/` |
 
 **Four decisions taken during implementation** that the plan had left to the keyboard, recorded here
 because each changed the design:

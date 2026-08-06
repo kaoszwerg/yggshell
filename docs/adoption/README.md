@@ -1,17 +1,22 @@
 # Adopting `work-legibility` in another repository
 
-Everything needed to introduce the convention somewhere else, in one directory. It assumes nothing
-about the other project: no governance framework, no index generator, no Node beyond running one
-script if you want the gate.
+**The app does this now.** Open the Chain tool on a repository that declares nothing, and it offers
+two things: *Copy the rule for the agent* — the manual plus the rule, straight into the clipboard, to
+be pasted into whatever agent works there — and *Put the check in this repo*, which writes the gate.
+Both files are shipped inside the app, so this repository does not have to be reachable from the
+machine doing the adopting (`src-tauri/src/adoption.rs`).
+
+This page is the manual route, for a machine without YggShell.
 
 **Adoption is an afternoon, and it never renames anything.** A project declares what it already has;
 scripts, targets and branches stay exactly where they are.
 
-## What is in here
+## What to take, and from where
 
 | File | What to do with it |
 | ---- | ------------------ |
-| `work-legibility.md` | The rule. Copy it wherever that project keeps its agent-facing rules. |
+| `../../.claude/rules/project/work-legibility.md` | The rule — the governed one this repository itself lives under. Copy it wherever that project keeps its agent-facing rules, **without its front-matter**: those fields address *our* governance system. There is deliberately no second, pre-stripped copy here; the two drifted 120 lines apart before anyone compared them. |
+| `../../src-tauri/resources/adoption/handover.md` | What the app prepends: what makes an agent legible, which files exist, how to run the check. Paste it above the rule. |
 | `work-levels.example.json` | A filled-in example to start from. |
 | `../../scripts/project/check-work-levels.mjs` | The gate. Optional, and it takes the repository root as its first argument, so it runs from anywhere. |
 
@@ -21,8 +26,9 @@ scripts, targets and branches stay exactly where they are.
 directory, its `AGENTS.md` — wherever an agent looks at the start of a task. The rule is written to
 be self-supporting: it names no stack, needs no tooling, and cites nothing outside itself.
 
-If that project has a governance system with front-matter, add whatever fields it expects. The copy
-here has none, on purpose — front-matter belongs to the system that reads it.
+If that project has a governance system with front-matter, add whatever fields it expects — and drop
+ours first. Front-matter belongs to the system that reads it, which is why the app strips it on the
+way out rather than a second copy of the rule existing to have none.
 
 **2. Write its `work-levels.json`.** Answer, for that project: what can be run here, and what does
 each thing mean? Start from the example, and take the commands from wherever they are already
