@@ -209,8 +209,18 @@ reads it mechanically.
 ## Why this is a rule and not (only) a lint
 
 The checkable parts should be checked: that `work-levels.json` parses, that every entry uses a valid
-act/refinement/target, that a non-`local` target carries `reaches`, and that every test-shaped script
-appears in it.
+act/refinement/target, that a non-`local` target carries `reaches`, and — this is the one that keeps
+the file from rotting — that a **runnable level declared nowhere** is named. A declaration's real
+failure mode is not being wrong, it is being from March; everything else here checks what is
+written, that one checks what is missing.
+
+**And it reaches only as far as the project is declarative.** The check reads `package.json`
+scripts, because they are machine-readable and cost no guessing; a project whose runs live in a
+`Makefile`, a `justfile` or a `scripts/` directory is **not covered**, and the rule says so rather
+than implying a completeness it does not have. It is also deliberately narrow about what counts —
+`dev`, `start` and `prepare` are not levels of work, and a check that flagged them would be
+suppressed inside a week, which lowers the real posture while raising the nominal one
+(ADR-CORE-039).
 
 What no checker can do is decide whether `verify/integration@dev` is the **truthful** label. A run
 named `unit` that quietly reaches a database is a lie the file cannot detect — only the person writing

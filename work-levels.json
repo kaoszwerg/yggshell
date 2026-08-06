@@ -5,6 +5,7 @@
   "entrypoints": [
     { "run": "npm run test", "is": "verify/unit@local" },
     { "run": "npm run test:coverage", "is": "verify/unit@local" },
+    { "run": "npm run test:watch", "is": "verify/unit@local" },
     { "run": "npm run rust:test", "is": "verify/unit@local" },
     { "run": "npm run typecheck", "is": "verify/unit@local" },
 
@@ -18,6 +19,11 @@
     { "run": "cargo fmt", "is": "verify/unit@local" },
 
     { "run": "npm run lint", "is": "verify/unit@local" },
+    {
+      "$comment": "It writes files, so `edit` is arguable — but what it is *for* is the linter's verdict, and calling it an edit would put a formatting pass in the same category as writing code.",
+      "run": "npm run lint:fix",
+      "is": "verify/unit@local"
+    },
     { "run": "npm run format:check", "is": "verify/unit@local" },
     { "run": "npm run rust:fmt", "is": "verify/unit@local" },
     { "run": "npm run rust:clippy", "is": "verify/unit@local" },
@@ -39,6 +45,7 @@
     { "run": "npm run check:blocking", "is": "verify/unit@local" },
     { "run": "npm run check:git-writes", "is": "verify/unit@local" },
     { "run": "npm run check:drag-drop", "is": "verify/unit@local" },
+    { "run": "npm run check:work-levels", "is": "verify/unit@local" },
 
     {
       "run": "npm run check:all",

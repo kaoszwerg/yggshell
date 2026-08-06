@@ -168,6 +168,46 @@ describe("the script", () => {
     expect(code).toBe(0);
   });
 
+  it("names a runnable package script that nobody declared", () => {
+    // **How the file stays current, as a mechanism rather than a hope.** The rule promised this
+    // check in its own text long before it existed — and a rule that advertises a gate nobody built
+    // is worse than one that admits the gap, because everybody assumes the gap is covered
+    // (rule:knowledge-handover §1). A declaration rots the day somebody adds a script; this is what
+    // notices.
+    const root = fixture({
+      version: 1,
+      entrypoints: [{ run: "npm run test", is: "verify/unit@local" }],
+    });
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({
+        scripts: { test: "vitest run", "test:e2e": "playwright test", dev: "vite" },
+      }),
+    );
+    const { code, out } = run(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(code).toBe(1);
+    expect(out).toMatch(/test:e2e/);
+    // `dev` is not a level of work — a completeness check that flagged everything would be
+    // suppressed within a week (ADR-CORE-039: a noisy tool lowers the real posture). Matched on the
+    // whole sentence, not on the bare word: the failure output also prints the target list, which
+    // contains `dev`, and asserting on the word passed for the wrong reason.
+    expect(out).not.toMatch(/`npm run dev` is a level of work/);
+  });
+
+  it("says nothing about a package script that is not a level of work", () => {
+    const root = fixture({ version: 1, entrypoints: [] });
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ scripts: { dev: "vite", start: "node .", prepare: "husky" } }),
+    );
+    const { code } = run(root);
+    rmSync(root, { recursive: true, force: true });
+
+    expect(code).toBe(0);
+  });
+
   it("passes this repository's own declaration", () => {
     // The proving ground rule: a convention its author does not live under is one nobody keeps.
     const repo = join(dirname(fileURLToPath(import.meta.url)), "../..");

@@ -113,6 +113,45 @@ export function checkDeclaration(declaration, { areas = null } = {}) {
   return problems;
 }
 
+/**
+ * Script names that are a **level of work** rather than a way to start the product.
+ *
+ * Deliberately narrow. A completeness check that flagged `dev`, `start` and `prepare` would be
+ * suppressed inside a week, and a suppressed check lowers the real posture while raising the nominal
+ * one (ADR-CORE-039). These prefixes are the ones whose absence from the declaration actually costs
+ * something: a run whose reach nobody wrote down.
+ */
+const LEVEL_SHAPED = /^(test|e2e|verify|check|lint|audit|security|deploy|release|ship)\b/;
+
+/**
+ * Package scripts that look like a level of work and appear in no entry's `run`.
+ *
+ * **This is how the declaration stays current.** Everything else here checks what is written; this
+ * checks what is missing — the failure mode a declaration actually has, which is not being wrong but
+ * being from March. Only `package.json` is read: it is declarative and machine-readable, so there
+ * are no false positives from guessing at files. A project whose runs live in a Makefile or a
+ * `scripts/` directory is not covered, and that is honest — the rule says so rather than pretending.
+ */
+export function undeclaredScripts(declaration, scripts) {
+  const declared = (declaration?.entrypoints ?? [])
+    .map((entry) => (typeof entry?.run === "string" ? entry.run : ""))
+    .join("\n");
+  return Object.keys(scripts ?? {})
+    .filter((name) => LEVEL_SHAPED.test(name))
+    .filter((name) => !declared.includes(name));
+}
+
+function packageScripts(root) {
+  const path = join(root, "package.json");
+  if (!existsSync(path)) return {};
+  try {
+    return JSON.parse(readFileSync(path, "utf8")).scripts ?? {};
+  } catch {
+    // Not this gate's business to report — the project's own tooling will.
+    return {};
+  }
+}
+
 function main() {
   const path = join(ROOT, "work-levels.json");
   if (!existsSync(path)) {
@@ -131,6 +170,12 @@ function main() {
     return 1;
   }
   const problems = checkDeclaration(declaration);
+  for (const name of undeclaredScripts(declaration, packageScripts(ROOT))) {
+    problems.push(
+      `\`npm run ${name}\` is a level of work and is declared nowhere — ` +
+        `add it to work-levels.json, or rename it if it is not one`,
+    );
+  }
   if (problems.length > 0) {
     console.error("check-work-levels FAILED:");
     for (const problem of problems) console.error(`  - ${problem}`);
