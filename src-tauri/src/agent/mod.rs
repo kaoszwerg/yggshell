@@ -330,11 +330,46 @@ pub fn session(home: &Path, cwd: &Path) -> Option<AgentSession> {
     Some(session)
 }
 
+/// How far `read_tail` will widen its window when a single line fills it.
+///
+/// Sixteen doublings of the 256 kB tail is 16 GB — far past any transcript, so in practice the loop
+/// ends because it reached the start of the file. The cap exists so a pathological input cannot make
+/// the reader loop, not because a particular size is meaningful.
+const TAIL_WIDENINGS: u32 = 16;
+
 /// Read the last `bytes` of a file, starting at a line boundary.
 ///
 /// A partial first line is dropped rather than parsed: half a JSON object is not an object, and
 /// feeding it to a parser to see what happens is how a reader ends up trusting a half-read value.
+///
+/// **It widens rather than return nothing, and that is not an optimisation.** A pasted image is one
+/// transcript line of several megabytes. When such a line straddles the window, dropping the partial
+/// first line leaves the caller with an empty string — and `newest_session` reads that as "this file
+/// holds no session" and walks on to an *older* transcript in the same project. The panel then shows
+/// somebody else's morning, convincingly, because it worked on the same repository. Measured on
+/// 2026-08-06: `edit statusline.sh` from 09:20 presented as the live step at 19:50, reported twice.
+/// A reader that answers with a different session than the one asked about is worse than one that
+/// answers "unknown", so it keeps looking until it has a whole line or has read the file.
 pub(crate) fn read_tail(path: &Path, bytes: u64) -> Option<String> {
+    let mut window = bytes;
+    for _ in 0..TAIL_WIDENINGS {
+        let text = read_tail_once(path, window)?;
+        if !text.trim().is_empty() {
+            return Some(text);
+        }
+        // Nothing survived the cut: one line is bigger than the window. Either widen, or the file is
+        // genuinely (nearly) empty and there is nothing to find.
+        let len = std::fs::metadata(path).ok()?.len();
+        if window >= len {
+            return Some(text);
+        }
+        window = window.saturating_mul(2);
+    }
+    read_tail_once(path, window)
+}
+
+/// One read at a fixed window. See [`read_tail`] for why the window is not fixed.
+fn read_tail_once(path: &Path, bytes: u64) -> Option<String> {
     use std::io::{Read, Seek, SeekFrom};
     let mut file = std::fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();

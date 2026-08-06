@@ -195,24 +195,50 @@ pub fn agent_session(
 /// `None` when no agent has run in this directory. Nothing read here is logged: this reads the
 /// user's prompts, commands and file contents, and ADR-PROJ-005 §1 permits counters and
 /// classifications in the log, never content.
+/// `id` names the tab, and it is what makes the answer about **this** tab.
+///
+/// **Two agents in one repository is a normal day, not an edge case.** They report the same `cwd`,
+/// so a directory alone cannot say which transcript belongs to this tab — the newest event would
+/// simply be whichever agent typed last. The pane's process tree can: the harness runs as a
+/// descendant of the pane, and every hook event carries its pid. Without a tab (or without tmux) the
+/// answer falls back to the directory, which is right there and wrong nowhere else.
+/// **Async because identifying the tab costs a `tmux` process.** A sync Tauri command runs on the
+/// main thread, so every keystroke in every terminal would wait for it — `check:blocking` refuses it,
+/// and rightly: this is polled every few seconds. The registry lookup happens first, on this thread,
+/// because it is a lock read and `State` cannot cross into the blocking closure.
 #[tauri::command]
-pub fn agent_chain(
+pub async fn agent_chain(
     app: tauri::AppHandle,
+    registry: State<'_, TerminalRegistry>,
     cwd: String,
+    id: Option<SessionId>,
+) -> Result<Option<crate::agent::chain::model::Chain>> {
+    let tmux = id.and_then(|id| registry.tmux_session(id));
+    tauri::async_runtime::spawn_blocking(move || chain_for(&app, &cwd, tmux.as_deref()))
+        .await
+        .map_err(|e| AppError::Other(format!("reading the chain failed: {e}")))?
+}
+
+/// The chain itself, off the main thread. See [`agent_chain`].
+fn chain_for(
+    app: &tauri::AppHandle,
+    cwd: &str,
+    tmux: Option<&str>,
 ) -> Result<Option<crate::agent::chain::model::Chain>> {
     use tauri::Manager;
-    let cwd_path = std::path::Path::new(&cwd);
+    let cwd_path = std::path::Path::new(cwd);
     let home = crate::agent::declared_home(cwd_path)
         .or_else(|| {
-            home_dir(&app)
-                .and_then(|dir| crate::agent::homes_for(&dir, cwd_path).into_iter().next())
+            home_dir(app).and_then(|dir| crate::agent::homes_for(&dir, cwd_path).into_iter().next())
         })
-        .or_else(|| home_dir(&app).map(|dir| dir.join(".claude")));
+        .or_else(|| home_dir(app).map(|dir| dir.join(".claude")));
     let Some(home) = home else {
         return Ok(None);
     };
     let state = app.state::<crate::state::AppState>();
-    let mut chain = crate::agent::chain::read(&home, cwd_path, &state.chain);
+    let pids = tab_pids(tmux);
+    let live = live_transcript(app, cwd, &pids);
+    let mut chain = crate::agent::chain::read(&home, cwd_path, live.as_deref(), &state.chain);
 
     // **Which of the two silences this is.** The transcript cannot say: an agent blocked on a
     // permission prompt and one that has simply finished both write nothing at all. The hook events
@@ -228,9 +254,9 @@ pub fn agent_chain(
         // flickered: the gap between two tool calls is routinely longer than any usable threshold,
         // because an agent thinking or writing a reply writes nothing. Without a hook the answer is
         // `Unknown`, and the tool says so rather than picking one (ADR-CORE-004).
-        let (standing, waiting_for) = match turn_open(&app, &cwd) {
+        let (standing, waiting_for) = match turn_open(app, cwd, &pids) {
             Some(true) => (Standing::Working, None),
-            Some(false) => match waiting_here(&app, &cwd) {
+            Some(false) => match waiting_here(app, cwd) {
                 Some(asking) => (Standing::Waiting, asking),
                 None => (Standing::Idle, None),
             },
@@ -254,13 +280,57 @@ pub fn agent_chain(
 /// here for the one question the panel exists to answer. `None` matters as much as the other two: it
 /// means nothing is known, and the chain then keeps whatever its own clock concluded rather than
 /// being told "not working" by an absence of evidence.
-fn turn_open(app: &tauri::AppHandle, cwd: &str) -> Option<bool> {
+/// The transcript the live session in this directory is writing, as the harness itself reported it.
+///
+/// Every hook event carries `transcript_path`, so this is a fact rather than an inference — which is
+/// the point: the alternative (newest file whose tail parses) silently picks a different session
+/// when a single line exceeds the tail window, and one pasted image does exactly that.
+fn live_transcript(app: &tauri::AppHandle, cwd: &str, pids: &[u32]) -> Option<std::path::PathBuf> {
     use tauri::Manager;
     let data = app.path().app_data_dir().ok()?;
     let events = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 200);
-    // Every pid, because the chain is about the directory rather than about one tab's process tree —
-    // `turn_state` filters by pid for the activity line, which is a question about a tab.
-    let pids: Vec<u32> = events.iter().filter_map(|e| e.agent_pid).collect();
+    events
+        .iter()
+        .rev()
+        .find(|event| {
+            event.cwd == cwd
+                && event.transcript.is_some()
+                // With no pids (a tab outside tmux) the directory has to do. With them, this is the
+                // only thing that separates two agents working in the same repository.
+                && (pids.is_empty() || event.agent_pid.is_some_and(|pid| pids.contains(&pid)))
+        })
+        .and_then(|event| event.transcript.as_deref())
+        .map(std::path::PathBuf::from)
+}
+
+/// Every process running inside this tab, which is where its agent lives.
+///
+/// The harness is a *descendant* of the pane's own process, never the pane itself, so the tree is
+/// what the hook's pid has to be matched against (`terminal::status` does the same for the activity
+/// line).
+fn tab_pids(session: Option<&str>) -> Vec<u32> {
+    let Some(session) = session else {
+        return Vec::new();
+    };
+    crate::procs::tree(&crate::terminal::tmux::pane_pids(session))
+        .into_iter()
+        .map(|process| process.pid)
+        .collect()
+}
+
+fn turn_open(app: &tauri::AppHandle, cwd: &str, pids: &[u32]) -> Option<bool> {
+    use tauri::Manager;
+    let data = app.path().app_data_dir().ok()?;
+    let events = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 200);
+    // **This tab's processes, not every pid in the file.** It used to take them all, reasoning that
+    // the chain was about a directory; two agents in one repository is an ordinary day, and then
+    // "the directory" answers with whichever of them typed last. Where there is no tmux session
+    // there are no pids and the directory has to do, exactly as `turn_state` documents.
+    let pids: Vec<u32> = if pids.is_empty() {
+        events.iter().filter_map(|e| e.agent_pid).collect()
+    } else {
+        pids.to_vec()
+    };
     crate::agent::hooks::turn_state(events, cwd, &pids)
 }
 

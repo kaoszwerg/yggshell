@@ -484,6 +484,16 @@ impl TerminalRegistry {
     /// `events` is the agent hook's log. Passed in rather than resolved here: this module knows about
     /// pseudo-terminals and tmux, and where an app keeps its data is not its business (the same reason
     /// paths come from `app.path()` everywhere else).
+    /// The tmux session behind a tab, or `None` when that tab is gone.
+    ///
+    /// Copied out under the lock and nothing else done with it held — the callers of this go on to
+    /// spawn `tmux`, and holding the registry across that stalls every keystroke in every other
+    /// terminal (the same reasoning as `status`, below).
+    pub fn tmux_session(&self, id: SessionId) -> Option<String> {
+        let sessions = self.sessions.lock().ok()?;
+        sessions.get(&id).and_then(|s| s.tmux_session.clone())
+    }
+
     pub fn status(
         &self,
         id: SessionId,

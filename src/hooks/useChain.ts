@@ -24,16 +24,20 @@ const REFRESH_MS = 8_000;
  * **Nothing is lost by not looking.** The backend keeps a byte offset per transcript, so reopening
  * resumes where it stopped rather than starting blind.
  *
- * Keyed on the directory alone, deliberately: the backend resolves everything else from it, and the
- * command is idempotent, so two tabs on one repository sharing a key is a cache hit rather than a
- * race (`agent::chain::cache`).
+ * **Keyed on the directory AND the tab**, because a directory does not identify an agent:
+ * two agents working in one repository report the same `cwd`, and the backend would answer with
+ * whichever of them typed last. The session names the tab, whose process tree contains its own
+ * harness. Sharing a key across two tabs on one repository was fine while the answer depended only
+ * on the directory; it is now a different answer per tab, so it is a different key.
  */
 export function useChain() {
-  const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
+  const pane = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey));
+  const cwd = pane?.cwd ?? null;
+  const sessionId = pane?.sessionId ?? null;
 
   const query = useQuery({
-    queryKey: ["chain", cwd],
-    queryFn: () => (cwd === null ? null : terminalApi.agentChain(cwd)),
+    queryKey: ["chain", cwd, sessionId],
+    queryFn: () => (cwd === null ? null : terminalApi.agentChain(cwd, sessionId)),
     enabled: cwd !== null,
     refetchInterval: REFRESH_MS,
   });

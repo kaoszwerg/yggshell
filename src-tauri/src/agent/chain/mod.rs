@@ -268,8 +268,28 @@ fn read_from(path: &Path, offset: u64) -> Option<String> {
 /// Read the chain for one tab, resuming from the cache where the file allows it.
 ///
 /// `None` when no agent has run in this directory — not a failure, and the common case.
-pub fn read(home: &Path, cwd: &Path, store: &cache::ChainCache) -> Option<Chain> {
-    let transcript = super::newest_transcript(home, cwd)?;
+pub fn read(
+    home: &Path,
+    cwd: &Path,
+    live: Option<&Path>,
+    store: &cache::ChainCache,
+) -> Option<Chain> {
+    // **The hook knows which file the live session is writing; the mtime walk only guesses.**
+    //
+    // That guess fails on a real and frequent input: the walk accepts the newest transcript whose
+    // *tail* still contains an assistant turn, and one pasted image is a single line far larger than
+    // the 256 kB window. After dropping the partial first line there is nothing left, the newest
+    // file looks sessionless, and the walk moves on — to an older session in the same project, whose
+    // trace looks plausibly like this one because it worked on the same repository. Measured: a
+    // panel showing `edit statusline.sh` from 09:20 as the live step at 19:50, reported twice as
+    // "that is not what you are doing".
+    //
+    // A wrong answer that looks right is the worst failure this tool has, so the authoritative
+    // source wins and the walk is only the fallback for a directory no hook has reported from.
+    let transcript = match live.filter(|path| path.is_file()) {
+        Some(path) => path.to_path_buf(),
+        None => super::newest_transcript(home, cwd)?,
+    };
 
     let known = store.resume(&transcript);
     let from = known.offset;
@@ -727,6 +747,42 @@ mod tests {
     fn an_empty_chain_expects_nothing_rather_than_guessing() {
         assert!(expectation(&[]).is_empty());
         assert!(expectation(&[stub(Act::Verify)]).is_empty());
+    }
+
+    #[test]
+    fn the_reported_transcript_wins_over_the_newest_one_on_disk() {
+        // **The defect this exists for.** The walk takes the newest transcript whose *tail* still
+        // holds an assistant turn — and one pasted image is a single line larger than that window,
+        // so the live session looks sessionless and an older one in the same project is picked
+        // instead. Its trace looks plausible (same repository, same kind of work), which is what
+        // made it survive two reports: a wrong answer that looks right.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let turn = |file: &str| {
+            format!(
+                r#"{{"type":"assistant","timestamp":"2026-08-06T09:00:00.000Z","message":{{"content":[{{"type":"tool_use","id":"a","name":"Edit","input":{{"file_path":"{file}"}}}}]}}}}"#
+            )
+        };
+        let live = dir.path().join("live.jsonl");
+        let stale = dir.path().join("stale.jsonl");
+        std::fs::write(&live, format!("{}\n", turn("/repo/live.rs"))).expect("write");
+        // Written second, so it is the newer file on disk — the situation that misfires. Ordering by
+        // write rather than by setting an mtime: a test dependency for one timestamp is not worth
+        // its supply chain (rule:dependencies).
+        std::fs::write(&stale, format!("{}\n", turn("/repo/statusline.sh"))).expect("write");
+
+        let chain = read(
+            dir.path(),
+            dir.path(),
+            Some(&live),
+            &cache::ChainCache::default(),
+        )
+        .expect("a chain");
+
+        assert_eq!(
+            chain.links.first().and_then(|l| l.refinement.as_deref()),
+            Some("live.rs"),
+            "the file the harness itself reported, not the newest one on disk"
+        );
     }
 
     /// Run the whole reader against a real transcript.

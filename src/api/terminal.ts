@@ -157,7 +157,13 @@ export const terminalApi = {
    *
    * `null` when no agent has run there.
    */
-  agentChain: (cwd: string) => invoke<Chain | null>("agent_chain", { cwd }),
+  /**
+   * `id` names the tab, and it is what makes the answer about *this* tab: two agents in one
+   * repository report the same directory, so without it the newest event wins — whichever of them
+   * typed last.
+   */
+  agentChain: (cwd: string, id: SessionId | null) =>
+    invoke<Chain | null>("agent_chain", { cwd, id }),
 
   /**
    * How much of the subscription this tab's account has used.
