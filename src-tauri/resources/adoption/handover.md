@@ -19,12 +19,21 @@ none of it is work you would not otherwise do.
 
 **Two files, and they are not treated the same.**
 
-1. **The check** — `scripts/check-work-levels.mjs`, if you accepted the offer to place it; the panel
-   reports the exact path, and it is yours to move. It takes the repository root as its first
-   argument (`node scripts/check-work-levels.mjs .`) and exits non-zero on a declaration that does
+1. **The check** — `scripts/check-work-levels.mjs`, and **leave it there**. It is not yours to edit
+   or to move: it is delivered, and the app replaces it in place when a newer one ships, which is
+   how a fix reaches a repository that adopted months ago. Moving it means never being told that
+   your copy is behind. Local adaptation goes in a **wrapper beside it** — import
+   `parseExpression`, `checkDeclaration`, `undeclaredScripts(declaration, scripts)` and
+   `undeclaredExamples` from it; importing the module does not run it, and those four names are
+   stable. Wrap, do not patch: an edit inside the delivered file is lost without trace on the next
+   update.
+
+   It takes the repository root as its first argument (`node scripts/check-work-levels.mjs .`, and
+   with no argument it walks up from where you are) and exits non-zero on a declaration that does
    not parse, uses an act or target outside the vocabulary, leaves a non-`local` target without
-   `reaches`, or omits a runnable level that `package.json` declares. Wire it into whatever this
-   project already runs as its gate. It is optional — the rule is worth keeping without it.
+   `reaches`, or omits a runnable level that `package.json` declares. Wire it — or your wrapper —
+   into whatever this project already runs as its gate. It is optional; the rule is worth keeping
+   without it.
 2. **The rule below** — install it into this repository's own project-level governance, wherever the
    agents working here read their rules (`CLAUDE.md`, `AGENTS.md`, a rules directory). It is
    self-supporting: it names no stack, needs no tooling and cites nothing outside itself. If your

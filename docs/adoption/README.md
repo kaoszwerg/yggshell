@@ -18,7 +18,7 @@ scripts, targets and branches stay exactly where they are.
 | `../../.claude/rules/project/work-legibility.md` | The rule — the governed one this repository itself lives under. Copy it wherever that project keeps its agent-facing rules, **without its front-matter**: those fields address *our* governance system. There is deliberately no second, pre-stripped copy here; the two drifted 120 lines apart before anyone compared them. |
 | `../../src-tauri/resources/adoption/handover.md` | What the app prepends: what makes an agent legible, which files exist, how to run the check. Paste it above the rule. |
 | `work-levels.example.json` | A filled-in example to start from. |
-| `../../scripts/project/check-work-levels.mjs` | The gate. Optional, and it takes the repository root as its first argument, so it runs from anywhere. |
+| `../../scripts/project/check-work-levels.mjs` | The gate. Optional — but if you take it, it goes to `scripts/check-work-levels.mjs` and **stays there**: the app replaces it in place when a newer one ships, and a moved copy is one that never gets told it is behind. Adapt by importing its four stable exports from a wrapper beside it, never by editing it. |
 
 ## The three steps
 
@@ -40,7 +40,8 @@ files, and it is the only part of the file that can hurt somebody when it is wro
 
 **3. Optionally, wire the gate.** `node check-work-levels.mjs <repo-root>` exits non-zero on a
 declaration that does not parse, uses an act or target that is not in the vocabulary, or leaves a
-non-local target without `reaches`. Put it wherever that project runs its checks.
+non-local target without `reaches`. It goes to `scripts/check-work-levels.mjs`; call it from
+whatever that project already runs as its gate.
 
 It is genuinely optional: the rule is worth having without it. But the first version of this
 repository's own declaration used two expressions the rule did not allow, and nobody noticed until a

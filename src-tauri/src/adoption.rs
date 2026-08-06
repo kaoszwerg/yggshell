@@ -81,11 +81,16 @@ pub fn rule_text(handover: &Path, bundled_rule: &Path) -> Result<String> {
     Ok(format!("{manual}\n{}", without_front_matter(&body)))
 }
 
-/// Where the gate is written in a foreign repository.
+/// Where the gate is written in a foreign repository. **Fixed, and the rule says so too.**
 ///
-/// `scripts/` because it is the most widely understood place for one, and the report says where it
-/// landed so it can be moved: this app cannot know where a project keeps its checks, and pretending
-/// otherwise would be the same guess `work-levels.json` is spared above.
+/// It began as a suggestion — `scripts/` is the most widely understood place, and the report said
+/// where it landed so it could be moved. That invitation is withdrawn: this app looks in exactly one
+/// place to tell a stale copy from a current one, so a project that took it up would never be told
+/// its copy is behind, and a fix would reach only whoever adopted afterwards.
+///
+/// A project adapts by **wrapping** — importing this module's four stable exports from a file of its
+/// own beside it — never by editing the delivered one, which the next update overwrites without
+/// trace.
 fn gate_destination(repo: &Path) -> PathBuf {
     repo.join("scripts/check-work-levels.mjs")
 }
