@@ -32,25 +32,18 @@
 use crate::error::{AppError, Result};
 use std::path::{Path, PathBuf};
 
-/// What an agent is told when the rule lands in its context.
+/// The manual, as shipped.
 ///
-/// It is prepended rather than written into the rule itself: the rule is a **document about a
-/// convention** and must read the same wherever it ends up, while this is an instruction to one
-/// agent at one moment. Merging them would put "install me" into a file that has already been
-/// installed.
-const PREAMBLE: &str = "\
-Install the rule below into this repository's own project-level governance — wherever the agents
-working here read their rules (`CLAUDE.md`, `AGENTS.md`, a rules directory). It is self-supporting:
-it names no stack, needs no tooling and cites nothing outside itself. If your governance expects
-front-matter, add whatever fields it wants.
+/// **A document, not a string literal in this file.** It is the app's *output* — the manual a
+/// foreign agent reads — so it is edited, reviewed and diffed as prose, next to the other things
+/// this app ships. Held in Rust it was unreadable in a diff, which is how a paragraph goes missing.
+pub const HANDOVER: &str = "resources/adoption/handover.md";
 
-Then write this repository's `work-levels.json` from what is already here, following the rule. Do
-not rename anything: a project declares what it has. The one field to get right is `reaches` —
-anything whose target is not `local` says where it actually goes.
+/// The convention itself: the very file this repository lives under, front-matter and all.
+pub const RULE: &str = "resources/adoption/work-legibility.md";
 
----
-
-";
+/// The grammar check, bundled from the path that already runs in this repository's own gate.
+pub const GATE: &str = "resources/adoption/check-work-levels.mjs";
 
 /// Strip a leading YAML front-matter block, if there is one.
 ///
@@ -73,11 +66,19 @@ fn without_front_matter(text: &str) -> &str {
     }
 }
 
-/// The rule as it should arrive in another agent's context.
-pub fn rule_text(bundled_rule: &Path) -> Result<String> {
+/// The whole handover, as it should arrive in another agent's context.
+///
+/// **The manual first, then the rule.** The agent receiving this is in another repository, possibly
+/// on another machine, and will never see the panel this came from: it did not press the button and
+/// cannot be told anything a second time. So the manual carries everything the interface knows —
+/// what makes it legible, which files exist and where, how to run the check, what to write next —
+/// and the rule carries the convention itself, unchanged from the one this repository lives under.
+pub fn rule_text(handover: &Path, bundled_rule: &Path) -> Result<String> {
+    let manual = std::fs::read_to_string(handover)
+        .map_err(|e| AppError::io(handover.display().to_string(), e))?;
     let body = std::fs::read_to_string(bundled_rule)
         .map_err(|e| AppError::io(bundled_rule.display().to_string(), e))?;
-    Ok(format!("{PREAMBLE}{}", without_front_matter(&body)))
+    Ok(format!("{manual}\n{}", without_front_matter(&body)))
 }
 
 /// Where the gate is written in a foreign repository.
@@ -131,6 +132,12 @@ mod tests {
         path
     }
 
+    /// The manual exactly as it ships. Read from the repository rather than mocked, because the
+    /// question this test asks is whether **the delivered file** is complete.
+    fn shipped_handover() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(HANDOVER)
+    }
+
     #[test]
     fn the_rule_arrives_with_an_instruction_and_its_whole_text() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -140,16 +147,65 @@ mod tests {
             "# Every piece of work says what it is\n",
         );
 
-        let text = rule_text(&rule).expect("the rule");
+        let text = rule_text(&shipped_handover(), &rule).expect("the rule");
 
+        // **Everything the receiving agent cannot get anywhere else.** It is in another repository,
+        // did not press the button, will never see the panel, and cannot be told a second time — so
+        // anything missing here is knowledge that never arrives. The list is deliberately literal:
+        // a paragraph quietly edited out of the manual fails here rather than in six months, in
+        // somebody else's repository, silently.
+        assert!(
+            text.contains("TaskCreate"),
+            "how to make the plan half work at all — without a task list there is no plan"
+        );
+        assert!(
+            text.contains("entrypoints the project declares"),
+            "why running the declared script rather than its runner matters"
+        );
         assert!(
             text.contains("project-level governance"),
-            "an agent pasted this into a chat needs to be told what to do with it"
+            "what to do with the rule"
+        );
+        assert!(
+            text.contains("check-work-levels.mjs"),
+            "which other file exists, and where"
+        );
+        assert!(
+            text.contains("node scripts/check-work-levels.mjs"),
+            "how to run it — a file nobody knows how to invoke is not delivered"
+        );
+        assert!(
+            text.contains("repository root"),
+            "where the declaration goes"
         );
         assert!(text.contains("work-levels.json"), "and what to write next");
         assert!(
+            text.contains("reaches"),
+            "the one field that can hurt somebody when it is wrong"
+        );
+        assert!(
             text.ends_with("# Every piece of work says what it is\n"),
             "the rule itself, whole"
+        );
+    }
+
+    #[test]
+    fn the_manual_names_the_paths_this_code_actually_uses() {
+        // **Half of the anti-drift, and the half a grammar check cannot see.** The manual tells a
+        // foreign agent where the two files are; this code is what puts them there. Renaming either
+        // without touching the other would leave a confident manual pointing at nothing — and the
+        // agent it misleads is in a different repository, with no way to ask.
+        let manual = std::fs::read_to_string(shipped_handover()).expect("the shipped manual");
+
+        let gate = gate_destination(Path::new("/r"));
+        let gate = gate.strip_prefix("/r").expect("relative");
+        assert!(
+            manual.contains(&gate.to_string_lossy().to_string()),
+            "the manual must name the path install_gate writes to"
+        );
+        assert!(
+            manual.contains("work-levels.json"),
+            "and the file declares_levels looks for"
         );
     }
 
@@ -164,8 +220,9 @@ mod tests {
             "rule.md",
             "---\nid: rule:work-legibility\nload: core\n---\n\n# Every piece of work says what it is\n",
         );
+        let handover = shipped_handover();
 
-        let text = rule_text(&rule).expect("the rule");
+        let text = rule_text(&handover, &rule).expect("the rule");
 
         assert!(!text.contains("rule:work-legibility"), "no front-matter");
         assert!(text.contains("# Every piece of work says what it is"));
@@ -186,7 +243,8 @@ mod tests {
     fn a_missing_bundled_rule_is_an_error_rather_than_an_empty_clipboard() {
         // Copying nothing and reporting success is the silent failure this refuses: the user pastes
         // an empty buffer into another agent and cannot tell why nothing happened.
-        assert!(rule_text(&PathBuf::from("/nowhere/rule.md")).is_err());
+        assert!(rule_text(&shipped_handover(), &PathBuf::from("/nowhere/rule.md")).is_err());
+        assert!(rule_text(&PathBuf::from("/nowhere/manual.md"), &shipped_handover()).is_err());
     }
 
     #[test]

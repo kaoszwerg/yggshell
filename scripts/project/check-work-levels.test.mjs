@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseExpression, checkDeclaration } from "./check-work-levels.mjs";
+import { parseExpression, checkDeclaration, undeclaredExamples } from "./check-work-levels.mjs";
 
 /**
  * The gate is tested like production code (rule:testing), against a temp fixture rather than the
@@ -120,6 +120,31 @@ describe("the declaration", () => {
       ],
     });
     expect(problems).toHaveLength(2);
+  });
+});
+
+describe("the handover manual", () => {
+  it("catches an example the vocabulary no longer has", () => {
+    // The manual ships beside the rule and is prose about it. Rename a refinement and a stale
+    // example goes on teaching the old one — in somebody else's repository, to an agent with no way
+    // to ask which of the two documents is current.
+    const stale = undeclaredExamples("run it as `verify/smoke@dev` when you are in a hurry");
+
+    expect(stale).toHaveLength(1);
+    expect(stale[0].error).toMatch(/does not take 'smoke'/);
+  });
+
+  it("says nothing about a manual whose examples are all current", () => {
+    expect(undeclaredExamples("`verify/e2e@dev` and `ship/deploy@prod`")).toEqual([]);
+  });
+
+  it("passes the manual this app actually ships", () => {
+    // The proving ground again: the file the button hands out, checked as it is.
+    const manual = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../src-tauri/resources/adoption/handover.md",
+    );
+    expect(undeclaredExamples(readFileSync(manual, "utf8"))).toEqual([]);
   });
 });
 

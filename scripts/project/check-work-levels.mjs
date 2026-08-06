@@ -141,6 +141,22 @@ export function undeclaredScripts(declaration, scripts) {
     .filter((name) => !declared.includes(name));
 }
 
+/**
+ * The manual YggShell hands to a foreign agent, checked against the grammar it describes.
+ *
+ * **This is the anti-drift the two documents need.** The manual is prose about the rule and ships
+ * separately from it; add an act to the vocabulary or rename a refinement, and a stale example in
+ * the manual would go on teaching the old one — in somebody else's repository, to an agent with no
+ * way to ask. Every `act/refinement@target` it prints must parse, or the vocabulary moved and the
+ * manual did not.
+ */
+export function undeclaredExamples(manual) {
+  const expressions = manual.match(/\b[a-z]+\/[a-z]+@[a-z]+\b/g) ?? [];
+  return [...new Set(expressions)]
+    .map((expression) => ({ expression, ...parseExpression(expression) }))
+    .filter((checked) => checked.error);
+}
+
 function packageScripts(root) {
   const path = join(root, "package.json");
   if (!existsSync(path)) return {};
@@ -175,6 +191,15 @@ function main() {
       `\`npm run ${name}\` is a level of work and is declared nowhere — ` +
         `add it to work-levels.json, or rename it if it is not one`,
     );
+  }
+  const manual = join(ROOT, "src-tauri/resources/adoption/handover.md");
+  if (existsSync(manual)) {
+    for (const stale of undeclaredExamples(readFileSync(manual, "utf8"))) {
+      problems.push(
+        `the handover manual teaches '${stale.expression}': ${stale.error} — ` +
+          `the vocabulary moved and the manual did not`,
+      );
+    }
   }
   if (problems.length > 0) {
     console.error("check-work-levels FAILED:");

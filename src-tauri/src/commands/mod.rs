@@ -967,15 +967,15 @@ pub fn install_agent_hook(app: tauri::AppHandle, cwd: String) -> Result<String> 
     Ok(settings.to_string_lossy().to_string())
 }
 
-/// One of the two files this app can hand to a repository that has never heard of the convention.
-fn bundled_adoption(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathBuf> {
+/// One of the files this app can hand to a repository that has never heard of the convention.
+///
+/// The names come from `adoption`, not from here: a second spelling of a resource path is a second
+/// chance to rename one of them and not the other (ADR-CORE-005).
+fn bundled_adoption(app: &tauri::AppHandle, resource: &str) -> Result<std::path::PathBuf> {
     use tauri::Manager;
     app.path()
-        .resolve(
-            format!("resources/adoption/{name}"),
-            tauri::path::BaseDirectory::Resource,
-        )
-        .map_err(|e| AppError::Other(format!("{name} is missing from the app: {e}")))
+        .resolve(resource, tauri::path::BaseDirectory::Resource)
+        .map_err(|e| AppError::Other(format!("{resource} is missing from the app: {e}")))
 }
 
 /// The rule, ready to paste into another agent's context.
@@ -986,7 +986,10 @@ fn bundled_adoption(app: &tauri::AppHandle, name: &str) -> Result<std::path::Pat
 #[tauri::command]
 pub fn adoption_rule(app: tauri::AppHandle) -> Result<String> {
     tracing::info!("adoption_rule");
-    crate::adoption::rule_text(&bundled_adoption(&app, "work-legibility.md")?)
+    crate::adoption::rule_text(
+        &bundled_adoption(&app, crate::adoption::HANDOVER)?,
+        &bundled_adoption(&app, crate::adoption::RULE)?,
+    )
 }
 
 /// Whether this repository already declares its levels — what the offer is shown for.
@@ -999,7 +1002,7 @@ pub fn adoption_declared(cwd: String) -> Result<bool> {
 #[tauri::command]
 pub fn adoption_install_gate(app: tauri::AppHandle, cwd: String) -> Result<String> {
     tracing::info!(%cwd, "adoption_install_gate");
-    let gate = bundled_adoption(&app, "check-work-levels.mjs")?;
+    let gate = bundled_adoption(&app, crate::adoption::GATE)?;
     let written = crate::adoption::install_gate(std::path::Path::new(&cwd), &gate)?;
     Ok(written.to_string_lossy().to_string())
 }
