@@ -41,6 +41,19 @@ export const environmentApi = {
    */
   installHook: (cwd: string) => invoke<string>("install_agent_hook", { cwd }),
 
+  /**
+   * Install the plan nudge — one sentence appended to a prompt, and only when the session has no
+   * task list.
+   *
+   * **Its own call, separate from `installHook`, and that is the design** (ADR-PROJ-005 §7): the
+   * attention hook reports to this app, this one writes into the model's context. Agreeing to be
+   * told when an agent is waiting is not agreeing to that.
+   */
+  installPlanNudge: (cwd: string) => invoke<string>("install_plan_nudge", { cwd }),
+
+  /** Whether the plan nudge is installed for this directory's account. */
+  nudgeInstalled: (cwd: string) => invoke<boolean>("agent_nudge_installed", { cwd }),
+
   /** Forget every attention event recorded so far. */
   clearAttention: () => invoke<void>("clear_agent_attention"),
 };

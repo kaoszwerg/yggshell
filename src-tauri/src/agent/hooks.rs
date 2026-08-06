@@ -89,11 +89,40 @@ fn names_our_script(settings: &Value, event: &str, script: &Path) -> bool {
         })
 }
 
+/// The event the plan nudge listens on.
+///
+/// **Its own installer, and its own consent.** `install` above adds three events at once and
+/// `refresh_agent_hooks` keeps them current at every start — right for a passive reporter, and
+/// exactly wrong here: an app update would turn "tell me when the agent is waiting" into "put text
+/// into the agent's context" without anybody being asked (ADR-PROJ-005 §7).
+pub const NUDGE_EVENT: &str = "UserPromptSubmit";
+
+/// Whether the plan nudge is installed in this Claude home.
+pub fn nudge_is_installed(home: &Path, script: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(home.join("settings.json")) else {
+        return false;
+    };
+    let Ok(settings) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    names_our_script(&settings, NUDGE_EVENT, script)
+}
+
+/// Add the plan nudge, leaving every other hook — including ours — untouched.
+pub fn install_nudge(home: &Path, script: &Path) -> Result<PathBuf> {
+    install_events(home, script, &[NUDGE_EVENT])
+}
+
 /// Add our hook to a Claude home's settings, preserving everything else.
 ///
 /// Returns the path written. The file is the user's — it holds their permissions, their model, their
 /// own hooks — so it is parsed, extended and written back whole, and backed up first.
 pub fn install(home: &Path, script: &Path) -> Result<PathBuf> {
+    install_events(home, script, &EVENTS)
+}
+
+/// The shared machinery: add `script` to each named event, preserving the rest of the file.
+fn install_events(home: &Path, script: &Path, events: &[&str]) -> Result<PathBuf> {
     let path = home.join("settings.json");
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
     let mut settings: Value = if existing.trim().is_empty() {
@@ -116,7 +145,7 @@ pub fn install(home: &Path, script: &Path) -> Result<PathBuf> {
         tracing::info!(backup = %backup.display(), "backed up settings.json before adding a hook");
     }
 
-    for event in EVENTS {
+    for event in events {
         add_hook(&mut settings, event, script);
     }
 

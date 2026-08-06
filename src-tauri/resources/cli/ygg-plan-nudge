@@ -1,0 +1,52 @@
+#!/bin/sh
+# YggShell's plan nudge — a `UserPromptSubmit` hook.
+#
+# One sentence, appended to a prompt, and ONLY when this session has no task list. A plan exists ->
+# it prints nothing at all and costs nothing.
+#
+# WHY THIS IS A SECOND SCRIPT AND NOT AN ADDITION TO `ygg-hook`: that one says, in capitals, that it
+# writes and never reads or decides. This one reads. Keeping them apart is what keeps that promise
+# true — and they are installed by two separate buttons, because consenting to "tell me when the
+# agent is waiting" is not consenting to have text put into the agent's context.
+#
+# WHY IT ONLY NUDGES: forcing the task list was built and measured. A `PreToolUse` gate on Edit/Write
+# never fired for a four-step task, because the agent wrote its files through the shell instead
+# (measured 265 Bash against 9 Write in the reference session) — and where it did fire, what it
+# produced was a task restating the tool call it had just blocked. A plan-shaped artefact that reads
+# as information and is none is worse than an honest gap.
+#
+# WHY THE TEXT IS A CONSTANT: `additionalContext` is model-visible. A sentence built from repository
+# data — a project name, an area, a path — would be a channel through which a cloned repository could
+# write instructions into somebody's agent, at every prompt, through an input nobody perceives as one
+# (ADR-PROJ-005 §7). Nothing below interpolates.
+#
+# NO `set -e`, DELIBERATELY. This runs inside the user's own session. Under `set -e` the exit status
+# of a failed command propagates, and several ordinary tools return 2 for an operating error — a
+# harness could then treat an unreadable directory as a decision. Every path here ends in `exit 0`.
+
+# The payload arrives on stdin as one JSON object. `session_id` is the only field needed, and it is
+# read with `sed` rather than a JSON tool the user may not have installed.
+payload=$(cat)
+session=$(printf '%s' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+# Nothing to check against: say nothing. Silence is always the safe answer here.
+[ -n "$session" ] || exit 0
+
+# The account this session belongs to. `CLAUDE_CONFIG_DIR` is how a project selects one; the default
+# is the only other possibility.
+home=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+
+# A task list exists when the directory holds at least one task file. The store is cleared when
+# nothing is open, so "no files" genuinely means "nothing is being tracked right now".
+if [ -d "$home/tasks/$session" ]; then
+  for task in "$home/tasks/$session"/*.json; do
+    [ -e "$task" ] && exit 0
+  done
+fi
+
+# One sentence, verbatim, every time.
+cat <<'JSON'
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"This session has no task list. If the work ahead has more than a couple of steps, open one before starting (TaskCreate), and start each subject with its act - plan, build, verify, ship or probe. If it is a single small thing, no list is needed."}}
+JSON
+
+exit 0

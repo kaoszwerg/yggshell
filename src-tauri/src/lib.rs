@@ -120,6 +120,8 @@ pub fn run() {
             commands::install_direnv,
             commands::agent_attention,
             commands::install_agent_hook,
+            commands::install_plan_nudge,
+            commands::agent_nudge_installed,
             commands::clear_agent_attention,
             commands::list_containers,
             commands::container_stats,

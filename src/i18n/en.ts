@@ -181,6 +181,11 @@ export const en = {
   "chain.links": "{n} links",
   "chain.underMinute": "< 1 min",
   "chain.openDetail": "Show what this consisted of",
+  "chain.nudgeInstall": "Ask the agent to keep one",
+  "chain.nudgeExplain":
+    "Adds one sentence to each prompt, and only while no list exists. It asks; it never blocks.",
+  "chain.nudgeInstalled": "Installed. It takes effect in the next session.",
+  "chain.nudgeFailed": "It could not be installed.",
   "agent.noSession": "This tab has no terminal running.",
   "agent.reading": "Reading the session…",
   "agent.none": "No agent has run in this directory.",

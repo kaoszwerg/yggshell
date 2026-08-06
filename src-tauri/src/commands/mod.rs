@@ -967,6 +967,67 @@ pub fn install_agent_hook(app: tauri::AppHandle, cwd: String) -> Result<String> 
     Ok(settings.to_string_lossy().to_string())
 }
 
+/// Where the plan-nudge script is installed.
+fn nudge_script(home: &std::path::Path) -> std::path::PathBuf {
+    home.join(".local/bin/ygg-plan-nudge")
+}
+
+/// Whether the plan nudge is installed for this directory's Claude account.
+#[tauri::command]
+pub fn agent_nudge_installed(app: tauri::AppHandle, cwd: String) -> Result<bool> {
+    use tauri::Manager;
+    let Ok(home) = app.path().home_dir() else {
+        return Ok(false);
+    };
+    let claude_home = crate::agent::declared_home(std::path::Path::new(&cwd))
+        .unwrap_or_else(|| home.join(".claude"));
+    Ok(crate::agent::hooks::nudge_is_installed(
+        &claude_home,
+        &nudge_script(&home),
+    ))
+}
+
+/// Install the plan nudge: one sentence appended to a prompt, and only when no task list exists.
+///
+/// **A separate button from the attention hook, on purpose** (ADR-PROJ-005 §7). That one reports;
+/// this one writes into the model's context. Consenting to the first is not consenting to the
+/// second, and `refresh_agent_hooks` — which quietly adds every event a build needs at startup —
+/// deliberately does not carry this one.
+#[tauri::command]
+pub fn install_plan_nudge(app: tauri::AppHandle, cwd: String) -> Result<String> {
+    use tauri::Manager;
+    tracing::info!(%cwd, "install_plan_nudge");
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Other(format!("no home directory: {e}")))?;
+
+    let source = app
+        .path()
+        .resolve(
+            "resources/cli/ygg-plan-nudge",
+            tauri::path::BaseDirectory::Resource,
+        )
+        .map_err(|e| AppError::Other(format!("the nudge script is missing from the app: {e}")))?;
+    let script = nudge_script(&home);
+    if let Some(parent) = script.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| AppError::io(parent.display().to_string(), e))?;
+    }
+    std::fs::copy(&source, &script).map_err(|e| AppError::io(script.display().to_string(), e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| AppError::io(script.display().to_string(), e))?;
+    }
+
+    let claude_home = crate::agent::declared_home(std::path::Path::new(&cwd))
+        .unwrap_or_else(|| home.join(".claude"));
+    let settings = crate::agent::hooks::install_nudge(&claude_home, &script)?;
+    Ok(settings.to_string_lossy().to_string())
+}
+
 /// Forget every attention event recorded so far.
 #[tauri::command]
 pub fn clear_agent_attention(app: tauri::AppHandle) -> Result<()> {

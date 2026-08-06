@@ -174,6 +174,11 @@ export const de: Translations = {
   "chain.links": "{n} Glieder",
   "chain.underMinute": "< 1 Min",
   "chain.openDetail": "Zeigen, woraus das bestand",
+  "chain.nudgeInstall": "Den Agenten bitten, einen zu führen",
+  "chain.nudgeExplain":
+    "Hängt einen Satz an jede Eingabe, und nur solange keine Liste existiert. Er bittet; er blockiert nie.",
+  "chain.nudgeInstalled": "Installiert. Wirksam ab der nächsten Sitzung.",
+  "chain.nudgeFailed": "Konnte nicht installiert werden.",
   "agent.noSession": "In diesem Tab läuft kein Terminal.",
   "agent.reading": "Die Session wird gelesen…",
   "agent.none": "In diesem Verzeichnis lief noch kein Agent.",

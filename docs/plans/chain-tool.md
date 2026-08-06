@@ -1,8 +1,22 @@
 # Plan — the Chain tool
 
-**Status: designed, reviewed by a five-member panel, revised. Not built.** The UI direction is
-settled — the maintainer confirmed the mockup verbatim ("genau das was ich will"). What remains open
-is listed at the end; each is a decision for the maintainer, not a gap.
+**Status: BUILT.** Reader, declaration, gate, primitive, tool and nudge all shipped in v0.52.0 with
+`check:all` green. This document is kept as the record of what was measured and why each decision
+went the way it did — the implementation order at the end is done, and the open decisions that
+remain are named as such.
+
+**Proven end to end against two real sessions**, which is what a unit fixture cannot do:
+
+| Session | Tool calls | Links | Plan steps | Recognised |
+| ------- | ---------- | ----- | ---------- | ---------- |
+| `lysisai-dsp`, 6:54 h, no task list | 446 | **39** | 0 | 200 |
+| the session that built this, with one | 392 | **31** | **19** | 275 |
+
+Both fallback stages work on real data, and the plan layer reconstructs from the transcript exactly
+as C2 argued it must — those 19 steps came out of the transcript, not out of the store.
+
+The UI direction was confirmed by the maintainer on the mockup ("genau das was ich will") before any
+code existed.
 
 **Read this first:** almost everything below was *measured* on this machine against live agent
 sessions, not reasoned about. Where a number appears, a command produced it. That matters, because

@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render as renderRaw, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import type { Chain } from "../../bindings/Chain";
 import type { ChainLink } from "../../bindings/ChainLink";
+
+/**
+ * The "no plan" state offers to install the nudge, and that offer is a real query — so the tool
+ * needs a client even though its own data is mocked. Retries off: a failing fixture should fail
+ * immediately rather than after three attempts.
+ */
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderRaw(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const state = { chain: null as Chain | null, isPending: false, isError: false, ready: true };
 

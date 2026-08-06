@@ -1,4 +1,8 @@
 import { Link2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { environmentApi } from "../../api/environment";
+import { useTerminalStore } from "../../store/terminal";
+import { Button } from "../ui/Button";
 import type { Chain } from "../../bindings/Chain";
 import type { ChainLink } from "../../bindings/ChainLink";
 import type { Round } from "../../bindings/Round";
@@ -320,14 +324,56 @@ function Node({
   );
 }
 
+/**
+ * Said plainly, with the one thing that can be done about it.
+ *
+ * The offer sits **here** rather than in Settings, because this is the moment somebody notices the
+ * absence — and it is offered rather than assumed: the nudge writes into the agent's context, which
+ * is a different consent from the attention hook's (ADR-PROJ-005 §7).
+ */
 function NoPlan({ done }: { done: boolean }) {
   const t = useT();
+  const cwd = useTerminalStore((s) => s.panes.find((p) => p.key === s.activeKey)?.cwd ?? null);
+  const client = useQueryClient();
+  const installed = useQuery({
+    queryKey: ["nudge", cwd],
+    queryFn: () => (cwd === null ? false : environmentApi.nudgeInstalled(cwd)),
+    enabled: cwd !== null && !done,
+  });
+  const install = useMutation({
+    mutationFn: () => environmentApi.installPlanNudge(cwd ?? ""),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["nudge"] }),
+  });
+
   return (
     <div className="border-dim/25 text-dim mb-[0.8em] border border-dashed px-[0.5em] py-[0.45em] text-[0.9em]">
       <b className="text-fg mb-[0.15em] block font-medium">
         {done ? t("chain.planDone") : t("chain.noPlan")}
       </b>
-      {done ? null : t("chain.noPlanHint")}
+      {done ? null : (
+        <>
+          {t("chain.noPlanHint")}
+          {cwd === null || installed.data === true ? null : (
+            <div className="mt-[0.5em]">
+              <Button
+                variant="ghost"
+                accent="cyan"
+                onClick={() => install.mutate()}
+                disabled={install.isPending}
+                tooltip={t("chain.nudgeExplain")}
+              >
+                {t("chain.nudgeInstall")}
+              </Button>
+              {install.isSuccess ? (
+                <div className="text-green mt-[0.3em]">{t("chain.nudgeInstalled")}</div>
+              ) : null}
+              {install.isError ? (
+                <div className="text-danger mt-[0.3em]">{t("chain.nudgeFailed")}</div>
+              ) : null}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

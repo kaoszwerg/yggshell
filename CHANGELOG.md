@@ -40,6 +40,22 @@ All notable changes to this project are documented here. The format follows
 - **A `Disclosure` HUD primitive**, and a lint that keeps `<details>`/`<summary>` out of views. The
   Agent tool had been using the native element since it shipped; it now uses the primitive.
 
+- **A plan nudge, offered where its absence is visible.** When the chain shows that a session keeps
+  no task list, it offers to install a `UserPromptSubmit` hook that appends one sentence to a prompt
+  — and only while no list exists, so it costs nothing in the ordinary case. Its own button and its
+  own script, separate from the attention hook: that one reports to this app, this one writes into
+  the model's context, and agreeing to the first is not agreeing to the second. Its text is a
+  constant with no interpolation, pinned by a test, because a sentence built from repository data
+  would be a channel through which a cloned repository could write instructions into somebody's
+  agent.
+
+  Forcing the list rather than asking was built, measured and dropped: a gate on file edits never
+  fired for a four-step task because the agent wrote through the shell instead, and where it did
+  fire it produced a task restating the tool call it had just blocked.
+
+- **`docs/adoption/`** — the rule, an example declaration and the gate, packaged for a repository
+  that has none of this project's tooling.
+
 - **A markdown file from the file browser can be read as markdown, not only as source.** Its menu
   offers *View as markdown* beside *View here* — only for markdown, because a `.rs` has nothing to
   draw — and the panel itself carries the same switch, so a document opened in the wrong lens does

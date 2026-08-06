@@ -1,0 +1,64 @@
+{
+  "$comment": "A worked example. Copy it to <repo-root>/work-levels.json and replace the entries with what this project actually has — the commands are already written down somewhere: a package.json, a Makefile, a scripts/ directory, the README. `run` is the identifying prefix as a person would type it, not the full line with its flags.",
+  "version": 1,
+
+  "$areas": "Which part of the product. Free, and yours — the names your team already uses. Referenced as #area in an expression; a project that has only one part can leave this out.",
+  "areas": ["core", "billing", "infra"],
+
+  "entrypoints": [
+    {
+      "$note": "The commonest kind: one module, no external process. Many entries share this — the axis says how DEEP a run reaches, not what kind it is, so a linter and a unit test are both verify/unit. The kind is visible in the command itself.",
+      "run": "npm run test:unit",
+      "is": "verify/unit@local"
+    },
+    {
+      "run": "npm run lint",
+      "is": "verify/unit@local"
+    },
+    {
+      "$note": "Reaches real services, so it is integration and it declares where they are — even though they are containers on this same machine.",
+      "run": "make test-api",
+      "is": "verify/integration@dev",
+      "reaches": "app-backend (docker compose)"
+    },
+    {
+      "$note": "The whole system through its own surface. Note that this is a SEPARATE entrypoint from the one below rather than the same command with a different environment variable — that separation is the rule's one hard requirement.",
+      "run": "npm run test:e2e",
+      "is": "verify/e2e@dev",
+      "reaches": "http://localhost:3000"
+    },
+    {
+      "run": "npm run test:e2e:staging",
+      "is": "verify/e2e@staging",
+      "reaches": "testing.example.com"
+    },
+    {
+      "$note": "Security, load and compatibility against a running installation. The `reaches` here is the most important line in the file: it is what makes 'am I about to hit production?' answerable without reading three files.",
+      "run": "scripts/audit/run.sh",
+      "is": "verify/audit@staging",
+      "reaches": "testing.example.com"
+    },
+
+    {
+      "run": "npm run build",
+      "is": "build@local"
+    },
+
+    {
+      "$note": "`ship` takes a step (commit, push, review, deploy, release), not a depth. `prod` because pushed history is public and permanent.",
+      "run": "git push",
+      "is": "ship/push@prod",
+      "reaches": "github.com/example/project"
+    },
+    {
+      "run": "gh pr create",
+      "is": "ship/review@prod",
+      "reaches": "github.com/example/project"
+    },
+    {
+      "run": "scripts/deploy.sh",
+      "is": "ship/deploy@prod",
+      "reaches": "app.example.com"
+    }
+  ]
+}

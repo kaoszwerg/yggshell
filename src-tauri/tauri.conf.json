@@ -51,6 +51,11 @@
         "template": "windows/installer.nsi"
       }
     },
-    "resources": ["resources/themes/*.yggtheme", "resources/cli/ygg", "resources/cli/ygg-hook"]
+    "resources": [
+      "resources/themes/*.yggtheme",
+      "resources/cli/ygg",
+      "resources/cli/ygg-hook",
+      "resources/cli/ygg-plan-nudge"
+    ]
   }
 }
