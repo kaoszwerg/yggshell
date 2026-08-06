@@ -8,6 +8,15 @@
     { "run": "npm run rust:test", "is": "verify/unit@local" },
     { "run": "npm run typecheck", "is": "verify/unit@local" },
 
+    {
+      "$comment": "The runners as they are actually typed while working — `cargo test <filter>`, `npx vitest run <file>`. Declaring only the npm scripts left every one of these marked as a guess in the Chain tool, which is honest but needlessly vague: they are the same level of work, reached by a shorter road.",
+      "run": "cargo test",
+      "is": "verify/unit@local"
+    },
+    { "run": "npx vitest run", "is": "verify/unit@local" },
+    { "run": "cargo clippy", "is": "verify/unit@local" },
+    { "run": "cargo fmt", "is": "verify/unit@local" },
+
     { "run": "npm run lint", "is": "verify/unit@local" },
     { "run": "npm run format:check", "is": "verify/unit@local" },
     { "run": "npm run rust:fmt", "is": "verify/unit@local" },
@@ -61,6 +70,11 @@
       "$comment": "Pulls the pinned upstream layers. Reaches a remote, so it declares it — even though nothing of this project goes out."
     },
 
+    {
+      "$comment": "Local: a commit reaches nothing until it is pushed. Declared so the tool stops calling it a guess — and so the gap between committing and pushing stays visible as two different levels.",
+      "run": "git commit",
+      "is": "ship/commit@local"
+    },
     {
       "run": "git push",
       "is": "ship/push@prod",

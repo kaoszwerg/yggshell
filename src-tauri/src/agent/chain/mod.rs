@@ -272,8 +272,23 @@ pub fn read(home: &Path, cwd: &Path, store: &cache::ChainCache) -> Option<Chain>
     let transcript = super::newest_transcript(home, cwd)?;
 
     let known = store.resume(&transcript);
-    let mut parsed = parse_onto(&transcript, known.offset, known);
+    let from = known.offset;
+    let mut parsed = parse_onto(&transcript, from, known);
     store.store(&transcript, &parsed);
+
+    // **Which file this chain is made of, on every poll.** The directory holds one transcript per
+    // session and the newest live one is *chosen*, so "am I looking at the wrong session?" is a
+    // question that will be asked — and it was, about a step nobody recognised. Without this line it
+    // is unanswerable after the fact, which makes it a silent failure by the definition in
+    // rule:logging. The path and the resumed offset only; never a line out of the file
+    // (ADR-PROJ-005 §1). `agent::session` logs the same identity for the same reason.
+    tracing::debug!(
+        transcript = %transcript.display(),
+        from,
+        to = parsed.offset,
+        steps = parsed.steps.len(),
+        "read the chain from a transcript"
+    );
 
     // Delegated work lives in a sibling directory the transcript never mentions again. Added after
     // the cache is written, because it is re-counted on every poll rather than accumulated.

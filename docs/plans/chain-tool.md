@@ -520,6 +520,37 @@ because each changed the design:
   33 % coverage for a session the reader had read correctly. Only an unrecognised program lowers it.
 - **`ship/pr` became `ship/review`.** Platform-neutral, because the rule is meant to travel.
 
+## What the first days of real use changed (v0.52.1)
+
+Every one of these was found by watching the tool report on the session that was building it — the
+loop the maintainer asked for in those words, and the only reason they were found at all.
+
+- **The state is reported, never inferred.** `Standing` came from the age of the last transcript
+  line, so a long `cargo build` read as *finished*. The gap between two tool calls is routinely
+  longer than any usable threshold — an agent thinking writes nothing — so **no threshold exists any
+  more**: `UserPromptSubmit` opens a turn, `Stop` closes it, and where neither has been heard the
+  answer is `Unknown` and says so (ADR-CORE-004). Demanded verbatim: *"das darf aber keine geratener
+  Zustand sein, das muss ein gewollt herbei geführter Status sein"*.
+- **A declaration is matched on the command, not on the refinement.** `Levels::apply` compared
+  `work-levels.json` against the link's *category* (`unit`), which no entry lists as its `run`. A
+  project with a correct declaration therefore still saw nearly every link marked as a guess. `Step`
+  now carries the signature the classifier wrote, and the fixtures keep the two deliberately
+  different so the old behaviour cannot come back quietly.
+- **`compact` is an act.** The one event that changes what an agent knows and leaves no tool call
+  behind. It also answers the "chain across a compact" question below by *showing the seam* rather
+  than choosing a side.
+- **The marks have a legend, on demand, grouped by region.** Six shapes serve two questions — *"how
+  did that go?"* about the trace and *"what is still outstanding?"* about the plan — and a flat list
+  answered neither. It sits outside the scrolling trace, because a legend that scrolls away is gone
+  exactly when the trace is long enough to need one.
+- **Which transcript a chain was read from is logged.** A directory holds one file per session and
+  the live one is *chosen*, so "am I looking at the wrong session?" is a question that gets asked —
+  and it was, about a step nobody recognised. Path and offsets only, never a line out of the file
+  (ADR-PROJ-005 §1).
+- **The declaration covers the road actually taken.** `cargo test`, `npx vitest run`, `git commit`
+  are typed constantly and were declared nowhere, so the panel called them guesses. Honest, and
+  needlessly vague — they are the same level of work reached by a shorter road.
+
 ## Still open
 
 Named rather than quietly deferred (ADR-CORE-002 — no leftovers, and what is left is on the record):
@@ -528,7 +559,9 @@ Named rather than quietly deferred (ADR-CORE-002 — no leftovers, and what is l
   line, one pulse, one clock. A delegated link says how many steps it is hiding, which closes the
   "looks like nothing happened" hole — it does not yet show the sub-chain under its own node.
 - **The chain across a compact.** Three compacts in one measured session. Show everything (work
-  nobody remembers) or cut (four hours vanish)? Both defensible, neither chosen.
+  nobody remembers) or cut (four hours vanish)? Neither: the compact is drawn **as a step**, so the
+  seam is visible and the choice stays with whoever is reading. Whether a long trace should also be
+  *foldable* at that seam is still open.
 - **`work-levels.json` for `lysisai-dsp`** — drafted and gate-checked here (27 entrypoints), not
   written into that repository while an agent works in it. Its `$verify` markers name the entries I
   could not establish by reading alone.
