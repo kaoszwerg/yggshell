@@ -490,32 +490,50 @@ honest when no plan is there.
 - **No answer to "is it stuck?" beyond a reported halt.** A 40-minute build and a wedged process look
   identical in a trace. Worth stating, because it is the question somebody opens this at 23:00 for.
 
-## Open decisions
+## What was built (v0.52.0)
 
-1. **`work-levels.json` for lysisai-dsp** — drafted under `docs/plans/`, deliberately not written into
-   that repository while an agent works in it with open commits.
-2. **The progress bar** stays; it is free from the plan. Percentages do not matter to the maintainer,
-   but they no longer cost anything either.
-3. **Parallel work.** `owner` and subagents mean two things can run at once; the design has one
-   `.now`, one pulse, one clock. Needs deciding before the DTO exists.
-4. **FIX subtypes** are filenames, TEST subtypes are suites. Confirm.
-5. **Where user signature assignments live** (priority 2). Only needed for projects without a
-   declaration.
-6. **What happens to the chain across a compact.** Three compacts in one measured session. Show
-   everything (work nobody remembers) or cut (four hours vanish)? Both defensible, neither chosen.
+| # | Step | Where it landed |
+| - | ---- | --------------- |
+| 1 | Threat model, before any code | `docs/adr/project/proj-005-chain-tool-trust.md` |
+| 2 | Idempotent reader, classifier, folding, coverage | `src-tauri/src/agent/chain/{mod,classify,fold,cache}.rs` |
+| 3 | Plan reconstruction in the same pass (C2) | `chain/mod.rs` — `parse_transcript` |
+| 4 | Delegated work counted rather than hidden (C3) | `chain/mod.rs` — `delegated_steps` |
+| 5 | Declaration reader, escalate-only | `chain/levels.rs` |
+| 6 | DTOs, bindings, `agent_chain`, api wrapper | `chain/model.rs`, `commands/terminal.rs`, `src/api/terminal.ts` |
+| 7 | `Disclosure` primitive + lint; `AgentTool` fixed with it | `src/components/ui/Disclosure.tsx`, `eslint.config.project.mjs` |
+| 8 | The tool, with the nine UI corrections | `src/components/tools/ChainTool.tsx` |
+| 9 | The nudge, its own script and its own consent | `src-tauri/resources/cli/ygg-plan-nudge` |
+| + | The grammar gate the panel asked for | `scripts/project/check-work-levels.mjs` (in `check:all`) |
+| + | Adoption package for other repositories | `docs/adoption/` |
 
-## Implementation order
+**Four decisions taken during implementation** that the plan had left to the keyboard, recorded here
+because each changed the design:
 
-1. **ADR-PROJ-00x** — the threat model above. Before code, per rule:security.
-2. Rust: incremental **idempotent** reader (offset + `(ino,len)` validation) + segment-splitting
-   classifier + cycle folding + coverage figure, tested against fixture transcripts.
-3. Rust: plan reconstruction from `TaskCreate`/`TaskUpdate` in the same pass (C2).
-4. Rust: `subagents/` sub-chains (C3).
-5. `work-levels.json` reader with the three-tier priority and the escalate-only rule.
-6. DTOs + `ts-rs` bindings, IPC command returning the **whole** chain, `src/api/` wrapper.
-7. `src/components/ui/Disclosure.tsx` + lint entry; fix `AgentTool.tsx:98` with it.
-8. The tool component, with the nine UI fixes, one `useContentFontSize` test per surface.
-9. The `UserPromptSubmit` hook and its settings switch, with its constant text pinned by a test.
+- **One vocabulary, and it is the rule's.** The mockup's `TEST`/`FIX`/`GATE` are gone; the interface
+  shows `verify e2e`, `build`, `ship commit`. Two names for one thing is ADR-CORE-005 duplication,
+  and the declaration could not have produced the mockup's words.
+- **Consecutive builds merge across their refinement; verifies do not.** The first run against a real
+  session produced **84 links instead of 39**, because every edited file started its own — four lines
+  for one act of translating. A build's refinement is a file and there are many; a verify's is a
+  suite, and switching it is meaningful.
+- **A `Read` counts as understood.** Conflating "is a probe" with "could not be classified" reported
+  33 % coverage for a session the reader had read correctly. Only an unrecognised program lowers it.
+- **`ship/pr` became `ship/review`.** Platform-neutral, because the rule is meant to travel.
+
+## Still open
+
+Named rather than quietly deferred (ADR-CORE-002 — no leftovers, and what is left is on the record):
+
+- **Parallel work.** `owner` and subagents mean two things can run at once; the tool has one "now"
+  line, one pulse, one clock. A delegated link says how many steps it is hiding, which closes the
+  "looks like nothing happened" hole — it does not yet show the sub-chain under its own node.
+- **The chain across a compact.** Three compacts in one measured session. Show everything (work
+  nobody remembers) or cut (four hours vanish)? Both defensible, neither chosen.
+- **`work-levels.json` for `lysisai-dsp`** — drafted and gate-checked here (27 entrypoints), not
+  written into that repository while an agent works in it. Its `$verify` markers name the entries I
+  could not establish by reading alone.
+- **User-assigned signatures** (priority 2 of the classification chain). Only needed for a project
+  with no declaration, and the heuristic already says when it is guessing.
 
 ## The rule's own lifecycle — it is a guest here
 
