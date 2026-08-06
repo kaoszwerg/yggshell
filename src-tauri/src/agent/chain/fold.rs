@@ -61,6 +61,14 @@ fn merges(open: &Block, step: &Step) -> bool {
     open.act == Act::Edit || open.refinement == step.refinement
 }
 
+/// How many probes an act may absorb before they stop being its footnotes.
+///
+/// A judgement, and it is the number that decides whether the panel answers "what now" honestly. Too
+/// high and a long look-around keeps announcing the act it followed; too low and every test run
+/// splits in two because somebody read its output twice. Four is "a couple of look-ups belong to the
+/// thing you were doing"; the fifth says you have moved on to finding something out.
+const PROBE_RUN: u32 = 4;
+
 fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
     // A compact met before any work has an open block to fall into. It is held rather than dropped:
@@ -85,14 +93,30 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
         }
         // A probe belongs inside whatever is open. Before anything is open it is dropped: a session
         // that begins with twenty greps has not started working yet.
+        //
+        // **Up to a point, and finding that point took two reports.** Reading a log after a test run
+        // belongs inside the test; twenty greps after a push are not the push, they are what the
+        // agent is doing now — and the panel went on announcing `ship push` through all of them,
+        // while the maintainer watched files being edited: *"so denke ich du tust etwas völlig
+        // anderes"*. Past the threshold the run becomes a link of its own, which is what `probe` is
+        // in the vocabulary for: finding out how things stand.
         if step.act == Act::Probe && step.kind == Kind::Normal {
-            if let Some(open) = blocks.last_mut() {
-                open.noise += 1;
-                if step.at.is_some() {
-                    open.last_at = step.at;
+            let absorbed = blocks
+                .last()
+                .is_some_and(|open| open.act != Act::Probe && open.noise < PROBE_RUN);
+            if absorbed {
+                if let Some(open) = blocks.last_mut() {
+                    open.noise += 1;
+                    if step.at.is_some() {
+                        open.last_at = step.at;
+                    }
                 }
+                continue;
             }
-            continue;
+            if blocks.is_empty() {
+                // Nothing open: a session that begins with greps has not started working yet.
+                continue;
+            }
         }
         match blocks.last_mut() {
             Some(open) if open.kind == step.kind && merges(open, &step) => {
@@ -327,6 +351,38 @@ mod tests {
         assert_eq!(links.len(), 2, "the probes are not links of their own");
         assert_eq!(links[0].noise, 3);
         assert_eq!(links[0].steps, 1);
+    }
+
+    #[test]
+    fn a_long_look_around_stops_being_a_footnote_of_the_act_before_it() {
+        // **Reported twice, and the second time it was named exactly.** After a push, twenty
+        // look-ups went on being counted as the push, so the panel announced `ship push` while the
+        // agent was reading files: *"das push ist schon erledigt … so denke ich du tust etwas
+        // völlig anderes"*. A handful still belongs to the act; a run of them is its own work.
+        let mut steps = vec![step(Act::Ship, "push")];
+        steps.extend(std::iter::repeat_with(probe).take(10));
+
+        let links = fold(steps);
+
+        assert_eq!(links.len(), 2, "the push, then the looking around");
+        assert_eq!(links[0].act, Act::Ship);
+        assert_eq!(links[0].noise, PROBE_RUN, "a few still ride along");
+        assert_eq!(
+            links[1].act,
+            Act::Probe,
+            "and the rest is what is happening now"
+        );
+        assert_eq!(links[1].steps, 6);
+    }
+
+    #[test]
+    fn a_couple_of_look_ups_still_belong_to_what_they_followed() {
+        // The other half, and the reason the threshold is not zero: reading a log after a test run
+        // is part of the test, and splitting it out would undo the fold this tool exists for.
+        let links = fold(vec![step(Act::Verify, "core"), probe(), probe(), probe()]);
+
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].noise, 3);
     }
 
     #[test]

@@ -77,12 +77,14 @@ export function ChainTool() {
   return (
     // No header of its own: the tool column already draws one with this tool's name, and two
     // identical titles above each other is the panel telling you twice what it is.
-    // One font-size for the "now" line, the goal AND the chain — see the component doc.
-    <div
-      ref={bodyRef}
-      className="flex min-h-0 flex-1 flex-col font-mono"
-      style={{ fontSize: `${fontSize}px` }}
-    >
+    //
+    // **The size hangs on the CONTENT, not on the tool.** It used to sit here, on the body, and
+    // that made this panel visibly larger than every other tool at the same setting: the heading,
+    // the legend, the footer and — because the padding is written in `em` — even the spacing grew
+    // with it, while Files, Agent, Docker, Activity, Tmux and Notes all keep their chrome fixed and
+    // scale only the region you read. Reported as exactly that. `rule:content-size` draws the line
+    // where those tools draw it: the trace and the plan are content, the rest is interface.
+    <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col font-mono">
       {running === undefined ? null : <Now chain={chain} link={running} />}
       {showPlan ? <Goal chain={chain} /> : null}
 
@@ -103,8 +105,9 @@ export function ChainTool() {
       {showPlan ? (
         <>
           <div
-            className="min-h-0 overflow-x-hidden overflow-y-auto px-[0.6em] pt-[0.5em]"
-            style={{ height: `${split}%` }}
+            className="min-h-0 overflow-x-hidden overflow-y-auto px-2 pt-2"
+            // Content, not chrome: a plan reads like a terminal, at the size chosen for one.
+            style={{ height: `${split}%`, fontSize: `${fontSize}px` }}
           >
             <SectionLabel>{t("chain.plan")}</SectionLabel>
             {chain.plan.map((step) => (
@@ -128,7 +131,9 @@ export function ChainTool() {
       ) : (
         <div
           data-chain-trace
-          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]"
+          className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2"
+          // Content: the trace is the same kind of reading as the terminal beside it.
+          style={{ fontSize: `${fontSize}px` }}
         >
           {chain.plan.length === 0 && !showPlan ? (
             <NoPlan done={chain.plan_done} />
@@ -169,8 +174,13 @@ export function ChainTool() {
  */
 function RestingRecord({ chain }: { chain: Chain }) {
   const t = useT();
+  const fontSize = useContentFontSize();
   return (
-    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[0.6em] py-[0.5em]">
+    <div
+      className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2"
+      // The folded record is the same content as the trace it replaces, so it is sized like it.
+      style={{ fontSize: `${fontSize}px` }}
+    >
       <Disclosure
         summaryClassName="text-dim"
         summary={<span>{t("chain.showRecord", { n: String(chain.links.length) })}</span>}
