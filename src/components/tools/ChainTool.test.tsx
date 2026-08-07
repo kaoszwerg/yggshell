@@ -129,7 +129,7 @@ describe("ChainTool", () => {
     // The harness clears its list the moment nothing is open. Nineteen crossed-off lines saying
     // "all done" is a panel asking for attention it does not need.
     state.chain = chain({
-      plan: [{ id: "1", subject: "done thing", status: "completed", blocked_by: [] }],
+      plan: [{ id: "1", subject: "done thing", status: "completed", done_at: 0, blocked_by: [] }],
       standing: "idle",
     });
     render(<ChainTool />);
@@ -140,8 +140,8 @@ describe("ChainTool", () => {
   it("keeps finished steps visible while anything is still open", () => {
     state.chain = chain({
       plan: [
-        { id: "1", subject: "done thing", status: "completed", blocked_by: [] },
-        { id: "2", subject: "open thing", status: "pending", blocked_by: [] },
+        { id: "1", subject: "done thing", status: "completed", done_at: 0, blocked_by: [] },
+        { id: "2", subject: "open thing", status: "pending", done_at: null, blocked_by: [] },
       ],
     });
     render(<ChainTool />);
@@ -149,6 +149,46 @@ describe("ChainTool", () => {
     expect(screen.getByText("done thing")).toBeTruthy();
     // Twice, and both are right: once as the goal being worked towards, once in the list.
     expect(screen.getAllByText("open thing").length).toBe(2);
+  });
+
+  it("puts what is left above what is done, and orders the done by when they finished", () => {
+    // Reported: a finished task was struck through and left where it was, so the open work sat
+    // scattered among the done work and the list had to be searched instead of read.
+    //
+    // The fixture is built so neither creation order nor id order could produce the answer by
+    // accident: created 1,2,3,4 and finished 3 → 1, with 2 and 4 still open.
+    state.chain = chain({
+      plan: [
+        { id: "1", subject: "finished second", status: "completed", done_at: 1, blocked_by: [] },
+        { id: "2", subject: "still open", status: "in_progress", done_at: null, blocked_by: [] },
+        { id: "3", subject: "finished first", status: "completed", done_at: 0, blocked_by: [] },
+        { id: "4", subject: "open too", status: "pending", done_at: null, blocked_by: [] },
+      ],
+    });
+    render(<ChainTool />);
+
+    const list = screen.getByLabelText("Plan");
+    const order = [...list.querySelectorAll("li")].map((row) => row.textContent?.trim());
+
+    expect(order).toEqual(["still open", "open too", "finished first", "finished second"]);
+  });
+
+  it("leaves a finished step with no recorded rank among the finished, not at the top", () => {
+    // A transcript read before the rank existed. Being slightly out of order among the done work is
+    // a far smaller lie than appearing to be open work.
+    state.chain = chain({
+      plan: [
+        { id: "1", subject: "no rank", status: "completed", done_at: null, blocked_by: [] },
+        { id: "2", subject: "open", status: "pending", done_at: null, blocked_by: [] },
+        { id: "3", subject: "ranked", status: "completed", done_at: 0, blocked_by: [] },
+      ],
+    });
+    render(<ChainTool />);
+
+    const list = screen.getByLabelText("Plan");
+    const order = [...list.querySelectorAll("li")].map((row) => row.textContent?.trim());
+
+    expect(order).toEqual(["open", "ranked", "no rank"]);
   });
 
   it("shows one line and no chain when nothing is outstanding", () => {

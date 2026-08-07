@@ -199,6 +199,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The Chain tool's plan reads as a plan again: what is left on top, what is done underneath.** A
+  finished task was struck through and left where it was, so open work sat scattered among done work
+  and the list had to be searched rather than read. On nineteen steps that is the difference between
+  a plan and a log.
+
+  Open steps keep the order the agent created them in — that order is its own sequencing and says
+  what it means to do next. **Finished steps follow in the order they finished**, which needed
+  recording: a status is a state, not an event, and nothing had kept when each one completed. Each
+  step now carries its place in that order, taken from the transcript, so it survives a poll and a
+  compaction; reopening a step takes its place away again rather than leaving it filed among the
+  finished while showing as open.
+
+  The list is also a list now (`ul`/`li`), so a screen reader announces "3 of 7" instead of reading
+  seven unrelated lines.
+
 - **A comment in a diff is readable again, in every scheme.** Measured in Alien Blood: the comment
   colour is the scheme's ANSI bright black, and a changed row paints a 14 % tint of its green or red
   underneath — **2.00 : 1** on the plain surface, **1.77** on an added line and **1.71** on a removed

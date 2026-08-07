@@ -9,6 +9,18 @@ export type PlanStep = { id: string, subject: string,
  */
 status: string, 
 /**
+ * Where this step came in the order things were **finished** — 0 for the first, and `None`
+ * while it is still open.
+ *
+ * **A rank rather than a timestamp**, because the question it answers is *"in which order were
+ * they completed"* and nothing else: a time would invite arithmetic on it, and the entries a
+ * plan is rebuilt from do not all carry one.
+ *
+ * Cleared when a step is reopened. A rank that outlived its completion would file an open task
+ * among the finished ones while showing it as open, which is worse than not sorting at all.
+ */
+done_at: number | null, 
+/**
  * Ids of steps that must finish first. Empty in every live file measured so far, so the UI must
  * not depend on it — but it is carried, because when it appears it is the causal chain.
  */

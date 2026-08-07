@@ -129,6 +129,7 @@ mod tests {
                 id: "1".into(),
                 subject: "verify@local: prove it".into(),
                 status: "completed".into(),
+                done_at: Some(0),
                 blocked_by: Vec::new(),
             }],
             session_id: Some("abc".into()),

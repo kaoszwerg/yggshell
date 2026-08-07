@@ -123,6 +123,16 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
     // The same shape for a backgrounded command: the call says what it is, its result says what the
     // task is called, and only the pair is useful.
     let mut pending_background: HashMap<String, OpenRun> = HashMap::new();
+    // How many steps have finished so far, so each learns where it came in that order. Seeded from
+    // what is already known, because a poll continues a pass rather than starting one — the same
+    // invariant `parse_onto` is documented by, and getting it wrong would restart the ranking at
+    // every poll and shuffle the finished list under the reader.
+    let mut finished: u32 = out
+        .plan
+        .iter()
+        .filter_map(|s| s.done_at)
+        .max()
+        .map_or(0, |highest| highest + 1);
 
     for line in text.lines() {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
@@ -221,7 +231,7 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                             pending_subjects.insert(id, subject.to_string());
                         }
                     } else if name == "TaskUpdate" {
-                        apply_update(&mut out.plan, input);
+                        apply_update(&mut out.plan, input, &mut finished);
                     }
                     out.steps.push(step);
                 }
@@ -256,6 +266,7 @@ pub fn parse_onto(path: &Path, from: u64, prior: Parsed) -> Parsed {
                                 id: task_id,
                                 subject,
                                 status: "pending".into(),
+                                done_at: None,
                                 blocked_by: Vec::new(),
                             });
                         }
@@ -352,7 +363,11 @@ fn between(text: &str, open: &str, close: &str) -> Option<String> {
 }
 
 /// Apply one `TaskUpdate` to the reconstructed plan.
-fn apply_update(plan: &mut [PlanStep], input: Option<&Value>) {
+///
+/// `finished` counts completions across the whole transcript, so each step learns **where it came in
+/// the order things were finished** — which the status alone cannot say, being a state rather than an
+/// event. It is what lets the list put open work above done work without inventing an order.
+fn apply_update(plan: &mut [PlanStep], input: Option<&Value>, finished: &mut u32) {
     let Some(input) = input else { return };
     let Some(id) = input.get("taskId").and_then(Value::as_str) else {
         return;
@@ -361,6 +376,16 @@ fn apply_update(plan: &mut [PlanStep], input: Option<&Value>) {
         return;
     };
     if let Some(status) = input.get("status").and_then(Value::as_str) {
+        // Only the *transition* counts. A second `completed` on a step that is already finished is
+        // bookkeeping, and re-ranking it would shuffle the finished list under the reader.
+        if status == "completed" {
+            if step.done_at.is_none() {
+                step.done_at = Some(*finished);
+                *finished += 1;
+            }
+        } else {
+            step.done_at = None;
+        }
         step.status = status.to_string();
     }
     if let Some(subject) = input.get("subject").and_then(Value::as_str) {
@@ -775,6 +800,63 @@ mod tests {
             "the id comes from the result, not a count"
         );
         assert_eq!(parsed.plan[0].status, "completed");
+    }
+
+    #[test]
+    fn a_finished_step_records_where_it_came_in_the_finishing_order() {
+        // Reported: the list strikes a finished task through and leaves it where it was, so the open
+        // work is scattered among the done work. Putting the finished ones underneath needs the ORDER
+        // THEY FINISHED IN, and nothing recorded it — the status is a state, not an event.
+        //
+        // Three created, finished 2 → 3 → 1: an order the creation order cannot produce, so a test
+        // that passed by accident here would be visible.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let body = r#"{"type":"assistant","timestamp":"2026-08-06T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"c1","name":"TaskCreate","input":{"subject":"one"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c1","content":"Task #1 created successfully: one"}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:00:10.000Z","message":{"content":[{"type":"tool_use","id":"c2","name":"TaskCreate","input":{"subject":"two"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c2","content":"Task #2 created successfully: two"}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:00:20.000Z","message":{"content":[{"type":"tool_use","id":"c3","name":"TaskCreate","input":{"subject":"three"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c3","content":"Task #3 created successfully: three"}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:01:00.000Z","message":{"content":[{"type":"tool_use","id":"u1","name":"TaskUpdate","input":{"taskId":"2","status":"completed"}}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:02:00.000Z","message":{"content":[{"type":"tool_use","id":"u2","name":"TaskUpdate","input":{"taskId":"3","status":"completed"}}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:03:00.000Z","message":{"content":[{"type":"tool_use","id":"u3","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}]}}
+"#;
+        let path = write(dir.path(), "t.jsonl", body);
+
+        let plan = parse_transcript(&path, 0).plan;
+
+        // The list itself stays in CREATION order: that is a fact about the session, and the display
+        // decides how to show it. Only the rank is added.
+        let by_id = |id: &str| plan.iter().find(|s| s.id == id).expect("step").done_at;
+        assert_eq!(by_id("2"), Some(0), "finished first");
+        assert_eq!(by_id("3"), Some(1));
+        assert_eq!(by_id("1"), Some(2), "created first, finished last");
+        assert_eq!(
+            plan.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            ["1", "2", "3"],
+            "the DTO is not reordered — `plan` still means the order they were created in"
+        );
+    }
+
+    #[test]
+    fn reopening_a_step_takes_its_place_in_the_finished_order_away() {
+        // Otherwise a task that was reopened keeps a stale rank, and the list would file it among the
+        // finished work while showing it as open. A rank is only meaningful while it holds.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let body = r#"{"type":"assistant","timestamp":"2026-08-06T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"c1","name":"TaskCreate","input":{"subject":"one"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"c1","content":"Task #1 created successfully: one"}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:01:00.000Z","message":{"content":[{"type":"tool_use","id":"u1","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}]}}
+{"type":"assistant","timestamp":"2026-08-06T12:02:00.000Z","message":{"content":[{"type":"tool_use","id":"u2","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}]}}
+"#;
+        let path = write(dir.path(), "t.jsonl", body);
+
+        let plan = parse_transcript(&path, 0).plan;
+
+        assert_eq!(plan[0].status, "in_progress");
+        assert_eq!(
+            plan[0].done_at, None,
+            "it is open again, so it has no place among the finished"
+        );
     }
 
     #[test]

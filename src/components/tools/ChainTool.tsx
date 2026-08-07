@@ -15,6 +15,7 @@ import { Disclosure } from "../ui/Disclosure";
 import { Splitter } from "../ui/Splitter";
 import { Tooltip } from "../ui/Tooltip";
 import { CHAIN_SPLIT_MAX, CHAIN_SPLIT_MIN, useUiStore } from "../../store/ui";
+import type { PlanStep } from "../../bindings/PlanStep";
 
 /**
  * What the agent in this tab has been through, and what it is doing now.
@@ -111,9 +112,11 @@ export function ChainTool() {
             style={{ height: `${split}%`, fontSize: `${fontSize}px` }}
           >
             <SectionLabel>{t("chain.plan")}</SectionLabel>
-            {chain.plan.map((step) => (
-              <PlanRow key={step.id} subject={step.subject} status={step.status} />
-            ))}
+            <ul aria-label={t("chain.plan")}>
+              {orderPlan(chain.plan).map((step) => (
+                <PlanRow key={step.id} subject={step.subject} status={step.status} />
+              ))}
+            </ul>
           </div>
           <Splitter
             label={t("chain.splitLabel")}
@@ -410,11 +413,44 @@ function Goal({ chain }: { chain: Chain }) {
  * So: done is struck through and dimmed, exactly as a crossed-off list looks; running is the only
  * line with an accent; pending is plain, waiting its turn.
  */
+/**
+ * The plan as it should be read: **what is left, then what is done.**
+ *
+ * Reported from the running app — a finished task was struck through and left where it was, so the
+ * open work sat scattered among the done work and the list had to be searched rather than read. On a
+ * list of nineteen that is the difference between a plan and a log.
+ *
+ * - **Open work keeps the order it was created in.** That order is the agent's own sequencing and
+ *   carries real information about what it intends to do next.
+ * - **Finished work follows, in the order it finished.** Not creation order: what a reader looks
+ *   back at is *what happened*, and the sequence in which things were completed is the only account
+ *   of that the list has. `done_at` exists for exactly this and comes out of the transcript, so it
+ *   survives a poll and a compaction.
+ *
+ * Sorted here rather than in the reader on purpose: `chain.plan` means *the order the agent created
+ * them*, which is a fact about the session. **How to read it is a question about a screen**, and a
+ * DTO that arrives pre-sorted for one surface would quietly decide it for every other.
+ *
+ * A finished step with no rank — from a transcript read before the field existed — keeps its place
+ * among the finished rather than jumping to the top: `Infinity` sorts it last, and being slightly
+ * out of order is a much smaller lie than appearing to be open work.
+ */
+function orderPlan(plan: readonly PlanStep[]): PlanStep[] {
+  const done = (step: PlanStep) => step.status === "completed";
+  return [...plan].sort((a, b) => {
+    if (done(a) !== done(b)) return done(a) ? 1 : -1;
+    if (!done(a)) return 0; // stable: both open, so creation order stands
+    return (a.done_at ?? Infinity) - (b.done_at ?? Infinity);
+  });
+}
+
 function PlanRow({ subject, status }: { subject: string; status: string }) {
   const done = status === "completed";
   const running = status === "in_progress";
   return (
-    <div className="flex items-baseline gap-[0.5em] pb-[0.35em]">
+    // `li`, because it is one: a plan is an ordered list of steps, and saying so is what lets a
+    // screen reader announce "3 of 7" instead of reading seven unrelated lines.
+    <li className="flex items-baseline gap-[0.5em] pb-[0.35em]">
       <Node state={done ? "done" : running ? "live" : "todo"} />
       <span
         className={`min-w-0 flex-1 truncate ${
@@ -423,7 +459,7 @@ function PlanRow({ subject, status }: { subject: string; status: string }) {
       >
         {subject}
       </span>
-    </div>
+    </li>
   );
 }
 
