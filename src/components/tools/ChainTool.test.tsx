@@ -368,6 +368,33 @@ describe("ChainTool", () => {
     expect((await screen.findAllByText(/does not declare its runs/i)).length).toBeGreaterThan(0);
   });
 
+  it("does not claim nobody ran here when it simply recognised nothing", async () => {
+    // **The message cost an evening.** A fresh repository, an agent that had read the design and
+    // answered — twelve tool calls in the transcript, every one of them a look-up, and the reader
+    // folded them to zero links. The panel then said *"no agent has run in this directory"*, which
+    // is a claim about the directory that the tool had not established, and the maintainer and this
+    // agent between them spent an hour hunting a lookup that was working the whole time.
+    //
+    // `null` and "read it, recognised nothing" are different facts and must read differently. The
+    // second one shows its own coverage, which is the number that points at the reader rather than
+    // at the repository (ADR-PROJ-005).
+    state.chain = chain({ links: [], steps_seen: 12, steps_understood: 10 });
+    render(<ChainTool />);
+
+    expect(await screen.findByText(/nothing in it looks like work/i)).toBeTruthy();
+    expect(screen.getByText("12/10")).toBeTruthy();
+    expect(screen.queryByText(/no agent has run/i)).toBeNull();
+  });
+
+  it("still says nobody ran here when there is no transcript at all", async () => {
+    // The other half, and the reason the two were ever one branch: with no chain, the original
+    // sentence is exactly right and must survive the fix.
+    state.chain = null;
+    render(<ChainTool />);
+
+    expect(await screen.findByText(/no agent has run/i)).toBeTruthy();
+  });
+
   it("says what is still running after the agent has stopped", () => {
     // "Nothing outstanding" answers whether the agent owes you something. It was being read as
     // "nothing is happening" while a build compiled — reported while a DMG was being built.

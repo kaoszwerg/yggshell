@@ -195,6 +195,8 @@ export const en = {
   "chain.noTerminal": "This tab has no terminal running.",
   "chain.reading": "Reading the session…",
   "chain.none": "No agent has run in this directory.",
+  "chain.nothingRecognised": "A transcript was read here — nothing in it looks like work yet.",
+  "chain.seenUnderstood": "tool calls seen / understood",
   "chain.failed": "The session could not be read.",
   "chain.plan": "Plan",
   "chain.trace": "Trace",

@@ -182,6 +182,9 @@ export const de: Translations = {
   "chain.noTerminal": "In diesem Tab läuft kein Terminal.",
   "chain.reading": "Sitzung wird gelesen…",
   "chain.none": "In diesem Verzeichnis lief noch kein Agent.",
+  "chain.nothingRecognised":
+    "Ein Transkript wurde gelesen — darin sieht bisher nichts nach Arbeit aus.",
+  "chain.seenUnderstood": "Tool-Aufrufe gesehen / verstanden",
   "chain.failed": "Die Sitzung konnte nicht gelesen werden.",
   "chain.plan": "Plan",
   "chain.trace": "Spur",

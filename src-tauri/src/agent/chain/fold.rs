@@ -73,7 +73,12 @@ fn merges(open: &Block, step: &Step) -> bool {
     if open.act != step.act {
         return false;
     }
-    open.act == Act::Edit || open.refinement == step.refinement
+    // **Editing and looking around are both about the run, not the file.** Three edits to three
+    // files are one act of building — that short-circuit was always here. Ten reads of ten files are
+    // one act of looking around by exactly the same argument, and without `Probe` on this line they
+    // were ten separate links: the same intent, implemented for one act and not the other. Which
+    // file is current is answered by `refinement`, and the ones before it by `also`.
+    matches!(open.act, Act::Edit | Act::Probe) || open.refinement == step.refinement
 }
 
 /// How many probes an act may absorb before they stop being its footnotes.
@@ -90,6 +95,15 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
     // a resumed session opens with the summary, and that seam is what explains why the trace starts
     // mid-thought.
     let mut pending_compacts = 0u32;
+    // **Held, not dropped — the same treatment a compact gets, and for a related reason.** A
+    // look-around before any work is not yet work, so it opens nothing; but "not yet" is a
+    // judgement with an expiry, and the expiry already exists four lines down as `PROBE_RUN`. It
+    // simply was not applied here, so at the *start* of a session the rule was "drop for ever"
+    // rather than "drop until it is clearly what is happening" — and a session that only ever reads
+    // folded to nothing at all. Measured in a fresh repository: ten `Read`s, two `Bash`es, zero
+    // links, and a panel announcing that no agent had run there.
+    let mut pending_probes = 0u32;
+    let mut probes_from: Option<String> = None;
     for step in steps {
         // Bookkeeping is how the plan is recorded, not work — it never becomes a link, and it is
         // not noise either, so it does not inflate the count of what a block consisted of.
@@ -129,7 +143,30 @@ fn merge_runs(steps: Vec<Step>) -> Vec<Block> {
                 continue;
             }
             if blocks.is_empty() {
-                // Nothing open: a session that begins with greps has not started working yet.
+                // Nothing open: a session that begins with greps has not started working yet — for
+                // as long as that stays plausible. Past the same threshold used above, looking
+                // around IS the work, and the whole run becomes its one link rather than only the
+                // steps after the threshold: the user asked what happened, not what happened fifth.
+                pending_probes += 1;
+                if probes_from.is_none() {
+                    probes_from.clone_from(&step.at);
+                }
+                if pending_probes <= PROBE_RUN {
+                    continue;
+                }
+                blocks.push(Block {
+                    act: Act::Probe,
+                    refinement: step.refinement,
+                    signature: step.signature,
+                    also: Vec::new(),
+                    kind: step.kind,
+                    steps: pending_probes,
+                    noise: 0,
+                    compacts: std::mem::take(&mut pending_compacts),
+                    failed: step.failed,
+                    first_at: probes_from.take(),
+                    last_at: step.at,
+                });
                 continue;
             }
         }
@@ -396,6 +433,74 @@ mod tests {
     }
 
     #[test]
+    fn a_session_that_only_ever_reads_is_still_a_session() {
+        // **The first session in any repository, and it rendered as nothing at all.** Measured in
+        // `kaoszwerg/mot` on 2026-08-08: an agent read the design and answered — 12 tool calls, ten
+        // `Read` and two `Bash`, every one of them a probe. The reader saw all twelve and folded
+        // them to **zero links**, so the panel fell through to its empty state and said *"no agent
+        // has run in this directory"* about a directory an agent was working in. The maintainer
+        // spent half an hour on it, and so did this agent, because the message blamed the wrong
+        // thing.
+        //
+        // The rule that discarded them — "a session that begins with greps has not started working
+        // yet" — is right, and it already carries its own limit four lines further down: past
+        // `PROBE_RUN` a look-around *is* the work. That limit simply was not applied before the
+        // first block existed, so at the start of a session it was "drop for ever" instead of
+        // "drop until it is clearly what is happening".
+        let links = fold(std::iter::repeat_with(probe).take(10).collect());
+
+        assert_eq!(links.len(), 1, "looking around IS what happened here");
+        assert_eq!(links[0].act, Act::Probe);
+        assert_eq!(
+            links[0].steps, 10,
+            "and all ten are counted, not merely the ones past the threshold"
+        );
+    }
+
+    #[test]
+    fn a_short_look_around_that_leads_nowhere_still_shows_nothing() {
+        // The other half of the same judgement, and it must not be lost while fixing the first: a
+        // couple of look-ups at the start of a session is not yet work, and announcing it would put
+        // a box on screen for every session anybody has ever opened.
+        let links = fold(
+            std::iter::repeat_with(probe)
+                .take(PROBE_RUN as usize)
+                .collect(),
+        );
+
+        assert!(links.is_empty(), "four is still 'has not started yet'");
+    }
+
+    #[test]
+    fn a_leading_look_around_is_discarded_once_real_work_arrives() {
+        // Unchanged behaviour, pinned because the fix above holds the probes rather than dropping
+        // them immediately — and a held thing is a thing that can leak out later.
+        let mut steps = std::iter::repeat_with(probe).take(3).collect::<Vec<_>>();
+        steps.push(step(Act::Edit, "a.rs"));
+
+        let links = fold(steps);
+
+        assert_eq!(links.len(), 1, "the edit, and nothing before it");
+        assert_eq!(links[0].act, Act::Edit);
+    }
+
+    #[test]
+    fn a_look_around_across_many_files_is_one_act_of_looking_around() {
+        // **The same fold that already merges a run of edits.** `merges` short-circuited on `Edit`
+        // alone, so three edits to three files were one act of building while ten reads of ten files
+        // were ten separate links — the same intent, implemented for one act and not the other. In
+        // the measured session every `Read` named a different file.
+        let links = fold(
+            (0..10)
+                .map(|i| Step::new(Act::Probe, Some(format!("{i}.md"))))
+                .collect(),
+        );
+
+        assert_eq!(links.len(), 1, "one look-around, not ten");
+        assert_eq!(links[0].steps, 10);
+    }
+
+    #[test]
     fn a_long_look_around_stops_being_a_footnote_of_the_act_before_it() {
         // **Reported twice, and the second time it was named exactly.** After a push, twenty
         // look-ups went on being counted as the push, so the panel announced `ship push` while the
@@ -429,8 +534,13 @@ mod tests {
 
     #[test]
     fn probes_before_any_work_are_dropped_rather_than_invented_into_a_block() {
-        // A session that opens with twenty greps has not started working. Attaching them to the
-        // first real block would date that block to the session's start.
+        // A session that opens with a couple of greps has not started working. Attaching them to
+        // the first real block would date that block to the session's start.
+        //
+        // **This used to say "twenty greps", and twenty is no longer true** — past `PROBE_RUN` a
+        // leading look-around becomes its own link, because a session that only ever reads is still
+        // a session (`a_session_that_only_ever_reads_is_still_a_session`). What this test pins is
+        // the *short* case, which is what it always actually exercised.
         let links = fold(vec![probe(), probe(), step(Act::Edit, "a.rs")]);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].noise, 0);

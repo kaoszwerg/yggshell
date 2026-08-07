@@ -55,11 +55,44 @@ export function ChainTool() {
   // "nothing here" and no offer: it was invisible in exactly the situation it exists for, which is
   // opening a project that has never heard of the convention. Measured on lysisai-dsp, which has
   // neither file and was offered neither.
-  if (chain === null || chain.links.length === 0) {
+  // **Two different silences, and saying the wrong one costs an evening.** `null` means no
+  // transcript was found: nobody has run an agent here, and the message may say so. An empty
+  // `links` means a transcript *was* read and nothing in it became a link — a statement about this
+  // reader, not about the directory. It used to say "no agent has run in this directory" for both,
+  // which is a confident claim the tool had not established (rule:logging): the maintainer and this
+  // agent between them spent an hour looking for a broken lookup that was working the whole time,
+  // because the panel blamed the repository.
+  //
+  // The second message therefore says what actually happened and names the file, so the next person
+  // starts where the answer is instead of where it is not.
+  if (chain === null) {
     return (
       <div className="flex min-h-0 flex-1 flex-col font-mono" style={{ fontSize: `${fontSize}px` }}>
         <Undeclared />
         <Empty>{t("chain.none")}</Empty>
+      </div>
+    );
+  }
+  if (chain.links.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col font-mono" style={{ fontSize: `${fontSize}px` }}>
+        <Undeclared />
+        <Empty>{t("chain.nothingRecognised")}</Empty>
+        {/* The coverage the reader reports on itself (ADR-PROJ-005), and the session it read — the
+            two facts that point at this tool rather than at the repository. Chrome, so it keeps the
+            fixed size `Empty` uses rather than the content size (rule:content-size). */}
+        <p className="text-dim -mt-2 px-3 text-center font-mono text-[11px]">
+          <code>
+            {chain.steps_seen}/{chain.steps_understood}
+          </code>{" "}
+          {t("chain.seenUnderstood")}
+          {chain.session_id ? (
+            <>
+              {" · "}
+              <code>{chain.session_id.slice(0, 8)}</code>
+            </>
+          ) : null}
+        </p>
       </div>
     );
   }
