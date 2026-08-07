@@ -16,6 +16,17 @@ import { i18nPlugin } from "./scripts/project/eslint-no-untranslated.mjs";
 
 export default [
   {
+    // A design folder that belongs to no repository, kept out of the tree by `.git/info/exclude`.
+    // It carries a measurement rig — plain Node scripts that spawn agent sessions and drive an HTTP
+    // room — which is neither this app's source nor governed by its lint: the browser globals the
+    // base config assumes are absent, and `process` and `setTimeout` are exactly what it is made of.
+    //
+    // **Ignored rather than configured as a Node environment on purpose.** It is not this project's
+    // code; it is evidence, kept beside the design it measured so a future reader can re-run it. The
+    // day it becomes a product it gets a repository, and that repository brings its own gate.
+    ignores: ["blueprint-mot/**"],
+  },
+  {
     files: ["src/**/*.tsx"],
     plugins: { hud: hudPlugin },
     rules: {

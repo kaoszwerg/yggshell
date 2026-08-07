@@ -6,6 +6,7 @@ import { useUiStore } from "../../store/ui";
 // The sync throttle is shared across the application on purpose (one repository, many callers), so
 // it also outlives a test — a mount here syncs only if the previous test's mount did not just do it.
 import { resetSyncThrottle } from "../../hooks/useNotesSync";
+import { setNoteFlush, resetNoteDrafts } from "../../lib/noteDraft";
 
 vi.mock("../../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
 vi.mock("../../hooks/useNoteProject", () => ({ useNoteProject: () => "github.com/a/b" }));
@@ -80,6 +81,7 @@ describe("NotesTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetSyncThrottle();
+    resetNoteDrafts();
     useUiStore.setState({ locale: "en", view: "terminal", note: null });
     vi.mocked(notesApi.topics).mockResolvedValue(["inbox", "release"]);
     vi.mocked(notesApi.read).mockImplementation((_p: string, topic: string) =>
@@ -150,6 +152,30 @@ describe("NotesTool", () => {
     expect(useUiStore.getState().view).toBe("terminal");
   });
 
+  it("writes out the editor's keystrokes before it ticks, and reaches the open note", async () => {
+    // Reported: ticking here did not reach the Notes view, and worse, it was undefined which of the
+    // two writers won. The toggle addresses an item by BYTE OFFSET in the file it last parsed, while
+    // the editor saves the whole document on a debounce — so a tick during unsaved typing was
+    // overwritten by a save carrying the old checkbox, silently.
+    const order: string[] = [];
+    setNoteFlush("github.com/a/b", "inbox", async () => {
+      order.push("editor flushed");
+      await Promise.resolve();
+    });
+    vi.mocked(notesApi.toggle).mockImplementation(() => {
+      order.push("toggled");
+      return Promise.resolve(true);
+    });
+    renderTool();
+    await screen.findByText("ask about the frame");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Mark as done" })[0] as HTMLElement);
+
+    await waitFor(() => {
+      expect(order).toEqual(["editor flushed", "toggled"]);
+    });
+  });
+
   it("searches across every project and opens the hit in the view", async () => {
     // Search IS navigation, which is why it lives in the tool rather than the page.
     vi.mocked(notesApi.search).mockResolvedValue([
@@ -216,6 +242,7 @@ describe("managing what is in the list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetSyncThrottle();
+    resetNoteDrafts();
     useUiStore.setState({ locale: "en", view: "terminal", note: null });
     vi.mocked(notesApi.topics).mockResolvedValue(["inbox"]);
     vi.mocked(notesApi.read).mockResolvedValue("- [ ] first\n- [ ] second\n");

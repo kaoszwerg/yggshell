@@ -12,3 +12,9 @@ docs/adr/manifest.json
 # Markdown is hand-maintained technical documentation. Prettier escapes `_`/`*` outside code spans
 # (e.g. x86_64 -> x86\*64, APPLE_* -> APPLE\*\*), corrupting technical content, so it is excluded.
 **/*.md
+
+# A design folder that belongs to no repository (kept out of the tree by `.git/info/exclude`), and the
+# measurement rig it carries. Evidence rather than source: the scripts are kept exactly as they were
+# when they produced the numbers, and reformatting them would edit a record. Excluded from the linter
+# for the same reason (`eslint.config.project.mjs`).
+blueprint-mot/

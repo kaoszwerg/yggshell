@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { BuildIdentity } from "../components/BuildIdentity";
 import { ProfileControls } from "../components/settings/ProfileControls";
 import { CliInstaller } from "../components/settings/CliInstaller";
@@ -16,6 +17,8 @@ import { SearchableSelect } from "../components/ui/SearchableSelect";
 import { HudPanel } from "../components/ui/HudPanel";
 import { TextField } from "../components/ui/TextField";
 import { Tabs } from "../components/ui/Tabs";
+import { IconButton } from "../components/ui/IconButton";
+import { useEscapeToTerminal } from "../hooks/useEscapeToTerminal";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "../lib/app";
 import { smallCaps } from "../lib/smallCaps";
 import logoUrl from "../../src-tauri/icons/icon.svg";
@@ -71,18 +74,36 @@ export function SettingsView() {
   const [section, setSection] = useState<SectionId>("appearance");
   const t = useT();
   const current = SECTIONS.find((s) => s.id === section);
+  const setView = useUiStore((s) => s.setView);
+  // Reported: Settings had no way out at all — no close control, and Escape did nothing. A view that
+  // replaces the whole page owes the user both, and neither should have to be discovered.
+  useEscapeToTerminal();
 
   return (
     <div className="flex h-full">
-      <Tabs
-        label={t("settings.sections")}
-        orientation="vertical"
-        items={SECTIONS.map((s) => ({ id: s.id, label: t(s.label) }))}
-        activeId={section}
-        onSelect={(id) => setSection(id as SectionId)}
-        getPanelId={panelId}
-        className="hud-strip w-44 shrink-0 p-2"
-      />
+      <div className="hud-strip flex w-44 shrink-0 flex-col p-2">
+        <div className="mb-2 flex items-center gap-2 px-1">
+          <IconButton
+            label={t("common.back")}
+            variant="ghost"
+            className="h-5 w-5 shrink-0"
+            onClick={() => {
+              setView("terminal");
+            }}
+          >
+            <ArrowLeft size={13} aria-hidden />
+          </IconButton>
+          <span className="hud-label truncate">{t("nav.settings")}</span>
+        </div>
+        <Tabs
+          label={t("settings.sections")}
+          orientation="vertical"
+          items={SECTIONS.map((s) => ({ id: s.id, label: t(s.label) }))}
+          activeId={section}
+          onSelect={(id) => setSection(id as SectionId)}
+          getPanelId={panelId}
+        />
+      </div>
 
       <div
         role="tabpanel"

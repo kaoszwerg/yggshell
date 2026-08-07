@@ -16,7 +16,9 @@ import { surfaceStyle } from "../lib/schemeSurface";
 import { api } from "../api/commands";
 import { notesApi } from "../api/notes";
 import { copyText } from "../lib/clipboard";
-import { useContentFontSize } from "../hooks/useContentFontSize";
+import { useToolFontSize } from "../hooks/useContentFontSize";
+import { useEscapeToTerminal } from "../hooks/useEscapeToTerminal";
+import { setNoteFlush } from "../lib/noteDraft";
 import { useT } from "../hooks/useT";
 import { useToastStore } from "../store/toast";
 import { NOTES_SPLIT_MAX, NOTES_SPLIT_MIN, useUiStore, type NotesLens } from "../store/ui";
@@ -71,7 +73,10 @@ export function NotesView() {
 
 function NoteDocument({ project, topic }: { project: string; topic: string }) {
   const t = useT();
-  const fontSize = useContentFontSize();
+  // A note is not a terminal. The editor and the preview are tool content like a diff or a commit
+  // message, so they follow `tool_font_size` — and, through the hook, stay independent of the UI
+  // scale, which is native WebView zoom and would otherwise override the size chosen for them.
+  const fontSize = useToolFontSize();
   const qc = useQueryClient();
   const note = useUiStore((s) => s.note);
   const setView = useUiStore((s) => s.setView);
@@ -184,9 +189,15 @@ function NoteDocument({ project, topic }: { project: string; topic: string }) {
 
   const save = useMutation({
     mutationFn: (next: string) => notesApi.write(project, topic, next),
-    onSuccess: () => {
+    onSuccess: (_result, written) => {
       void qc.invalidateQueries({ queryKey: ["notes-content"] });
       void qc.invalidateQueries({ queryKey: ["notes-note"] });
+      // **Let go of the draft once it is the file.** `text` reads `draft ?? content.data`, so a draft
+      // that is never released makes the editor blind to the file for as long as it stays open —
+      // which is the reported half where ticking a checkbox in the tool appeared nowhere until you
+      // left the note and came back. Only when nothing has been typed since: comparing against the
+      // text actually written is what keeps this from snatching a sentence out from under the user.
+      setDraft((current) => (current === written ? null : current));
     },
     // A write that failed used to go nowhere at all. A note is the one thing in this app that cannot
     // be regenerated, so "it looked like it saved" is the worst possible failure mode
@@ -199,17 +210,26 @@ function NoteDocument({ project, topic }: { project: string; topic: string }) {
 
   // Debounced, and only once something has been typed: a save on every keystroke would be a commit
   // per character once the sync is on.
+  //
+  // **And while that debounce is counting, this editor owns the note** (`lib/noteDraft`). The tool's
+  // checkbox toggles the same file by byte offset; without this the debounced write lands after the
+  // toggle, carrying the old checkbox, and the tick is silently undone. Registering a flush lets the
+  // tool write out these keystrokes first and then work from the file that results.
   useEffect(() => {
     if (draft === null) return;
+    setNoteFlush(project, topic, async () => {
+      await save.mutateAsync(draft);
+    });
     const timer = setTimeout(() => {
       save.mutate(draft);
     }, SAVE_MS);
     return () => {
       clearTimeout(timer);
+      setNoteFlush(project, topic, null);
     };
     // `save` is a stable mutation object; including it would re-arm the timer on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft]);
+  }, [draft, project, topic]);
 
   /**
    * The last text typed, for the way out.
@@ -249,17 +269,11 @@ function NoteDocument({ project, topic }: { project: string; topic: string }) {
 
   // Escape leaves — the editor first, then the view. Two presses at most from anywhere in here, and
   // neither of them is something to know in advance.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (editing) return; // the editor handles its own Escape, which returns to reading
-      setView("terminal");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [editing, setView]);
+  //
+  // **This used to be written out here, and that is how Settings and Logs came to have no way out
+  // at all**: a behaviour living inside one component is a behaviour the next one does not inherit.
+  // It is a shared hook now, and the two views that were missing it call it too (ADR-CORE-005).
+  useEscapeToTerminal(!editing);
 
   // Put the caret where the user pointed, once the editor exists — either the block whose "edit
   // here" they pressed, or the entry the tool sent them in on.

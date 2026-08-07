@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useLogs } from "../hooks/useLogs";
 import { useT } from "../hooks/useT";
+import { useEscapeToTerminal } from "../hooks/useEscapeToTerminal";
+import { useUiStore } from "../store/ui";
 import { HudPanel } from "../components/ui/HudPanel";
 import { Button } from "../components/ui/Button";
+import { IconButton } from "../components/ui/IconButton";
 import { TextField } from "../components/ui/TextField";
 import { PALETTE } from "../styles/palette";
 import type { LogRecord } from "../bindings/LogRecord";
@@ -26,6 +30,8 @@ export function LogsView() {
   const [q, setQ] = useState("");
   const [desc, setDesc] = useState(true);
   const t = useT();
+  const setView = useUiStore((s) => s.setView);
+  useEscapeToTerminal();
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -44,9 +50,21 @@ export function LogsView() {
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden p-6">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="hud-label" style={{ "--hud-label-size": "1rem" } as React.CSSProperties}>
-          Logs
-        </h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <IconButton
+            label={t("common.back")}
+            variant="ghost"
+            className="h-5 w-5 shrink-0"
+            onClick={() => {
+              setView("terminal");
+            }}
+          >
+            <ArrowLeft size={13} aria-hidden />
+          </IconButton>
+          <h1 className="hud-label" style={{ "--hud-label-size": "1rem" } as React.CSSProperties}>
+            Logs
+          </h1>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1">
             {LEVELS.map((l) => (

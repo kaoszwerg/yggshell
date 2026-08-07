@@ -20,18 +20,32 @@ export function useContentFontSize(): number {
 }
 
 /**
- * The size a **tool** draws its content at.
+ * The size a **tool** draws its content at — the markdown editor and preview, a git diff, a commit
+ * message, a file tree, a container list.
  *
  * **Its own setting, because it is its own question.** The tools borrowed the terminal's, and that
  * is wrong in both directions: a large terminal font chosen for readability does not mean the
  * sidebar should eat the window, and a small one chosen for density does not mean the panels beside
- * it should become unreadable. It starts equal to the terminal's, so introducing the control moves
- * nothing until somebody turns it.
+ * it should become unreadable. It starts equal to the terminal's, so introducing the control moved
+ * nothing until somebody turned it.
  *
- * Not divided by `ui_scale`, for the same reason as above: this is ordinary DOM, and the WebView
- * zoom already applies to it.
+ * **Divided by `ui_scale`, and this is the correction that matters.** That setting is native WebView
+ * zoom (ADR-APP-021): it multiplies every DOM pixel, so a tool that merely *reads* `tool_font_size`
+ * still grows when the chrome does — and the size the user chose for its content is overridden by an
+ * unrelated setting. Reported from the running app: *"aktuell ändert sich diff und commit mit der ui
+ * size und das ist schlecht."*
+ *
+ * The emulator has divided since the day it was built, for exactly this reason. **There are three
+ * questions and they are separate: how big the chrome is, how big the terminal is, how big
+ * everything else is.** UI is UI, terminal is terminal, all the rest is tool — and each surface
+ * follows exactly one of them.
+ *
+ * A zero or missing scale is treated as 1 rather than divided by: a hand-edited settings file would
+ * otherwise render every tool at `Infinity`, which is a blank panel with no error anywhere.
  */
 export function useToolFontSize(): number {
   const settings = useSettings();
-  return settings.data?.tool_font_size ?? settings.data?.terminal_font_size ?? 13;
+  const size = settings.data?.tool_font_size ?? settings.data?.terminal_font_size ?? 13;
+  const scale = settings.data?.ui_scale ?? 1;
+  return size / (scale > 0 ? scale : 1);
 }

@@ -546,4 +546,30 @@ describe("SettingsView", () => {
 
     expect(screen.getByRole("group", { name: "Licences" })).toBeInTheDocument();
   });
+
+  describe("leaving", () => {
+    // Reported verbatim from the running app: "die einstellungen haben weder ein close button noch
+    // reagieren sie auf esc". A view that replaces the whole page owes the user both, and neither
+    // should have to be discovered.
+    beforeEach(() => {
+      useUiStore.setState({ view: "settings" });
+      mockSettings();
+    });
+
+    it("leaves on Escape, from wherever the caret is", () => {
+      render(<SettingsView />);
+
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
+
+    it("has a visible way back that does not need discovering", () => {
+      render(<SettingsView />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
+  });
 });

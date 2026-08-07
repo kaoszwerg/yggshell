@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { LogsView } from "./LogsView";
+import { useUiStore } from "../store/ui";
 import type { LogRecord } from "../bindings/LogRecord";
 
 const clear = vi.fn();
@@ -106,5 +107,30 @@ describe("LogsView", () => {
     mockLogsState({ logs: [rec()], paused: true });
     render(<LogsView />);
     expect(screen.getByRole("button", { name: "paused" })).toBeInTheDocument();
+  });
+
+  describe("leaving", () => {
+    // Reported from the running app about Settings, and this view had the same hole: no close
+    // control and no Escape. A view that replaces the whole page owes the user both.
+    beforeEach(() => {
+      useUiStore.setState({ view: "logs" });
+      mockLogsState({ logs: [rec()] });
+    });
+
+    it("leaves on Escape, from wherever the caret is", () => {
+      render(<LogsView />);
+
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
+
+    it("has a visible way back that does not need discovering", () => {
+      render(<LogsView />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+      expect(useUiStore.getState().view).toBe("terminal");
+    });
   });
 });

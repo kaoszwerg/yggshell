@@ -199,6 +199,36 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Ticking a checkbox in the Notes tool no longer loses itself, and no longer hides.** Three defects
+  with one cause: two writers on one file and no rule about which won. The tool addresses an item by
+  **byte offset** in the version it last parsed; the view saves the whole document on a 600 ms
+  debounce. Tick while a keystroke was still pending and the debounced write landed afterwards
+  **carrying the old checkbox** — the tick was undone, silently, and the offset it used had been
+  computed against a file that had since moved.
+
+  The rule is now that **the last human act wins, and only one writer is ever in flight**: an editor
+  with unsaved keystrokes registers itself, and anything else about to write the same note flushes it
+  first and works from the file that results. Ticking, removing an item and moving one between notes
+  all go through that door.
+
+  The other two halves were smaller and just as visible: `notes-note` — the query the *view* reads —
+  was missing from what the tool invalidated, so a tick refreshed the tool's own list and left the
+  open editor and preview showing the file as it was; and the editor held its draft for as long as it
+  stayed open, which made it blind to the file even once the query did refresh. It lets go of the
+  draft the moment that draft *is* the file, and never while something has been typed since.
+
+- **Settings and Logs can be left again.** Neither had a close control, and neither answered Escape.
+  Notes had both — written inline, which is exactly how the other two came to have neither. It is one
+  shared hook now, used by all three, and Escape yields to whatever inside a view owns it first.
+
+- **The git diff, the commit message and the markdown editor stop growing with the interface.** They
+  read `tool_font_size` already, but `ui_scale` is native WebView zoom: it multiplies every DOM pixel,
+  so the size chosen for a tool's content was overridden by an unrelated setting. Tool content now
+  divides by it, exactly as the terminal emulator has since the day it was built. **Three questions,
+  three answers: UI is UI, terminal is terminal, everything else is tool** — and each surface follows
+  exactly one. The notes editor and preview also still read the *terminal's* size; a note is not a
+  terminal.
+
 - **A hard line break inside a paragraph now breaks the line.** Two trailing spaces — markdown's own
   way of breaking a line without starting a paragraph — was parsed and then thrown away: it became a
   text run holding a newline, and HTML collapses a newline inside a paragraph to a space. It draws a

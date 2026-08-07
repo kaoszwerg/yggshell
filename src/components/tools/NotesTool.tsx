@@ -17,6 +17,7 @@ import { KebabMenu } from "../ui/KebabMenu";
 import { MenuButton } from "../ui/MenuButton";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { copyText } from "../../lib/clipboard";
+import { flushNote } from "../../lib/noteDraft";
 import { useToastStore } from "../../store/toast";
 import type { NoteImportReport } from "../../bindings/NoteImportReport";
 import type { NotesStatus } from "../../bindings/NotesStatus";
@@ -110,10 +111,20 @@ export function NotesTool() {
     queryFn: () => notesApi.search(query),
   });
 
+  /**
+   * Every query that shows a note, after this tool has changed one.
+   *
+   * **`notes-note` was missing, and that is the whole of the "it does not update" half of the
+   * reported defect**: it is the query the Notes *view* reads, so ticking an item here refreshed the
+   * tool's own list and left the open editor and preview showing the file as it was. Anything that
+   * writes a note invalidates every reader of one — a list of readers that is nearly complete is the
+   * same as none, because the one it misses is the one somebody is looking at.
+   */
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["notes-projects"] });
     void qc.invalidateQueries({ queryKey: ["notes-tree"] });
     void qc.invalidateQueries({ queryKey: ["notes-content"] });
+    void qc.invalidateQueries({ queryKey: ["notes-note"] });
   };
 
   const capture = useMutation({
@@ -146,8 +157,20 @@ export function NotesTool() {
     },
   });
 
+  /**
+   * Tick or untick an item.
+   *
+   * **Two things here exist because of one reported defect, and both are about the note being open
+   * in the view at the same time.**
+   *
+   * The toggle addresses an item by *byte offset* in the file it last parsed, while the editor saves
+   * the whole document on a debounce. Ticking with keystrokes still pending means the debounced write
+   * lands afterwards **carrying the old checkbox** — the tick is undone, silently, and the offset it
+   * used was computed against a file that has since moved. So the editor's keystrokes are flushed
+   * first (`lib/noteDraft`), and this writes to the file that results.
+   */
   const toggle = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       project: inProject,
       topic,
       offset,
@@ -155,7 +178,10 @@ export function NotesTool() {
       project: string;
       topic: string;
       offset: number;
-    }) => notesApi.toggle(inProject, topic, offset),
+    }) => {
+      await flushNote(inProject, topic);
+      return notesApi.toggle(inProject, topic, offset);
+    },
     onSuccess: refresh,
   });
 
@@ -168,6 +194,9 @@ export function NotesTool() {
    */
   const removeItem = useMutation({
     mutationFn: async (at: { project: string; topic: string; from: number; to: number }) => {
+      // Read-splice-write against a file the editor may still be holding keystrokes for. Flush them
+      // first, or this reads the old text and writes it back over them (`lib/noteDraft`).
+      await flushNote(at.project, at.topic);
       const text = await notesApi.read(at.project, at.topic);
       const rest = text.slice(at.to).replace(/^\n/, "");
       await notesApi.write(at.project, at.topic, text.slice(0, at.from) + rest);
@@ -193,6 +222,9 @@ export function NotesTool() {
       to: { project: string; topic: string };
       item: Task;
     }) => {
+      // Both ends may be open in the editor, and both get spliced. Flush each before reading it.
+      await flushNote(from.project, from.topic);
+      await flushNote(to.project, to.topic);
       const source = await notesApi.read(from.project, from.topic);
       const block = source.slice(item.offset, item.end);
       const target = await notesApi.read(to.project, to.topic);
