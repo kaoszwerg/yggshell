@@ -76,3 +76,86 @@ export function mostReadableOn(background: string, candidates: readonly string[]
   }
   return best?.colour ?? null;
 }
+
+/**
+ * `a` laid over `b` at `alpha` — the same arithmetic `color-mix(in srgb, a X%, b)` performs.
+ *
+ * Needed because a pairing can be formed by CSS rather than by a palette: a diff tints a changed row
+ * with `color-mix`, and the colour a token is actually read against is the *result*, which exists
+ * nowhere in the scheme.
+ */
+export function blend(a: string, b: string, alpha: number): string | null {
+  const x = channels(a);
+  const y = channels(b);
+  if (x === null || y === null) return null;
+  // Destructured rather than indexed: `security/detect-object-injection` flags the subscript, and it
+  // is right to — three named channels say what this is anyway.
+  const [xr, xg, xb] = x;
+  const [yr, yg, yb] = y;
+  const hex = (over: number, under: number) =>
+    Math.round(over * alpha + under * (1 - alpha))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${hex(xr, yr)}${hex(xg, yg)}${hex(xb, yb)}`;
+}
+
+/**
+ * The floor for a colour that carries *text a person reads continuously*, but which should stay
+ * dimmer than body text.
+ *
+ * **Deliberately WCAG's large-text threshold rather than `AA`.** A comment must read as subordinate,
+ * and several bundled schemes give their own foreground only ~4.4 — demanding 4.5 of a comment would
+ * make comments the brightest thing on screen, which is the opposite defect.
+ */
+export const READABLE_DIM = 3;
+
+/**
+ * Lift a dim colour toward `towards` until it clears `minRatio` on **every** background it can meet.
+ *
+ * **The defect this was measured against.** A comment is drawn in the scheme's `brightBlack`, and a
+ * diff paints a 14 % tint of green or red underneath it. In Alien Blood that is **2.00 : 1** on the
+ * plain surface, **1.77** on an added line and **1.71** on a removed one — against a body text of
+ * 4.43. Reported as *"der Kommentartext ist zu hell für seinen Hintergrund"* and *"bei diffs ist es
+ * auch schlecht zu lesen"*.
+ *
+ * It is **not that scheme's fault**, which is why the correction belongs here and not in its file:
+ * `brightBlack` is a terminal slot one rarely reads, and a highlighter promotes it to *every comment
+ * in the file*. Any scheme whose bright black sits near its green or red in luminance has the same
+ * problem, and there are fifteen bundled.
+ *
+ * This is the same policy as `mostReadableOn` above — **the app supplies its own half of a pairing it
+ * formed, and never rewrites somebody's palette.** A scheme that already reads is returned untouched.
+ *
+ * @param towards the scheme's foreground. Blending toward *that* rather than toward white keeps the
+ *   scheme's hue: a light scheme's comment gets darker, a dark scheme's lighter, neither turns grey.
+ *   If even the foreground cannot clear the floor, that is the author's choice of background and not
+ *   this function's to overrule — it stops there.
+ */
+export function readable(
+  colour: string,
+  towards: string,
+  on: readonly string[],
+  minRatio: number = READABLE_DIM,
+): string {
+  const worst = (c: string) => {
+    let lowest = Infinity;
+    for (const bg of on) {
+      const ratio = contrast(c, bg);
+      // Unmeasurable is not "fine": skipping it would let an unreadable pairing through, which is
+      // the failure this module opens by refusing.
+      if (ratio === null) return -Infinity;
+      lowest = Math.min(lowest, ratio);
+    }
+    return lowest;
+  };
+
+  if (on.length === 0 || worst(colour) >= minRatio) return colour;
+
+  // Twenty steps: fine enough to keep the scheme's hue, coarse enough to stay a loop rather than a
+  // solver.
+  for (let step = 1; step <= 20; step++) {
+    const lifted = blend(towards, colour, step / 20);
+    if (lifted !== null && worst(lifted) >= minRatio) return lifted;
+  }
+  return towards;
+}

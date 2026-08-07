@@ -9,7 +9,7 @@ import { Row } from "../ui/Row";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
 import { useUiStore, type PaneDetail } from "../../store/ui";
-import { useToolFontSize } from "../../hooks/useContentFontSize";
+import { useContentFontSize } from "../../hooks/useContentFontSize";
 import { useDetailScheme } from "../../hooks/useDetailScheme";
 import { surfaceStyle } from "../../lib/schemeSurface";
 import { isMarkdown, languageFor, tokenize } from "../../lib/highlight";
@@ -28,23 +28,20 @@ import type { GitFileStat } from "../../bindings/GitFileStat";
  * focus trap that is deliberately absent. It does take focus on open, so a keystroke meant for the
  * panel cannot land in a terminal the user can no longer see.
  */
-/**
- * The text size a detail view is drawn at — the terminal's own setting.
- *
- * Code is code: the size you chose to read a terminal at is the size you want to read a diff at, and
- * having one follow the other while the other stayed fixed was simply an oversight.
- *
- * Undivided by the UI scale, unlike the emulator's: this is ordinary DOM and the WebView zoom already
- * applies. Dividing would shrink a diff as the rest of the interface grew.
- */
-/// A diff is tool content like any other, so it follows the tool's own size.
+/// A diff and a commit message are **reading surfaces**, so they follow the terminal's size — not the
+/// tool column's.
 ///
-/// **This used to be a private copy of `useContentFontSize` reading `terminal_font_size`** — written
-/// before either the shared hook or a separate tool size existed. Left alone it would have made the
-/// Git panel the one surface in the tool column that ignored the new control, which is the same
-/// inconsistency the control was added to end (ADR-CORE-005: one source per cross-cutting concern).
+/// **This has now been wrong in both directions, and the second time says where the line actually
+/// runs.** It began as a private copy reading `terminal_font_size`; that was made shared, and then
+/// moved onto the new `tool_font_size` on the reasoning that a panel in the tool column is tool
+/// content. Reported from the running app: the detail panel came out too small, *"und das ist bei git
+/// commit, git diff, markdown edit und markdown view/render ebenfalls so"*.
+///
+/// The distinction is not tool-versus-view, it is **reading versus scanning**. A dense column of
+/// paths wants to be smaller than the thing you are sitting down to read — which is precisely why the
+/// maintainer set the two settings to different numbers. See `useContentFontSize`.
 function useDetailFontSize(): number {
-  return useToolFontSize();
+  return useContentFontSize();
 }
 
 // `useDetailScheme` moved to `hooks/useDetailScheme` when the notes view became its third and fourth

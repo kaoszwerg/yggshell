@@ -16,7 +16,7 @@ import { surfaceStyle } from "../lib/schemeSurface";
 import { api } from "../api/commands";
 import { notesApi } from "../api/notes";
 import { copyText } from "../lib/clipboard";
-import { useToolFontSize } from "../hooks/useContentFontSize";
+import { useContentFontSize } from "../hooks/useContentFontSize";
 import { useEscapeToTerminal } from "../hooks/useEscapeToTerminal";
 import { setNoteFlush } from "../lib/noteDraft";
 import { useT } from "../hooks/useT";
@@ -73,10 +73,11 @@ export function NotesView() {
 
 function NoteDocument({ project, topic }: { project: string; topic: string }) {
   const t = useT();
-  // A note is not a terminal. The editor and the preview are tool content like a diff or a commit
-  // message, so they follow `tool_font_size` — and, through the hook, stay independent of the UI
-  // scale, which is native WebView zoom and would otherwise override the size chosen for them.
-  const fontSize = useToolFontSize();
+  // **A reading surface**, like the diff and the commit beside it — so it follows the terminal's
+  // size, not the tool column's. Writing a note and reading one are the same act as reading a
+  // terminal; a dense list of paths is not, which is why the two settings hold different numbers.
+  // Independent of the UI scale through the hook (`useContentFontSize`).
+  const fontSize = useContentFontSize();
   const qc = useQueryClient();
   const note = useUiStore((s) => s.note);
   const setView = useUiStore((s) => s.setView);

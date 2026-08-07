@@ -42,14 +42,35 @@ describe("useToolFontSize", () => {
 
 describe("useContentFontSize", () => {
   it("follows the terminal's own text size", () => {
-    // Reported: the tools ignored the setting. Code is code — somebody who turned the terminal up
-    // did so because that size is comfortable, and a panel beside it at a hard-coded 11px is the
-    // app deciding it knows better.
+    // A reading surface — a diff, a commit, a note — is the same act as reading a terminal. Code is
+    // code, and the size chosen for one is the size wanted for the other.
     vi.mocked(useSettings).mockReturnValue({
-      data: { terminal_font_size: 17 },
+      data: { terminal_font_size: 17, ui_scale: 1 },
     } as unknown as ReturnType<typeof useSettings>);
 
     expect(renderHook(() => useContentFontSize()).result.current).toBe(17);
+  });
+
+  it("is independent of the UI scale, like every other text setting", () => {
+    // Reported when the reading surfaces had been moved onto the tool size and came out too small:
+    // "und das ist bei git commit, git diff, markdown edit und markdown view/render ebenfalls so".
+    // Three questions, three answers, and none of them may quietly override another.
+    vi.mocked(useSettings).mockReturnValue({
+      data: { terminal_font_size: 16, ui_scale: 2 },
+    } as unknown as ReturnType<typeof useSettings>);
+
+    expect(renderHook(() => useContentFontSize()).result.current).toBe(8);
+  });
+
+  it("is NOT the tool column's size — reading and scanning are different", () => {
+    // The line the second attempt got wrong. A dense column of paths wants to be smaller than the
+    // thing you sat down to read, which is why the two settings hold different numbers at all.
+    vi.mocked(useSettings).mockReturnValue({
+      data: { terminal_font_size: 16, tool_font_size: 14, ui_scale: 1 },
+    } as unknown as ReturnType<typeof useSettings>);
+
+    expect(renderHook(() => useContentFontSize()).result.current).toBe(16);
+    expect(renderHook(() => useToolFontSize()).result.current).toBe(14);
   });
 
   it("has a size before the settings have loaded", () => {

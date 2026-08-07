@@ -5,7 +5,7 @@ import { NotesView } from "./NotesView";
 import { useUiStore } from "../store/ui";
 import { useTerminalStore } from "../store/terminal";
 
-vi.mock("../hooks/useContentFontSize", () => ({ useToolFontSize: () => 17 }));
+vi.mock("../hooks/useContentFontSize", () => ({ useContentFontSize: () => 17 }));
 vi.mock("../api/notes", () => ({
   notesApi: { read: vi.fn(), write: vi.fn(), readImage: vi.fn(), readImageLarge: vi.fn() },
 }));

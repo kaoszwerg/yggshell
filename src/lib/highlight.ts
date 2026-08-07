@@ -1,6 +1,7 @@
 import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { HUD_TERMINAL_THEME as HUD_COLOURS, type XtermTheme } from "./terminalTheme";
+import { readable, blend } from "./contrast";
 
 /**
  * Syntax highlighting for the diff and commit views.
@@ -32,6 +33,25 @@ import { HUD_TERMINAL_THEME as HUD_COLOURS, type XtermTheme } from "./terminalTh
  */
 function syntaxTheme(scheme: XtermTheme | null): ThemeRegistration {
   const c = scheme ?? HUD_COLOURS;
+
+  /**
+   * The comment colour, floored so it survives the background it lands on.
+   *
+   * **Measured, in the scheme it was reported in.** `brightBlack` is a terminal slot you rarely read;
+   * a highlighter promotes it to *every comment in the file*, and a diff then paints a 14 % tint of
+   * green or red underneath it. Alien Blood came out at **2.00 : 1** on the plain surface, **1.87** on
+   * an added line and **1.71** on a removed one — against a body text managing 4.43.
+   *
+   * The three backgrounds are exactly the ones `globals.css` can put behind a token: the surface, and
+   * each changed row. Lifting toward the scheme's own foreground keeps its hue, and a scheme that
+   * already reads is returned untouched — which is nearly all of them.
+   */
+  const comment = readable(c.brightBlack, c.foreground, [
+    c.background,
+    blend(c.green, c.background, 0.14) ?? c.background,
+    blend(c.red, c.background, 0.14) ?? c.background,
+  ]);
+
   return {
     name: "hud",
     type: "dark",
@@ -42,7 +62,7 @@ function syntaxTheme(scheme: XtermTheme | null): ThemeRegistration {
     tokenColors: [
       {
         scope: ["comment", "punctuation.definition.comment"],
-        settings: { foreground: c.brightBlack },
+        settings: { foreground: comment },
       },
       {
         scope: ["string", "constant.other.symbol", "string.regexp"],

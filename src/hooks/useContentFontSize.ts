@@ -1,22 +1,35 @@
 import { useSettings } from "./useSettings";
 
 /**
- * The size the tools' monospace content is drawn at.
+ * The size a **reading surface** is drawn at: a diff, a commit message, the markdown editor and its
+ * preview.
  *
- * **The same setting the terminal uses, for the reason the diff already used it:** code is code. A
- * file tree, a process list and a container's log are the same kind of reading as a terminal, and
- * somebody who turned the terminal up did so because that size is comfortable for them — leaving
- * the panels beside it at a hard-coded 11px is the app deciding it knows better.
+ * **The terminal's own setting, because these are the same act as reading a terminal.** Code is
+ * code: somebody who turned the terminal up did so because that size is comfortable to *read*, and a
+ * diff beside it is the same reading. Reported when they had been moved onto the tool size and came
+ * out too small — *"und das ist bei git commit, git diff, markdown edit und markdown view/render
+ * ebenfalls so"*.
  *
- * **Not divided by the UI scale**, unlike the emulator's: this is ordinary DOM and the WebView zoom
- * already applies to it. Dividing would shrink the panels as the rest of the interface grew.
+ * **This is the line between the two hooks, and it is not "tool versus view".** It is *reading*
+ * versus *scanning*:
  *
- * Chrome — section headings, hints, the small print — stays fixed. It is interface, not content, and
- * a heading that grew with the code would compete with it.
+ * | | Follows |
+ * | - | ------- |
+ * | A diff, a commit, a note being written or read | **this hook** — `terminal_font_size` |
+ * | The tool column: file trees, process lists, containers, history rows | `useToolFontSize` |
+ * | Chrome — headings, hints, the small print | neither; it is interface |
+ *
+ * That is why the two settings differ in practice: a dense column of paths wants to be smaller than
+ * the thing you are actually reading. Setting them equal is the default and costs nothing.
+ *
+ * **Divided by `ui_scale`** — see `useToolFontSize` for the whole argument. Three questions, three
+ * answers, and each surface follows exactly one.
  */
 export function useContentFontSize(): number {
   const settings = useSettings();
-  return settings.data?.terminal_font_size ?? 13;
+  const size = settings.data?.terminal_font_size ?? 13;
+  const scale = settings.data?.ui_scale ?? 1;
+  return size / (scale > 0 ? scale : 1);
 }
 
 /**

@@ -199,6 +199,31 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A comment in a diff is readable again, in every scheme.** Measured in Alien Blood: the comment
+  colour is the scheme's ANSI bright black, and a changed row paints a 14 % tint of its green or red
+  underneath — **2.00 : 1** on the plain surface, **1.77** on an added line and **1.71** on a removed
+  one, against a body text managing 4.43.
+
+  Not that scheme's fault, which is why nothing in it was touched: bright black is a terminal slot one
+  rarely reads, and a syntax highlighter promotes it to *every comment in the file*. **8 of the 14
+  bundled schemes** put it under 3 : 1 on their own background, Solarized Dark at 1.00 — where it is
+  meant as a *background* tone, not a text one.
+
+  So the comment colour is floored per scheme, against every background it can land on, and lifted
+  toward that scheme's own foreground so the hue survives. A scheme that already reads is untouched.
+  Alien Blood now measures 3.66 / 3.25 / 3.12 — and stays below its own body text, which is the point
+  of a comment colour and the reason the floor is 3 rather than 4.5.
+
+  **The terminal is deliberately unchanged.** There the *program* chooses bright black, not the app,
+  and overruling it would rewrite both a palette and a program's intent — Solarized Dark's 1.00 is
+  correct for the separators and frames it was designed for.
+
+- **The diff, the commit message and the markdown editor follow the terminal's size again.** They had
+  been moved onto `tool_font_size` on the reasoning that a panel in the tool column is tool content,
+  and came out too small. The line is not tool-versus-view, it is **reading versus scanning**: a diff,
+  a commit and a note are the same act as reading a terminal, while a dense column of paths wants to
+  be smaller — which is precisely why the two settings hold different numbers.
+
 - **Ticking a checkbox in the Notes tool no longer loses itself, and no longer hides.** Three defects
   with one cause: two writers on one file and no rule about which won. The tool addresses an item by
   **byte offset** in the version it last parsed; the view saves the whole document on a 600 ms
