@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session that only ever reads is a session, and the Chain tool now says so.** Measured in a
+  fresh repository: an agent read the design and answered — twelve tool calls, ten `Read` and two
+  `Bash`, every one a probe. The reader saw all twelve and folded them to **zero links**, so the
+  panel fell through to its empty state and announced that *no agent had run in this directory*,
+  about a directory an agent was working in.
+
+  The rule that discarded them — *"a session that begins with greps has not started working yet"* —
+  is right, and it already carried its own expiry four lines below: past `PROBE_RUN` a look-around
+  **is** the work. That limit was simply never applied before the first block existed, so at the
+  start of a session it meant "drop for ever" instead of "drop until it is clearly what is
+  happening". Leading probes are now held like a leading compact and become one link once the run
+  passes the threshold, carrying the whole count rather than only the steps after it.
+
+  A run of look-ups across many files is also **one** act of looking around now, exactly as a run of
+  edits across many files has always been one act of building — `merges` short-circuited on `Edit`
+  alone, which was the same intent implemented for one act and not the other.
+
+  Verified against the real transcript that produced the report: `0 links` before, `probe · 12 steps`
+  after.
+
+- **Two different silences no longer share one message.** `chain === null` means no transcript was
+  found and *"no agent has run in this directory"* is true. An empty `links` means a transcript **was**
+  read and nothing in it became a link — a fact about the reader, not about the repository. The panel
+  claimed the first for both, which is a confident statement the tool had not established
+  (rule:logging), and it sent the maintainer and an agent on an hour-long hunt for a lookup that was
+  working the whole time. The second case now says what happened and shows its own coverage
+  (`seen/understood`) and the session id, so the next person starts where the answer is.
+
+- **The work-levels gate installs where the receiving repository's own rules put it.** `adoption.rs`
+  always wrote `scripts/check-work-levels.mjs`. That is right for the repositories this feature exists
+  for — they consume no governance from here — but in one that does, `scripts/` is pinned
+  **recursively** (ADR-CORE-032) and a project's own script belongs in `scripts/project/`. Detected by
+  `governance/config.json`, the marker the governance itself reads, so there is no second opinion
+  about what a governed repository is.
+
 ### Added
 
 - **A Chain tool: what the agent in this tab has been through, and what it is doing now.** It reads

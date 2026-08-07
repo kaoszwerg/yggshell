@@ -92,7 +92,31 @@ pub fn rule_text(handover: &Path, bundled_rule: &Path) -> Result<String> {
 /// own beside it — never by editing the delivered one, which the next update overwrites without
 /// trace.
 fn gate_destination(repo: &Path) -> PathBuf {
-    repo.join("scripts/check-work-levels.mjs")
+    if is_governed(repo) {
+        repo.join("scripts/project/check-work-levels.mjs")
+    } else {
+        repo.join("scripts/check-work-levels.mjs")
+    }
+}
+
+/// Whether `repo` consumes a governance layer that pins `scripts/`.
+///
+/// **`scripts/` is not the project's own everywhere, and the difference is invisible from outside.**
+/// In an ordinary repository — the audience this whole module exists for, which consumes no
+/// governance from here — `scripts/` is simply where scripts go. In a repository that consumes the
+/// layers this app is built on, it is pinned **recursively** (ADR-CORE-032), and a project's own
+/// script belongs in `scripts/project/`: *"never directly under `scripts/`, which is governed and
+/// pinned recursively: a future upstream script of the same name would overwrite it silently."*
+///
+/// Getting it wrong is not untidiness. The receiving repository's own drift-gate reports a file
+/// nobody added, in a place its own rules forbid, and the person who pressed the button has no way
+/// to connect the two — the button said "installed" and meant it.
+///
+/// **`governance/config.json` is the marker because it is the one the governance itself reads** to
+/// find its upstream. Anything else here would be a second opinion about what a governed repository
+/// is, and the two would eventually disagree.
+fn is_governed(repo: &Path) -> bool {
+    repo.join("governance/config.json").is_file()
 }
 
 /// What this repository has of the convention, and whether it is current.
@@ -320,6 +344,56 @@ mod tests {
             std::fs::read_to_string(&written).expect("read"),
             "// the gate\n"
         );
+    }
+
+    #[test]
+    fn a_governed_repository_gets_the_gate_where_its_own_rules_put_a_project_script() {
+        // **`scripts/` is not the project's own everywhere.** In a repository that consumes this
+        // project's governance layers it is pinned *recursively* (ADR-CORE-032), and a project's own
+        // script belongs in `scripts/project/` — "never directly under `scripts/` … a future upstream
+        // script of the same name would overwrite it silently".
+        //
+        // Writing into the pinned directory is not merely untidy: the receiving repository's own
+        // drift-gate then reports a file it did not add, in a place its own rules forbid, and the
+        // person who pressed the button has no way to connect the two. Found in `kaoszwerg/mot`,
+        // which is exactly such a repository.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let gate = bundled(dir.path(), "check.mjs", "// the gate\n");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::create_dir_all(repo.path().join("governance")).expect("dirs");
+        std::fs::write(
+            repo.path().join("governance/config.json"),
+            r#"{"upstream":"owner/repo","layer":null,"exclude":[]}"#,
+        )
+        .expect("write");
+
+        let written = install_gate(repo.path(), &gate).expect("installed");
+
+        assert!(
+            written.ends_with("scripts/project/check-work-levels.mjs"),
+            "a governed repository pins scripts/ recursively, got {}",
+            written.display()
+        );
+        // And it must be *found* there afterwards, or the offer never stops being made.
+        assert!(adoption(repo.path(), &gate).gate, "and it is seen there");
+        assert!(
+            !adoption(repo.path(), &gate).gate_stale,
+            "and recognised as current"
+        );
+    }
+
+    #[test]
+    fn an_ordinary_repository_is_untouched_by_that_and_still_gets_scripts() {
+        // The audience this feature was built for: no governance, no pinning, `scripts/` is simply
+        // where scripts go. A marker file that is a *directory* is not a governed repository either.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let gate = bundled(dir.path(), "check.mjs", "// the gate\n");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::create_dir_all(repo.path().join("governance/config.json")).expect("dirs");
+
+        let written = install_gate(repo.path(), &gate).expect("installed");
+
+        assert!(written.ends_with("scripts/check-work-levels.mjs"));
     }
 
     #[test]
