@@ -152,7 +152,7 @@ never delivered by an update, yours to write.**
 | ----- | ----- | ----- |
 | `work-levels.json` | the repository root — or a package's own directory in a monorepo; a reader walks **up** from the working directory, so the nearest one wins | the project's |
 | this rule | wherever **this project's** agents read their rules — its `CLAUDE.md`, its `AGENTS.md`, its own rules directory. It joins the project's governance and is subject to it | the project's |
-| the grammar gate | `scripts/check-work-levels.mjs` — **fixed**, because it is delivered and replaced in place. Local adaptation is a wrapper beside it that imports from it, never an edit inside it | optional |
+| the grammar gate | delivered and replaced **in place**, so its path is not the project's to choose: `scripts/check-work-levels.mjs` normally, `scripts/project/check-work-levels.mjs` where `scripts/` is pinned by a governance manifest. Local adaptation is a wrapper beside it that imports from it, never an edit inside it | optional |
 
 **The name `work-levels.json` is the one fixed thing** — a tool looking for it has nothing else to go
 on. Everything else about the placement is the adopting project's decision, and deliberately so: a

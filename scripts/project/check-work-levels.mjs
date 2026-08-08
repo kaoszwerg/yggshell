@@ -13,9 +13,61 @@
  * a database is a lie no parser can see. That is the rule's business and the reader's caution
  * (ADR-PROJ-005 §4: the declaration may name and escalate, never reassure).
  */
+import { createHash } from "node:crypto";
 import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/**
+ * The revision of `rule:work-legibility` this script was shipped alongside.
+ *
+ * **It exists because the rule's own staleness cannot be detected, and the script's can.** An
+ * adopting repository holds two things from us: this file, whose bytes are compared against the
+ * shipped copy on every poll (`adoption::gate_stale`) so a newer one is *offered*, and the rule text,
+ * which goes through the clipboard into their governance under a name we never learn. There is
+ * nothing to compare, so a rule that changes reaches nobody.
+ *
+ * Measured, 2026-08-08: the matching contract — the words a `run` is compared on — was written into
+ * the rule and this script was not touched. `gate_stale` stayed false, no offer appeared, and the one
+ * project that had adopted the convention would never have learned that the answer to its own bug
+ * report was now written down. A person had to send an email.
+ *
+ * So the undetectable is chained to the detectable: the stamp is the rule's content hash, it is
+ * printed on every run, and `ruleStampProblem` below fails the gate **in the repository that ships
+ * the rule** whenever the two drift. Changing the rule therefore changes this file, which makes every
+ * adopter's copy stale, which raises the offer, which delivers a script whose printed stamp says the
+ * rule moved too.
+ *
+ * The price, stated: touching the rule now always means touching this file. That is the discipline
+ * that was missing, made mechanical instead of remembered.
+ */
+export const RULE_STAMP = "92a6ca3c359da7ca";
+
+/** The rule's content hash, in the form [`RULE_STAMP`] carries. */
+export function stampOf(ruleText) {
+  return createHash("sha256").update(ruleText, "utf8").digest("hex").slice(0, 16);
+}
+
+/**
+ * The complaint when this script and the rule it ships beside have drifted, or `null`.
+ *
+ * **Only in the repository that publishes them.** An adopter may perfectly well keep the rule at the
+ * same path under their own governance, and their copy is *theirs* — it may be edited, extended or
+ * superseded. Comparing it against our stamp would fail their gate for doing exactly what the rule
+ * invites. The marker is the resource the publisher ships and nobody else has.
+ */
+export function ruleStampProblem(root, { stamp = RULE_STAMP } = {}) {
+  const publishes = join(root, "src-tauri/resources/adoption/handover.md");
+  const rule = join(root, ".claude/rules/project/work-legibility.md");
+  if (!existsSync(publishes) || !existsSync(rule)) return null;
+  const actual = stampOf(readFileSync(rule, "utf8"));
+  if (actual === stamp) return null;
+  return (
+    `the rule changed and this script did not: RULE_STAMP is \`${stamp}\`, the rule hashes to ` +
+    `\`${actual}\`. Set RULE_STAMP to that value — an adopting repository learns a rule has moved ` +
+    `ONLY because this file's bytes changed, so a rule edit that leaves it alone reaches nobody`
+  );
+}
 
 /**
  * The repository this is checking.
@@ -274,6 +326,8 @@ function main() {
       );
     }
   }
+  const drift = ruleStampProblem(ROOT);
+  if (drift !== null) problems.push(drift);
   if (problems.length > 0) {
     console.error("check-work-levels FAILED:");
     for (const problem of problems) console.error(`  - ${problem}`);
@@ -286,8 +340,12 @@ function main() {
     );
     return 1;
   }
+  // **The stamp is printed on every run, not only when something is wrong.** It is the one line an
+  // adopting repository sees regularly, and it is how they learn the rule text moved: the number
+  // changes when they update this script, and the rule they hold is then the older one.
   console.log(
-    `check-work-levels OK — ${declaration.entrypoints.length} entrypoints, grammar valid.`,
+    `check-work-levels OK — ${declaration.entrypoints.length} entrypoints, grammar valid. ` +
+      `(rule:work-legibility @ ${RULE_STAMP} — if this changed, copy the rule again)`,
   );
   return 0;
 }

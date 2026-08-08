@@ -81,12 +81,17 @@ pub fn rule_text(handover: &Path, bundled_rule: &Path) -> Result<String> {
     Ok(format!("{manual}\n{}", without_front_matter(&body)))
 }
 
-/// Where the gate is written in a foreign repository. **Fixed, and the rule says so too.**
+/// Where the gate is written in a foreign repository. **Decided here, never by the project.**
 ///
 /// It began as a suggestion — `scripts/` is the most widely understood place, and the report said
 /// where it landed so it could be moved. That invitation is withdrawn: this app looks in exactly one
-/// place to tell a stale copy from a current one, so a project that took it up would never be told
-/// its copy is behind, and a fix would reach only whoever adopted afterwards.
+/// place to tell a stale copy from a current one, so a project that moved it would never be told its
+/// copy is behind, and a fix would reach only whoever adopted afterwards.
+///
+/// **One place, but not the same place everywhere** — see [`is_governed`]. A repository whose
+/// `scripts/` is pinned by a governance manifest gets `scripts/project/`, because a file of ours
+/// among files somebody else replaces wholesale is a file that vanishes without trace. The staleness
+/// check asks the same question, so the two never look in different places.
 ///
 /// A project adapts by **wrapping** — importing this module's four stable exports from a file of its
 /// own beside it — never by editing the delivered one, which the next update overwrites without
@@ -112,11 +117,34 @@ fn gate_destination(repo: &Path) -> PathBuf {
 /// nobody added, in a place its own rules forbid, and the person who pressed the button has no way
 /// to connect the two — the button said "installed" and meant it.
 ///
-/// **`governance/config.json` is the marker because it is the one the governance itself reads** to
-/// find its upstream. Anything else here would be a second opinion about what a governed repository
-/// is, and the two would eventually disagree.
+/// **The manifest is read, not merely looked for.** It is the file that lists what is pinned, so it
+/// answers the question directly instead of standing in for it.
 fn is_governed(repo: &Path) -> bool {
-    repo.join("governance/config.json").is_file()
+    // **The question is not "is this repository governed" — it is "is `scripts/` pinned here", and
+    // the manifest answers it directly.** The first version asked for `governance/config.json`,
+    // which names a repository's *upstream*: a repo that OWNS a layer rather than consuming one has
+    // a manifest and may have no config at all, and its `scripts/` is pinned all the same. Reported
+    // by an adopting repository that listed 27 pinned files under `scripts/` and could not follow
+    // the instruction to put ours beside them.
+    //
+    // Reading it rather than trusting its presence also means an empty or unrelated manifest does
+    // not silently redirect the install: no pinned path under `scripts/`, no reason to avoid it.
+    let Ok(text) = std::fs::read_to_string(repo.join("governance/manifest.json")) else {
+        return false;
+    };
+    let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    manifest
+        .get("files")
+        .and_then(|f| f.as_array())
+        .is_some_and(|files| {
+            files.iter().any(|file| {
+                file.get("path")
+                    .and_then(|p| p.as_str())
+                    .is_some_and(|path| path.starts_with("scripts/"))
+            })
+        })
 }
 
 /// What this repository has of the convention, and whether it is current.
@@ -308,7 +336,15 @@ mod tests {
 
         let text = rule_text(&handover, &rule).expect("the rule");
 
-        assert!(!text.contains("rule:work-legibility"), "no front-matter");
+        // **The front-matter keys, not the id string.** This asserted on `rule:work-legibility`
+        // alone, which is a proxy — and the proxy broke the day the manual started naming the rule
+        // in prose (the stamp line tells a reader which rule the number belongs to). A test that
+        // fails because a document mentioned the thing it is about was testing the wrong property.
+        assert!(
+            !text.contains("id: rule:work-legibility"),
+            "no front-matter"
+        );
+        assert!(!text.contains("load: core"), "and none of its other keys");
         assert!(text.contains("# Every piece of work says what it is"));
     }
 
@@ -362,8 +398,8 @@ mod tests {
         let repo = tempfile::tempdir().expect("repo");
         std::fs::create_dir_all(repo.path().join("governance")).expect("dirs");
         std::fs::write(
-            repo.path().join("governance/config.json"),
-            r#"{"upstream":"owner/repo","layer":null,"exclude":[]}"#,
+            repo.path().join("governance/manifest.json"),
+            r#"{"files":[{"path":"scripts/sync-index.mjs","hash":"x","layer":"core"}]}"#,
         )
         .expect("write");
 
@@ -385,15 +421,42 @@ mod tests {
     #[test]
     fn an_ordinary_repository_is_untouched_by_that_and_still_gets_scripts() {
         // The audience this feature was built for: no governance, no pinning, `scripts/` is simply
-        // where scripts go. A marker file that is a *directory* is not a governed repository either.
+        // where scripts go.
         let dir = tempfile::tempdir().expect("tempdir");
         let gate = bundled(dir.path(), "check.mjs", "// the gate\n");
         let repo = tempfile::tempdir().expect("repo");
-        std::fs::create_dir_all(repo.path().join("governance/config.json")).expect("dirs");
 
         let written = install_gate(repo.path(), &gate).expect("installed");
 
         assert!(written.ends_with("scripts/check-work-levels.mjs"));
+    }
+
+    #[test]
+    fn a_manifest_that_pins_nothing_under_scripts_is_not_a_reason_to_move() {
+        // **The question is "is `scripts/` pinned", not "is there governance".** Asking only whether
+        // a governance file exists would redirect the install in a repository whose `scripts/` is
+        // entirely its own — and that repository would then find our file somewhere its own
+        // conventions do not put it, for no reason it could discover.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let gate = bundled(dir.path(), "check.mjs", "// the gate\n");
+        let repo = tempfile::tempdir().expect("repo");
+        std::fs::create_dir_all(repo.path().join("governance")).expect("dirs");
+        std::fs::write(
+            repo.path().join("governance/manifest.json"),
+            r#"{"files":[{"path":"docs/adr/core-001.md","hash":"x","layer":"core"}]}"#,
+        )
+        .expect("write");
+
+        assert!(install_gate(repo.path(), &gate)
+            .expect("installed")
+            .ends_with("scripts/check-work-levels.mjs"));
+
+        // And unreadable governance is not a governed `scripts/` either — a half-written file must
+        // not silently move somebody's install.
+        std::fs::write(repo.path().join("governance/manifest.json"), "{ not json").expect("write");
+        assert!(install_gate(repo.path(), &gate)
+            .expect("installed")
+            .ends_with("scripts/check-work-levels.mjs"));
     }
 
     #[test]

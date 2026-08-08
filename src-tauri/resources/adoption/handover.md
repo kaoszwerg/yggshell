@@ -19,10 +19,23 @@ none of it is work you would not otherwise do.
 
 **Two files, and they are not treated the same.**
 
-1. **The check** — `scripts/check-work-levels.mjs`, and **leave it there**. It is not yours to edit
-   or to move: it is delivered, and the app replaces it in place when a newer one ships, which is
-   how a fix reaches a repository that adopted months ago. Moving it means never being told that
-   your copy is behind. Local adaptation goes in a **wrapper beside it** — import
+1. **The check** — **and leave it where the button put it.** It is not yours to edit or to move: it
+   is delivered, and the app replaces it in place when a newer one ships, which is how a fix reaches
+   a repository that adopted months ago. Moving it means never being told that your copy is behind.
+
+   **Where that is depends on your repository, and the app decides — you do not.** Normally
+   `scripts/check-work-levels.mjs`. But if your `scripts/` is *pinned* by a governance manifest — a
+   directory whose contents are owned upstream and replaced wholesale — it goes to
+   `scripts/project/check-work-levels.mjs` instead, because a file of ours sitting among files
+   somebody else replaces is a file that vanishes without trace on their next update. The app reads
+   your manifest and picks; the staleness check follows it to the same place.
+
+   *(This paragraph used to name one path and insist on it. An adopting repository could not comply —
+   27 of its `scripts/` entries were pinned, and its own rules said a project's script belongs in
+   `scripts/project/` for exactly the reason above. It said so instead of quietly diverging, which is
+   the only reason this is written down rather than being a difference nobody could see.)*
+
+   Local adaptation goes in a **wrapper beside it** — import
    `parseExpression`, `checkDeclaration`, `undeclaredScripts(declaration, scripts)` and
    `undeclaredExamples` from it; importing the module does not run it, and those four names are
    stable. Wrap, do not patch: an edit inside the delivered file is lost without trace on the next
@@ -38,6 +51,24 @@ none of it is work you would not otherwise do.
    agents working here read their rules (`CLAUDE.md`, `AGENTS.md`, a rules directory). It is
    self-supporting: it names no stack, needs no tooling and cites nothing outside itself. If your
    governance expects front-matter, add whatever fields it wants.
+
+**How you find out the rule has changed, because nothing else can tell you.** The check knows when
+*it* is out of date — its bytes are compared against the shipped copy and you are offered a newer
+one. The rule cannot be: it lives in your governance under a name of your choosing, and there is
+nothing to compare. So the check carries the rule's fingerprint and prints it on every run:
+
+```
+check-work-levels OK — 85 entrypoints, grammar valid. (rule:work-legibility @ a8916909f181aa6f — if this changed, copy the rule again)
+```
+
+**When that value changes, the rule you hold is the older one.** Take the copy again. It changes only
+when the check is replaced, so the sequence is always: the app offers you a newer check → you take it
+→ the stamp moves → the rule is worth re-reading. Nothing is rewritten in your repository without you
+pressing something.
+
+*(This exists because it was needed and was not there. A bug report from an adopting project was
+answered by writing the answer into the rule — and the check was left untouched, so no copy anywhere
+became stale, no offer appeared, and the answer travelled by email.)*
 
 **Then write `work-levels.json`.** In the repository root — or in a package's own directory in a
 monorepo, since a reader walks up from the working directory. Take the commands from where they are

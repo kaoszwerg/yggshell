@@ -4,7 +4,14 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync } from "nod
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseExpression, checkDeclaration, undeclaredExamples } from "./check-work-levels.mjs";
+import {
+  parseExpression,
+  checkDeclaration,
+  undeclaredExamples,
+  ruleStampProblem,
+  stampOf,
+  RULE_STAMP,
+} from "./check-work-levels.mjs";
 
 /**
  * The gate is tested like production code (rule:testing), against a temp fixture rather than the
@@ -120,6 +127,68 @@ describe("the declaration", () => {
       ],
     });
     expect(problems).toHaveLength(2);
+  });
+});
+
+describe("the rule stamp", () => {
+  /** A repository that looks like the one that PUBLISHES the rule: both markers present. */
+  function publisher(ruleText) {
+    const root = mkdtempSync(join(tmpdir(), "stamp-"));
+    mkdirSync(join(root, "src-tauri/resources/adoption"), { recursive: true });
+    writeFileSync(join(root, "src-tauri/resources/adoption/handover.md"), "# manual\n");
+    mkdirSync(join(root, ".claude/rules/project"), { recursive: true });
+    writeFileSync(join(root, ".claude/rules/project/work-legibility.md"), ruleText);
+    return root;
+  }
+
+  it("fails when the rule moved and this script did not", () => {
+    // **The discipline this exists to make mechanical, and it was skipped on the day it was needed.**
+    // The matching contract was written into the rule and this file was left alone, so no adopting
+    // repository's copy became stale, no offer appeared, and the answer to somebody's bug report
+    // reached them by email instead of by the mechanism.
+    const root = publisher("the rule, revised\n");
+    try {
+      expect(ruleStampProblem(root, { stamp: "0000000000000000" })).toMatch(/RULE_STAMP/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("passes when they agree, and names the value to set", () => {
+    const text = "the rule, revised\n";
+    const root = publisher(text);
+    try {
+      expect(ruleStampProblem(root, { stamp: stampOf(text) })).toBeNull();
+      // The failure has to carry the answer: a gate that says "wrong" without saying "this value"
+      // sends the reader to compute a hash by hand, and they will paste the wrong one.
+      expect(ruleStampProblem(root, { stamp: "0000000000000000" })).toContain(stampOf(text));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("says nothing in a repository that merely ADOPTED the rule", () => {
+    // **Their copy is theirs.** The rule invites a project to extend or supersede it, so comparing an
+    // adopter's text against our hash would fail their gate for doing what the rule asks. The marker
+    // is the resource only the publisher ships.
+    const root = mkdtempSync(join(tmpdir(), "adopter-"));
+    mkdirSync(join(root, ".claude/rules/project"), { recursive: true });
+    writeFileSync(join(root, ".claude/rules/project/work-legibility.md"), "their edited copy\n");
+    try {
+      expect(ruleStampProblem(root, { stamp: "0000000000000000" })).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("is the hash of the rule this repository actually ships", () => {
+    // The live assertion: `RULE_STAMP` is not a number somebody typed once. If this fails, the rule
+    // was edited and the stamp was not — which is the whole failure mode.
+    const rule = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../.claude/rules/project/work-legibility.md",
+    );
+    expect(RULE_STAMP).toBe(stampOf(readFileSync(rule, "utf8")));
   });
 });
 

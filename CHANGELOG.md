@@ -53,7 +53,36 @@ All notable changes to this project are documented here. The format follows
 - One byte-array-to-`data:`-URL conversion for the whole app (`lib/dataUrl`). The notes view carried
   it twice, character for character, and the file viewer would have been the third.
 
+### Added
+
+- **The adoption gate now carries the rule's fingerprint, and prints it on every run.** An adopting
+  repository holds two things from this app: the check, whose bytes are compared on every poll so a
+  newer one is *offered*, and the rule text, which goes through the clipboard into their governance
+  under a name we never learn — nothing to compare, so a rule that changes reaches nobody.
+
+  Measured the same day it was needed: the matching contract was written into the rule and the check
+  was not touched, so no copy anywhere became stale, no offer appeared, and the answer to somebody's
+  bug report travelled by email. The undetectable is now chained to the detectable — the stamp is the
+  rule's content hash, `check:all` fails **in the repository that publishes the rule** when the two
+  drift, and the failure names the value to set. Changing the rule therefore changes the check, which
+  makes every adopter's copy stale, which raises the offer, which delivers a check whose printed stamp
+  says the rule moved too.
+
+  It caught its own first case: the very next rule edit failed the gate before it could ship.
+
 ### Fixed
+
+- **The instruction to put the check in `scripts/` could not be followed in a governed repository,
+  and said so nowhere.** Reported with evidence: 27 pinned files under `scripts/`, and the reporting
+  project's own rules requiring a project script to live in `scripts/project/` — for exactly the
+  reason the instruction gives, only through the other door. The app already installed to
+  `scripts/project/` there since 0.57.4; **the shipped manual still named one path and insisted on
+  it**, which is two documents with two answers and a reader deciding privately.
+
+  The manual and the rule now say the path is the app's to pick and why. And the marker moved from
+  "does `governance/config.json` exist" to **"does the manifest pin anything under `scripts/`"** — the
+  file that lists what is pinned answers the question directly, where the config only names an
+  upstream, so a repository that *owns* a layer rather than consuming one was missed.
 
 - **A declared deployment could vanish from the chain entirely.** Reported from `lysisai-dsp`: six
   production deploys in a row, every one declared in `work-levels.json` with its `is` and `reaches`,
