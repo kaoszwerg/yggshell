@@ -254,13 +254,26 @@ fn chain_for(
         // flickered: the gap between two tool calls is routinely longer than any usable threshold,
         // because an agent thinking or writing a reply writes nothing. Without a hook the answer is
         // `Unknown`, and the tool says so rather than picking one (ADR-CORE-004).
-        let (standing, waiting_for) = match turn_open(app, cwd, &pids) {
-            Some(true) => (Standing::Working, None),
-            Some(false) => match waiting_here(app, cwd) {
-                Some(asking) => (Standing::Waiting, asking),
-                None => (Standing::Idle, None),
+        // **Blocked is asked first, and the turn boundary second.** They were nested the other way
+        // round, with a `Notification` counted as a turn *ending* — which is right for the activity
+        // line (`hooks::turn_state`: an agent blocked on you is not working for you) and wrong here.
+        // A permission prompt arrives INSIDE a turn; once it is answered the agent works on and
+        // writes nothing further until `Stop`, so the panel said **Stopped** for the rest of it.
+        //
+        // Measured: `UserPromptSubmit` 24 minutes earlier, two prompts after it, the transcript
+        // written to 11 seconds ago — *"oben links steht aber stopped obwohl er arbeitet"*. It never
+        // showed in this repository's own tab, because that one triggers no permission prompts: its
+        // last event is always a boundary.
+        //
+        // `waiting_here` already discards a prompt the agent has worked past (`has_moved_on`), so
+        // asking it first costs nothing and answers the one state the boundaries cannot express.
+        let (standing, waiting_for) = match waiting_here(app, cwd) {
+            Some(asking) => (Standing::Waiting, asking),
+            None => match turn_running(app, cwd, &pids) {
+                Some(true) => (Standing::Working, None),
+                Some(false) => (Standing::Idle, None),
+                None => (Standing::Unknown, None),
             },
-            None => (Standing::Unknown, None),
         };
         crate::agent::chain::settle_standing(chain, standing, waiting_for);
     }
@@ -318,20 +331,26 @@ fn tab_pids(session: Option<&str>) -> Vec<u32> {
         .collect()
 }
 
-fn turn_open(app: &tauri::AppHandle, cwd: &str, pids: &[u32]) -> Option<bool> {
+/// Whether a turn is still running here, with a `Notification` counted as neither boundary.
+///
+/// **The chain's question, and it replaced `turn_state`'s here rather than joining it.** The
+/// activity line still asks that one — a blocked agent is not working *for you*, so its newest event
+/// of any kind is the answer. The chain asks whether the turn is *open*, where a permission prompt
+/// says nothing at all; see `hooks::turn_running` for the defect that distinction fixes.
+///
+/// **This tab's processes, not every pid in the file.** Two agents in one repository is an ordinary
+/// day, and then "the directory" answers with whichever of them typed last. A tab outside tmux
+/// contributes no pids, and the directory has to do.
+fn turn_running(app: &tauri::AppHandle, cwd: &str, pids: &[u32]) -> Option<bool> {
     use tauri::Manager;
     let data = app.path().app_data_dir().ok()?;
     let events = crate::agent::hooks::read_events(&crate::agent::hooks::events_path(&data), 200);
-    // **This tab's processes, not every pid in the file.** It used to take them all, reasoning that
-    // the chain was about a directory; two agents in one repository is an ordinary day, and then
-    // "the directory" answers with whichever of them typed last. Where there is no tmux session
-    // there are no pids and the directory has to do, exactly as `turn_state` documents.
     let pids: Vec<u32> = if pids.is_empty() {
         events.iter().filter_map(|e| e.agent_pid).collect()
     } else {
         pids.to_vec()
     };
-    crate::agent::hooks::turn_state(events, cwd, &pids)
+    crate::agent::hooks::turn_running(events, cwd, &pids)
 }
 
 /// Whether the agent in this directory is blocked on the user, and on what.

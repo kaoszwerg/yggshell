@@ -47,6 +47,35 @@ const EVENTS: [&str; 3] = ["UserPromptSubmit", "Notification", "Stop"];
 /// one line per turn in a file that already holds two.
 pub const TURN_START: &str = "UserPromptSubmit";
 
+/// The event that closes a turn: the agent has finished answering.
+pub const TURN_END: &str = "Stop";
+
+/// Whether a turn is still running here — with a `Notification` counted as **neither** boundary.
+///
+/// **The same events as [`turn_state`], asked a different question, and the difference is a defect
+/// this app shipped.** `turn_state` serves the *activity line*, where "blocked on a person" is
+/// correctly not "working for you", so it treats the newest event of any kind as the answer. The
+/// chain needs the other question — *is this turn still open?* — and there a `Notification` says
+/// nothing: a permission prompt arrives **inside** a turn, and once it is answered the agent works
+/// on and writes no further event until `Stop`.
+///
+/// Measured 2026-08-08: `UserPromptSubmit` 24 minutes earlier, two permission prompts after it, the
+/// newest 9 minutes old, the transcript written to 11 seconds ago — and the panel said **Stopped**
+/// while the agent was visibly writing files. Reported as *"oben links steht aber stopped obwohl er
+/// arbeitet"*.
+///
+/// So only the two declared boundaries move this. Whether the agent is *blocked* is a separate
+/// question with a separate answer (`waiting_now` plus `has_moved_on`), and keeping them separate is
+/// what lets a prompt that has been answered stop counting without ending the turn.
+pub fn turn_running(events: Vec<AgentEvent>, dir: &str, pids: &[u32]) -> Option<bool> {
+    let decisive = events
+        .into_iter()
+        .filter(|event| event.cwd == dir)
+        .filter(|event| event.agent_pid.is_some_and(|pid| pids.contains(&pid)))
+        .rfind(|event| event.event == TURN_START || event.event == TURN_END)?;
+    Some(decisive.event == TURN_START)
+}
+
 /// Where the hook script appends its lines. Must match the script itself.
 pub fn events_path(app_data: &Path) -> PathBuf {
     app_data.join("agent-events.jsonl")
@@ -629,6 +658,56 @@ mod tests {
                 &[MINE]
             ),
             Some(false)
+        );
+    }
+
+    #[test]
+    fn a_notification_does_not_close_a_turn_for_the_chain() {
+        // **The same events, the other question — and the difference was a defect on screen.** For
+        // the activity line a blocked agent is not working for you, which is why `turn_state` above
+        // treats a `Notification` as the answer. The chain asks whether the TURN is open, and there a
+        // permission prompt says nothing: it arrives inside a turn, and once answered the agent works
+        // on and writes no further event until `Stop`.
+        //
+        // Measured 2026-08-08: prompt submitted 24 minutes earlier, two permission prompts after it,
+        // the transcript written to 11 seconds ago — and the panel said "Stopped" while the agent was
+        // visibly writing files. It shows in every project, and only becomes visible where a long
+        // stretch of work follows an answered prompt.
+        let submit = event(TURN_START, "/repo");
+        let notify = event("Notification", "/repo");
+
+        assert_eq!(
+            turn_running(
+                vec![submit.clone(), notify.clone(), notify.clone()],
+                "/repo",
+                &[MINE]
+            ),
+            Some(true),
+            "two prompts later, the turn is still the one that was opened"
+        );
+        assert_eq!(
+            turn_running(
+                vec![submit.clone(), notify.clone(), event(TURN_END, "/repo")],
+                "/repo",
+                &[MINE]
+            ),
+            Some(false),
+            "and only Stop closes it"
+        );
+        assert_eq!(
+            turn_running(vec![notify], "/repo", &[MINE]),
+            None,
+            "a notification alone says nothing about a turn — not 'closed', UNKNOWN"
+        );
+        assert_eq!(
+            turn_running(vec![], "/repo", &[MINE]),
+            None,
+            "and neither does silence"
+        );
+        assert_eq!(
+            turn_running(vec![submit], "/other", &[MINE]),
+            None,
+            "another directory's turn is not this one's"
         );
     }
 

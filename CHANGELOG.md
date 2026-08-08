@@ -55,6 +55,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **"Stopped" while the agent is working.** After a permission prompt the panel announced a stopped
+  agent for the rest of the turn — reported live, with `vitest` running in the tab. Measured:
+  `UserPromptSubmit` 24 minutes earlier, two permission prompts after it, the transcript written to
+  11 seconds ago.
+
+  `turn_state` takes the newest event **of any kind** and asks whether it is `UserPromptSubmit`. That
+  is right for the activity line — an agent blocked on you is not working *for* you — and wrong for
+  the chain, which asks whether the **turn** is open. A permission prompt arrives *inside* a turn,
+  and once it is answered the agent works on and writes no further event until `Stop`, so the wrong
+  answer stood for as long as the work lasted.
+
+  The chain now asks its own question (`hooks::turn_running`): only the two declared boundaries move
+  it, a `Notification` is transparent, and "blocked on a person" is answered separately by the check
+  that already knows when a prompt has been worked past. The activity line is unchanged.
+
+  It was never a difference between repositories, which is where the search started: **every**
+  project shows it — this one has 14 permission prompts of its own — and it only becomes *visible*
+  where a long stretch of work follows an answered prompt.
+
 - **The Chain tool no longer folds its whole record away for an agent that keeps no task list.**
   Reported as the tool *"behaving completely differently"* in a second repository, with the suspicion
   that its `work-levels.json` was wrong. Both declarations were valid and gate-green; the difference
