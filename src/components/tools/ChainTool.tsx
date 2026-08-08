@@ -939,7 +939,6 @@ function NoPlan({ done }: { done: boolean }) {
 
 function Footer({ chain }: { chain: Chain }) {
   const t = useT();
-  const unverified = chain.harness_version !== null && !VERIFIED.includes(chain.harness_version);
   return (
     <div className="text-dim flex shrink-0 gap-[0.8em] border-t border-white/6 px-[0.6em] py-[0.35em] text-[0.75em] tabular-nums">
       <span>{t("chain.links", { n: String(chain.links.length) })}</span>
@@ -953,8 +952,21 @@ function Footer({ chain }: { chain: Chain }) {
           {chain.steps_understood}/{chain.steps_seen}
         </span>
       </Tooltip>
-      {unverified ? (
-        <Tooltip content={t("chain.unverifiedHarness", { version: chain.harness_version ?? "" })}>
+      {/* **A measurement, never an identity.** This used to compare the harness version against a
+          list of ones the reader had been "verified against" — so it fired on nearly every session,
+          because the harness ships versions constantly, and it would have refused to vouch for a
+          different vendor's harness altogether. The maintainer's rule: *whatever behaves and is
+          configured the way this tool reads gets rendered, whatever it is called and whatever
+          version it claims.* So the only question left is the honest one — how much of this
+          transcript did the reader actually understand? The version is still shown as context you
+          would quote in a report; nothing branches on it. */}
+      {chain.coverage_poor ? (
+        <Tooltip
+          content={t("chain.coverageLow", {
+            understood: String(chain.steps_understood),
+            seen: String(chain.steps_seen),
+          })}
+        >
           <span className="text-gold ml-auto">!</span>
         </Tooltip>
       ) : null}
@@ -975,14 +987,6 @@ function LegendBar() {
     </div>
   );
 }
-
-/**
- * Harness versions this reader has been checked against — mirrored from `agent::chain`.
- *
- * Duplicated deliberately and minimally: the alternative is another IPC round trip for a boolean.
- * If they drift, the tool warns when it need not, which is the harmless direction.
- */
-const VERIFIED = ["2.1.220", "2.1.221", "2.1.223"];
 
 /**
  * The word for an act, from the catalogue.

@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Columns2, FileText, GitCommitHorizontal, X } from "lucide-react";
+import { ArrowLeft, Columns2, FileQuestion, FileText, GitCommitHorizontal, X } from "lucide-react";
 import { gitApi } from "../../api/git";
+import { Button } from "../ui/Button";
 import { DiffView } from "../ui/DiffView";
+import { ImageViewer, ZoomableImage } from "../ui/ImageViewer";
 import { Markdown } from "../ui/Markdown";
 import { IconButton } from "../ui/IconButton";
 import { Row } from "../ui/Row";
+import { toDataUrl } from "../../lib/dataUrl";
+import { humanSize } from "../../lib/humanSize";
 import { useTerminalStore } from "../../store/terminal";
 import { useT } from "../../hooks/useT";
 import { useUiStore, type PaneDetail } from "../../store/ui";
@@ -14,6 +18,7 @@ import { useDetailScheme } from "../../hooks/useDetailScheme";
 import { surfaceStyle } from "../../lib/schemeSurface";
 import { isMarkdown, languageFor, tokenize } from "../../lib/highlight";
 import { filesApi } from "../../api/files";
+import type { FilePreviewDto } from "../../bindings/FilePreviewDto";
 import type { GitCommitDetail } from "../../bindings/GitCommitDetail";
 import type { GitFileStat } from "../../bindings/GitFileStat";
 
@@ -181,20 +186,27 @@ function TextContent({
   const fontSize = useDetailFontSize();
 
   const query = useQuery({
-    queryKey: ["text-file", detail.root, detail.path],
-    queryFn: () => filesApi.readText(detail.root, detail.path),
+    queryKey: ["file-preview", detail.root, detail.path],
+    queryFn: () => filesApi.preview(detail.root, detail.path),
   });
+
+  // **What the file turned out to be, decided in the backend.** The panel never guesses from an
+  // extension: a `.png` full of zip bytes is not a picture, and a `.txt` that is really a JPEG is.
+  const preview = query.data;
+  const text: Extract<FilePreviewDto, { kind: "text" }> | undefined =
+    preview !== undefined && preview.kind === "text" ? preview : undefined;
 
   const coloured = useQuery({
     // Keyed on WHEN the file was read, not on its contents: a two-megabyte string in a query key is
     // stringified for hashing on every render. `dataUpdatedAt` moves whenever the read above returns,
     // which is the same signal for a fraction of the cost.
     queryKey: ["highlight-file", detail.path, query.dataUpdatedAt, scheme?.id ?? "hud"],
-    queryFn: () => tokenize(query.data?.text ?? "", languageFor(detail.path), scheme),
-    enabled: query.data !== undefined,
+    queryFn: () => tokenize(text?.text ?? "", languageFor(detail.path), scheme),
+    enabled: text !== undefined,
   });
 
-  const markdown = isMarkdown(detail.path);
+  // The lens is only offered where there is text to switch — a picture has no source view.
+  const markdown = isMarkdown(detail.path) && preview?.kind !== "image";
   const rendered = markdown && detail.rendered === true;
 
   return (
@@ -233,22 +245,35 @@ function TextContent({
         {query.isPending ? (
           <p className="text-dim p-4 font-mono text-xs">{t("files.reading")}</p>
         ) : query.isError ? (
-          // Named, not swallowed: "it is binary" and "it is gone" are different problems and only
-          // the message says which (rule:logging).
+          // A real failure — gone, unreadable, outside the root. "Cannot be drawn here" is NOT one
+          // of these any more; it arrives as a state below (rule:logging).
           <p className="text-dim p-4 font-mono text-xs">{String(query.error)}</p>
+        ) : preview === undefined ? null : preview.kind === "image" ? (
+          // **A picture, drawn.** This used to say "no image renderer, deliberately", on the grounds
+          // that a "read any binary under root" command was a wider door than the feature was worth.
+          // The door was already open — `read_text` reads every file under the root and only refuses
+          // to *return* binary — and the command that replaced it is strictly narrower: same root
+          // check, a size cap, and an allow-list of picture formats recognised by their first bytes.
+          // No `assetProtocol` capability is involved, so the sandbox is exactly where it was
+          // (ADR-PROJ-004).
+          <ImageContent preview={preview} name={detail.path.split("/").pop() ?? detail.path} />
+        ) : preview.kind === "unsupported" ? (
+          <UnsupportedContent
+            preview={preview}
+            onOpen={() => {
+              void filesApi.open(detail.root, detail.path).catch((error: unknown) => {
+                console.error("could not open", detail.path, error);
+              });
+            }}
+          />
         ) : (
           <>
             {rendered ? (
-              // **No `image` renderer, deliberately.** The notes have one because their pictures live
-              // inside a directory this app owns; an arbitrary file in the user's tree has no such
-              // reader, and inventing a "read any binary under root" command to preview a picture is
-              // a wider door than the feature is worth (rule:security). An image therefore draws its
-              // alt text, which says something is there rather than pretending nothing is.
-              <Markdown source={query.data.text} scheme={scheme} className="px-3 py-2" />
+              <Markdown source={preview.text} scheme={scheme} className="px-3 py-2" />
             ) : (
               <pre className="px-2 py-1 font-mono leading-[1.5] wrap-anywhere whitespace-pre-wrap">
                 {coloured.data === undefined
-                  ? query.data.text
+                  ? preview.text
                   : coloured.data.map((line, at) => (
                       <span key={at}>
                         {line.map((token, index) => (
@@ -264,7 +289,7 @@ function TextContent({
                     ))}
               </pre>
             )}
-            {query.data.truncated ? (
+            {preview.truncated ? (
               // Said out loud: a file that silently stops is read as a file that ends there.
               <p className="scheme-meta px-2 py-1 font-mono text-[10px]">
                 {t("files.fileTruncated")}
@@ -274,6 +299,90 @@ function TextContent({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * A picture from the tree, shown at its own size and zoomable.
+ *
+ * **The bytes come over IPC, not over a URL the webview resolves.** This app declares no
+ * `assetProtocol` capability, so a `file://` in an `<img>` loads nothing — every byte reaches the
+ * webview through a command confined to the tab's root (ADR-PROJ-004). The type is the one the
+ * backend read out of the file's first bytes, never one guessed from the name here.
+ *
+ * `ZoomableImage` rather than a bare `<img>`: the picture is the affordance, so it is a primitive
+ * (ADR-APP-026), and a raw element in a view is lint-rejected — rightly.
+ */
+function ImageContent({
+  preview,
+  name,
+}: {
+  preview: Extract<FilePreviewDto, { kind: "image" }>;
+  name: string;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  // Built once per read rather than on every render: base64 of a multi-megabyte picture is not a
+  // thing to redo because a parent re-rendered.
+  const src = useMemo(() => toDataUrl(preview.bytes, preview.mime), [preview]);
+
+  return (
+    <div className="flex min-h-full items-center justify-center p-3">
+      <ZoomableImage
+        src={src}
+        alt={name}
+        label={t("files.imageOpen", { name })}
+        onOpen={() => setOpen(true)}
+        className="max-h-full max-w-full object-contain"
+      />
+      {open ? (
+        <ImageViewer
+          src={src}
+          alt={name}
+          caption={name}
+          onClose={() => setOpen(false)}
+          labels={{
+            back: t("common.back"),
+            zoomIn: t("notes.zoomIn"),
+            zoomOut: t("notes.zoomOut"),
+            fit: t("notes.zoomFit"),
+            actual: t("notes.zoomActual"),
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A file this panel cannot draw — said as a state, not as an error.
+ *
+ * **The whole reason this component exists.** Opening a PDF used to print
+ * *"…/spec.pdf is not a text file"*: true, addressed to nobody, and silent about what to do next. A
+ * viewer that cannot show something owes the reader two facts — *what it is* and *what to do
+ * instead* — and the second one is a button, because the platform handler is exactly the right
+ * answer here and is one click away in the tree's own menu.
+ */
+function UnsupportedContent({
+  preview,
+  onOpen,
+}: {
+  preview: Extract<FilePreviewDto, { kind: "unsupported" }>;
+  onOpen: () => void;
+}) {
+  const t = useT();
+  const reason =
+    preview.reason === "image_too_large" ? t("files.imageTooLarge") : t("files.notShowable");
+
+  return (
+    <div className="flex min-h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <FileQuestion size={28} strokeWidth={1.5} className="text-dim" />
+      <p className="text-dim font-mono text-xs">{reason}</p>
+      <p className="text-dim font-mono text-[10px]">{humanSize(preview.size)}</p>
+      <Button variant="ghost" onClick={onOpen}>
+        {t("files.open")}
+      </Button>
+    </div>
   );
 }
 

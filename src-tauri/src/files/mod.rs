@@ -376,6 +376,257 @@ fn is_binary(bytes: &[u8]) -> bool {
     bytes.iter().take(SNIFF_BYTES).any(|byte| *byte == 0)
 }
 
+/// What the viewer can make of a file.
+///
+/// **Three answers, and the third is the point.** The viewer used to have two: text, or an error
+/// string rendered raw. So a PNG produced *"…/shot.png is not a text file"* in the panel — which is
+/// true, is not a sentence anybody wrote for a reader, and says nothing about what to do instead.
+/// A file the viewer cannot draw is a **state**, not a failure (rule:logging: no silent failures,
+/// and no unnamed ones either).
+pub enum Preview {
+    Text(TextFile),
+    /// A picture, and its type as decided by the bytes rather than by the name.
+    Image {
+        bytes: Vec<u8>,
+        mime: &'static str,
+    },
+    /// Nothing this panel can draw. It still says what the file *is*, so the answer is "open it
+    /// with something else", not "something went wrong".
+    Unsupported {
+        reason: Unsupported,
+        size: u64,
+    },
+}
+
+/// Why a file cannot be drawn here.
+pub enum Unsupported {
+    /// Binary, and not a picture format this viewer knows.
+    Binary,
+    /// A picture, but past what may be held in a webview at once.
+    ImageTooLarge,
+}
+
+/// The largest picture the file viewer will hand to the webview.
+///
+/// **The same ceiling the notes' viewer uses, from the same constant** (ADR-CORE-005). It is one
+/// question — *how much image may a webview hold while somebody looks at it* — and answering it
+/// twice is how the two come to disagree. `notes::images` states the reasoning: base64 inflates by
+/// a third, and the viewer holds exactly one picture for as long as it is open.
+pub const MAX_IMAGE_BYTES: u64 = crate::notes::images::MAX_VIEWER as u64;
+
+/// The picture formats this viewer draws, decided by the file's first bytes.
+///
+/// **By content, never by extension.** A `.png` that is really a JPEG still draws; a `.png` that is
+/// really a zip does not, and says so. The name is a claim by whoever wrote the file, and the
+/// webview is the thing being handed the result (rule:security).
+///
+/// **SVG is deliberately absent.** It is text, so it already opens in this viewer as its own source,
+/// which is usually what somebody browsing a repository wants — and it is the one image format that
+/// carries script. Drawing it belongs with markdown's source/rendered lens rather than here.
+fn image_mime(bytes: &[u8]) -> Option<&'static str> {
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
+    match bytes {
+        _ if bytes.starts_with(PNG) => Some("image/png"),
+        _ if bytes.starts_with(b"\xff\xd8\xff") => Some("image/jpeg"),
+        _ if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") => Some("image/gif"),
+        // RIFF containers carry their real type at byte 8; only WEBP is a picture.
+        _ if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") => Some("image/webp"),
+        _ if bytes.starts_with(b"BM") => Some("image/bmp"),
+        _ if bytes.starts_with(b"\x00\x00\x01\x00") => Some("image/x-icon"),
+        // ISO base media: the brand at byte 4 says which. AVIF and HEIC share the container.
+        _ if bytes.get(4..8) == Some(b"ftyp") => match bytes.get(8..12) {
+            Some(b"avif") | Some(b"avis") => Some("image/avif"),
+            Some(b"heic") | Some(b"heix") | Some(b"mif1") => Some("image/heic"),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Read a file for the viewer, and always answer *something*.
+///
+/// **This is the one place that decides what a file is**, so the panel never has to guess from an
+/// extension or read an error message to find out. Order matters: pictures are recognised before
+/// the text sniff, because every one of them would otherwise be "binary".
+pub fn preview(target: &Path) -> Result<Preview> {
+    let meta =
+        std::fs::metadata(target).map_err(|e| AppError::io(target.display().to_string(), e))?;
+    if meta.is_dir() {
+        return Err(AppError::Other(format!(
+            "{} is a directory, not a file",
+            target.display()
+        )));
+    }
+
+    let mut head = [0u8; 16];
+    let read = {
+        let mut file = std::fs::File::open(target)
+            .map_err(|e| AppError::io(target.display().to_string(), e))?;
+        let mut filled = 0;
+        while filled < head.len() {
+            match file.read(&mut head[filled..]) {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(e) => return Err(AppError::io(target.display().to_string(), e)),
+            }
+        }
+        filled
+    };
+
+    if let Some(mime) = image_mime(&head[..read]) {
+        if meta.len() > MAX_IMAGE_BYTES {
+            // **Named rather than truncated.** Half a JPEG renders as a grey block, which reads as a
+            // broken file rather than as a file this panel declined to hold.
+            return Ok(Preview::Unsupported {
+                reason: Unsupported::ImageTooLarge,
+                size: meta.len(),
+            });
+        }
+        let bytes =
+            std::fs::read(target).map_err(|e| AppError::io(target.display().to_string(), e))?;
+        return Ok(Preview::Image { bytes, mime });
+    }
+
+    match read_text(target) {
+        Ok(text) => Ok(Preview::Text(text)),
+        // The only thing `read_text` refuses on its own account is "not text". Anything else — gone,
+        // unreadable — is a real error and stays one.
+        Err(_) if is_binary(&head[..read]) => Ok(Preview::Unsupported {
+            reason: Unsupported::Binary,
+            size: meta.len(),
+        }),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    fn write(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, bytes).expect("write");
+        path
+    }
+
+    /// The smallest thing that is unmistakably a PNG: the signature and nothing after it.
+    const PNG_HEAD: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR";
+
+    #[test]
+    fn a_picture_is_recognised_by_its_bytes_and_not_by_its_name() {
+        // **The whole reason this decision is in the backend.** A name is a claim by whoever wrote
+        // the file; the bytes are the file. Both directions are asserted, because only checking the
+        // helpful one would let an extension quietly become the source of truth again.
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let lying = write(dir.path(), "notes.txt", PNG_HEAD);
+        assert!(
+            matches!(preview(&lying), Ok(Preview::Image { mime, .. }) if mime == "image/png"),
+            "a picture called .txt is still a picture"
+        );
+
+        let pretending = write(dir.path(), "shot.png", b"PK\x03\x04\x00\x00");
+        assert!(
+            matches!(
+                preview(&pretending),
+                Ok(Preview::Unsupported {
+                    reason: Unsupported::Binary,
+                    ..
+                })
+            ),
+            "a zip called .png is not one"
+        );
+    }
+
+    #[test]
+    fn every_format_the_viewer_claims_is_actually_recognised() {
+        // A list in a doc comment that the code does not implement is worse than no list: it is a
+        // promise the panel then breaks on one file type out of eight.
+        assert_eq!(image_mime(PNG_HEAD), Some("image/png"));
+        assert_eq!(image_mime(b"\xff\xd8\xff\xe0"), Some("image/jpeg"));
+        assert_eq!(image_mime(b"GIF89a...."), Some("image/gif"));
+        assert_eq!(image_mime(b"GIF87a...."), Some("image/gif"));
+        assert_eq!(
+            image_mime(b"RIFF\x00\x00\x00\x00WEBPVP8 "),
+            Some("image/webp")
+        );
+        assert_eq!(image_mime(b"BM\x00\x00\x00\x00"), Some("image/bmp"));
+        assert_eq!(
+            image_mime(b"\x00\x00\x01\x00\x01\x00"),
+            Some("image/x-icon")
+        );
+        assert_eq!(image_mime(b"\x00\x00\x00\x20ftypavif"), Some("image/avif"));
+        assert_eq!(image_mime(b"\x00\x00\x00\x20ftypheic"), Some("image/heic"));
+
+        // A RIFF that is not a picture must not be drawn as one: the container also carries audio.
+        assert_eq!(image_mime(b"RIFF\x00\x00\x00\x00WAVEfmt "), None);
+        // And a video in the same box as AVIF is still not a picture.
+        assert_eq!(image_mime(b"\x00\x00\x00\x20ftypmp42"), None);
+        assert_eq!(image_mime(b"fn main() {}"), None);
+        assert_eq!(image_mime(b""), None, "an empty file is nothing at all");
+    }
+
+    #[test]
+    fn a_picture_past_the_cap_is_named_rather_than_half_drawn() {
+        // Half a JPEG renders as a grey block, which reads as a corrupt file rather than as one the
+        // panel declined to hold. The size travels with it so the message can say how far past.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut bytes = PNG_HEAD.to_vec();
+        bytes.resize(
+            usize::try_from(MAX_IMAGE_BYTES).unwrap_or(usize::MAX) + 1,
+            0,
+        );
+        let path = write(dir.path(), "huge.png", &bytes);
+
+        match preview(&path) {
+            Ok(Preview::Unsupported {
+                reason: Unsupported::ImageTooLarge,
+                size,
+            }) => assert!(size > MAX_IMAGE_BYTES),
+            other => panic!("expected a named refusal, got {:?}", other.is_ok()),
+        }
+    }
+
+    #[test]
+    fn a_binary_that_is_no_picture_is_a_state_rather_than_an_error() {
+        // **The defect this whole enum exists for.** It used to be `Err("… is not a text file")`,
+        // which the panel printed raw: true, addressed to nobody, and silent about what to do next.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write(dir.path(), "a.bin", b"\x00\x01\x02\x03binary");
+
+        assert!(matches!(
+            preview(&path),
+            Ok(Preview::Unsupported {
+                reason: Unsupported::Binary,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn text_still_comes_back_as_text() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write(dir.path(), "a.rs", b"fn main() {}\n");
+
+        match preview(&path) {
+            Ok(Preview::Text(file)) => {
+                assert_eq!(file.text, "fn main() {}\n");
+                assert!(!file.truncated);
+            }
+            _ => panic!("expected text"),
+        }
+    }
+
+    #[test]
+    fn a_real_failure_stays_a_failure() {
+        // "Gone" and "cannot be drawn" are different facts, and collapsing them would hide a missing
+        // file behind a tidy panel (rule:logging).
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert!(preview(&dir.path().join("nothing-here")).is_err());
+        assert!(preview(dir.path()).is_err(), "a directory is not a file");
+    }
+}
+
 #[cfg(test)]
 mod text_tests {
     use super::*;

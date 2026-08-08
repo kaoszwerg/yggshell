@@ -1,27 +1,32 @@
-import type { TextFileDto } from "../bindings/TextFileDto";
+import type { FilePreviewDto } from "../bindings/FilePreviewDto";
 // Typed wrapper around the file browser's read-only command surface.
 import { invoke } from "@tauri-apps/api/core";
 import type { DirListing } from "../bindings/DirListing";
 
 export const filesApi = {
   /**
-   * A file's text, for the inline viewer.
-   *
-   * **Reading, never running.** The alternative — handing the path to the platform's default handler
-   * — starts an application chosen by the file. Here the type decides only which highlighter colours
-   * it. The backend refuses a directory, refuses anything binary, and caps what it reads; `path` is
-   * checked against `root` exactly as a listing is.
-   */
-  /**
    * Hand a path to whatever the platform opens it with.
    *
-   * **This starts an application chosen by the file.** Kept narrow on purpose: anything that is text
-   * has {@link readText}, which launches nothing. This is for a PDF, an image, a binary — the cases
-   * an inline viewer cannot answer. The backend verifies the path against `root` first.
+   * **This starts an application chosen by the file.** Kept narrow on purpose: anything the viewer
+   * can draw has {@link preview}, which launches nothing. This is for a PDF, an archive, a binary —
+   * the cases an inline viewer cannot answer, and the button the viewer itself offers when it says
+   * so. The backend verifies the path against `root` first.
    */
   open: (root: string, path: string) => invoke<void>("open_path", { root, path }),
 
-  readText: (root: string, path: string) => invoke<TextFileDto>("read_text_file", { root, path }),
+  /**
+   * A file for the viewer: its text, its pixels, or a named reason it has neither.
+   *
+   * **This replaced a `readText` that answered text or an *error*** — so a picture arrived as
+   * the string "… is not a text file" and the panel had nothing better to do than print it. What a
+   * file *is* gets decided in the backend, next to the root check and the byte sniffing — never here
+   * from an extension, which is a claim by whoever named the file.
+   *
+   * An image travels as bytes rather than as a URL the webview fetches: this app has no
+   * `assetProtocol` capability at all, so everything on disk reaches the webview through a command
+   * confined by a root check. Drawing a picture does not widen the sandbox (ADR-PROJ-004).
+   */
+  preview: (root: string, path: string) => invoke<FilePreviewDto>("preview_file", { root, path }),
 
   /**
    * List one directory of the tab's own tree.

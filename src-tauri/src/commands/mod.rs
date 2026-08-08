@@ -1082,28 +1082,51 @@ pub fn clear_agent_attention(app: tauri::AppHandle) -> Result<()> {
     crate::agent::hooks::clear(&crate::agent::hooks::events_path(&data))
 }
 
-/// A file's text, for the inline viewer.
+/// A file for the viewer: its text, its pixels, or why it has neither.
 ///
-/// **Reading, never running — and that distinction is the whole reason this exists.** Handing a path
-/// to the platform's default handler *starts an application chosen by the file*, which is what
-/// [`reveal_in_file_manager`] was written to avoid. Here the file's type decides only which syntax
-/// highlighter colours it; nothing is launched, and nothing is written back.
+/// **It replaced a `read_text_file` that answered text or an error, and the reason is one the panel
+/// could not solve on its own.** A picture arrived as the string *"… is not a text file"* — and the
+/// viewer had nothing better to do than print it. Deciding what a file *is* belongs here, next to
+/// the root check and the sniffing, rather than in a webview guessing from an extension.
 ///
-/// The path is checked against the tab's own root exactly as a listing is, so the browser cannot be
-/// talked into reading something outside the tree it shows (rule:security).
-///
-/// Refuses a directory and anything that looks binary, and caps what it reads — a viewer is not a
-/// reason to move a gigabyte across the IPC boundary.
+/// Same confinement as every other read: the path is verified against the tab's own root first, so
+/// the browser cannot be talked into reading outside the tree it shows (rule:security). **Reading,
+/// never running** — nothing is launched, and a picture is recognised by its first bytes rather than
+/// by its name.
 #[tauri::command]
-pub fn read_text_file(root: String, path: String) -> Result<crate::dto::TextFileDto> {
-    tracing::info!(%root, %path, "read_text_file");
+pub fn preview_file(root: String, path: String) -> Result<crate::dto::FilePreviewDto> {
+    use crate::files::{Preview, Unsupported};
+    tracing::info!(%root, %path, "preview_file");
     let target = crate::files::verify(std::path::Path::new(&root), std::path::Path::new(&path))?;
-    let file = crate::files::read_text(&target)?;
-    tracing::info!(%path, bytes = file.text.len(), truncated = file.truncated, "read_text_file ok");
-    Ok(crate::dto::TextFileDto {
-        text: file.text,
-        truncated: file.truncated,
-    })
+    let preview = crate::files::preview(&target)?;
+    // Logged by shape and size only — never a byte of what was read (ADR-PROJ-005 §1).
+    match preview {
+        Preview::Text(file) => {
+            tracing::info!(%path, bytes = file.text.len(), truncated = file.truncated, "preview_file text");
+            Ok(crate::dto::FilePreviewDto::Text {
+                text: file.text,
+                truncated: file.truncated,
+            })
+        }
+        Preview::Image { bytes, mime } => {
+            tracing::info!(%path, bytes = bytes.len(), %mime, "preview_file image");
+            Ok(crate::dto::FilePreviewDto::Image {
+                bytes,
+                mime: mime.to_string(),
+            })
+        }
+        Preview::Unsupported { reason, size } => {
+            let reason = match reason {
+                Unsupported::Binary => "binary",
+                Unsupported::ImageTooLarge => "image_too_large",
+            };
+            tracing::info!(%path, %reason, size, "preview_file unsupported");
+            Ok(crate::dto::FilePreviewDto::Unsupported {
+                reason: reason.to_string(),
+                size,
+            })
+        }
+    }
 }
 
 /// Open a file or folder with whatever the platform opens it with.
@@ -1116,8 +1139,8 @@ pub fn read_text_file(root: String, path: String) -> Result<crate::dto::TextFile
 ///
 /// What stands: the path is verified against the tab's own root, so nothing outside the tree on
 /// screen can be reached; the action is explicit; and it is logged with what was opened. Anything
-/// that is text has an inline viewer that launches nothing ([`read_text_file`]) — this is for the
-/// rest.
+/// the viewer can draw has an inline path that launches nothing ([`preview_file`]) — this is for the
+/// rest, and it is the button that panel offers when it says it cannot draw something.
 ///
 /// **`async` + `spawn_blocking`**: it starts a process (rule:rust-conventions).
 #[tauri::command]

@@ -18,6 +18,7 @@ import { notesApi } from "../api/notes";
 import { copyText } from "../lib/clipboard";
 import { useContentFontSize } from "../hooks/useContentFontSize";
 import { useEscapeToTerminal } from "../hooks/useEscapeToTerminal";
+import { toDataUrl } from "../lib/dataUrl";
 import { setNoteFlush } from "../lib/noteDraft";
 import { useT } from "../hooks/useT";
 import { useToastStore } from "../store/toast";
@@ -643,10 +644,10 @@ function NoteImage({ project, src, alt }: { project: string; src: string; alt: s
       const bytes = remote
         ? await notesApi.fetchImage(src)
         : await notesApi.readImage(project, src);
-      const binary = Uint8Array.from(bytes);
-      let out = "";
-      for (const byte of binary) out += String.fromCharCode(byte);
-      return `data:image/*;base64,${btoa(out)}`;
+      // A note's image keeps the wildcard type: the bytes arrive from a command that does not sniff
+      // them, and the honest answer to "which type" is that this caller does not know. The file
+      // viewer's command does sniff, and passes the real one (`lib/dataUrl`).
+      return toDataUrl(bytes, "image/*");
     },
   });
 
@@ -755,10 +756,7 @@ function NoteImageViewer({
       const bytes = remote
         ? await notesApi.fetchImage(src)
         : await notesApi.readImageLarge(project, src);
-      const binary = Uint8Array.from(bytes);
-      let out = "";
-      for (const byte of binary) out += String.fromCharCode(byte);
-      return `data:image/*;base64,${btoa(out)}`;
+      return toDataUrl(bytes, "image/*");
     },
   });
 

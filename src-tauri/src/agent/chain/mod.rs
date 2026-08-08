@@ -38,16 +38,47 @@ use std::path::Path;
 /// app run, and it is why the tool shows a loading state rather than blocking (rule:ui-design).
 const MAX_TRANSCRIPT_BYTES: u64 = 64 * 1024 * 1024;
 
-/// The harness versions this reader has been verified against.
+/// How little of a transcript this reader may understand before it says so out loud.
 ///
-/// Not a compatibility check — the reader degrades on anything. It is what lets the tool **say** it
-/// is on unproven ground instead of quietly showing a shorter chain, which is indistinguishable
-/// from a genuinely shorter one (ADR-PROJ-005, chain-tool.md §Format drift).
-const VERIFIED_VERSIONS: &[&str] = &["2.1.220", "2.1.223"];
+/// **This replaced a list of harness versions, and the replacement is the point.** The tool used to
+/// carry `VERIFIED_VERSIONS = ["2.1.220", "2.1.223"]` and mark anything else as written by an
+/// unverified harness. The maintainer, on meeting it at `2.1.224`: *"verified version ist doch
+/// bekloppt, die versionen ändern sich andauernd, wir bauen doch nicht für jeden harness eine neue
+/// version"* — and he is right twice over.
+///
+/// It was a **treadmill**: the harness ships versions constantly, so the marker fired on almost
+/// every session until somebody edited a Rust constant and cut a release. A warning that is always
+/// lit carries no information, and a check that fires on everything gets ignored on the day it is
+/// right (ADR-CORE-039). It was also **the wrong measurement**: a patch bump usually changes nothing
+/// about the transcript, while a format change could arrive inside a version already on the list.
+/// And it lived **twice** — the same array was duplicated in `ChainTool.tsx`, so the two were one
+/// release away from disagreeing (ADR-CORE-005).
+///
+/// What the marker was actually for — *"is this reader quietly showing a shorter chain than the
+/// truth?"* — is measured directly, and the reader already measures it: `seen` against `understood`.
+/// That is the thing itself rather than a proxy for it, and it needs no maintenance at all.
+///
+/// **The floor is set from real sessions, not from taste.** Measured 2026-08-08: 3013/3662 (82 %) on
+/// a 33 MB session, 26/37 (70 %) on a fresh repository's first afternoon. Ordinary work sits at
+/// 70–85 %, so 40 % is far below anything healthy and fires only on genuine breakage.
+/// Expressed as a fraction rather than a float so the comparison is exact at any session size: a
+/// 33 MB session counts in the thousands, and `as f32` on those is a lossy cast clippy is right to
+/// dislike.
+const COVERAGE_FLOOR: (u64, u64) = (2, 5);
 
-/// Whether this reader has been checked against the version that wrote the transcript.
-pub fn version_is_verified(version: Option<&str>) -> bool {
-    version.is_some_and(|v| VERIFIED_VERSIONS.contains(&v))
+/// Below this many tool calls the ratio is noise rather than a signal.
+///
+/// Two calls, neither recognised, is 0 % and means nothing: a session that has just started, or one
+/// that ran two shell commands nobody wrote a classifier for. The warning exists for a reader that
+/// has stopped understanding a transcript, and that only shows over a sample.
+const COVERAGE_SAMPLE: u32 = 20;
+
+/// Whether this reader understood so little of the transcript that it should say so.
+///
+/// The honest form of *"the format may have moved under us"*: not a version number, a measurement.
+pub fn coverage_is_poor(seen: u32, understood: u32) -> bool {
+    let (numerator, denominator) = COVERAGE_FLOOR;
+    seen >= COVERAGE_SAMPLE && u64::from(understood) * denominator < u64::from(seen) * numerator
 }
 
 /// Everything parsed out of one transcript, before folding.
@@ -641,6 +672,7 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
         waiting_for: None,
         steps_seen: parsed.seen,
         steps_understood: parsed.understood,
+        coverage_poor: coverage_is_poor(parsed.seen, parsed.understood),
         home: home.to_string(),
         session_id: parsed.session_id,
         harness_version: parsed.harness_version,
@@ -990,10 +1022,29 @@ mod tests {
     }
 
     #[test]
-    fn an_unverified_harness_version_is_recognised_as_such() {
-        assert!(version_is_verified(Some("2.1.223")));
-        assert!(!version_is_verified(Some("9.9.9")));
-        assert!(!version_is_verified(None));
+    fn poor_coverage_is_measured_rather_than_guessed_from_a_version() {
+        // **What this replaced.** A list of harness versions the reader had been "verified against",
+        // duplicated in the frontend, warning about everything else — so it fired on almost every
+        // session, because the harness ships versions constantly. A warning that is always lit
+        // carries no information (ADR-CORE-039), and the maintainer said so on meeting it:
+        // *"verified version ist doch bekloppt, die versionen ändern sich andauernd"*.
+        //
+        // Real sessions measured the same day: 3013/3662 and 26/37 — ordinary work is 70–85 %.
+        assert!(!coverage_is_poor(3662, 3013), "82 % is ordinary");
+        assert!(!coverage_is_poor(37, 26), "70 % is ordinary");
+        assert!(
+            coverage_is_poor(100, 10),
+            "10 % is the format moving under us"
+        );
+
+        // Under the sample it says nothing: two unrecognised calls is a session that has barely
+        // started, not a reader that has stopped working.
+        assert!(!coverage_is_poor(2, 0), "too small to mean anything");
+        assert!(!coverage_is_poor(COVERAGE_SAMPLE - 1, 0), "still too small");
+        assert!(
+            coverage_is_poor(COVERAGE_SAMPLE, 0),
+            "and at the sample it speaks"
+        );
     }
 
     #[test]

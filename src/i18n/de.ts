@@ -209,7 +209,8 @@ export const de: Translations = {
   "chain.disputed": "das Projekt deklariert das näher, als es tatsächlich reicht",
   "chain.delegated": "{n} Schritte in einem Subagenten",
   "chain.coverage": "{understood} von {seen} Schritten erkannt",
-  "chain.unverifiedHarness": "von einer ungeprüften Harness-Version geschrieben ({version})",
+  "chain.coverageLow":
+    "dieser Leser hat nur {understood} von {seen} Schritten verstanden — das Transkript-Format hat sich womöglich geändert",
   "chain.steps": "{n} Schritte",
   "chain.links": "{n} Glieder",
   "chain.underMinute": "< 1 Min",
@@ -292,6 +293,9 @@ export const de: Translations = {
   "files.viewRendered": "Als Markdown ansehen",
   "files.viewSource": "Quelltext ansehen",
   "files.open": "Mit Standardprogramm öffnen",
+  "files.imageOpen": "{name} in voller Größe öffnen",
+  "files.notShowable": "Diese Datei kann der Viewer nicht darstellen.",
+  "files.imageTooLarge": "Dieses Bild ist zu groß für den Viewer.",
   "files.newTerminal": "In neuem Terminal öffnen",
   "files.thisTerminal": "cd in dieses Terminal tippen",
   "files.fileTruncated":

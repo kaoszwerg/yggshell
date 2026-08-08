@@ -6,6 +6,53 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **"View here" draws pictures, and names what it cannot draw.** The viewer had two answers — text,
+  or an error string printed raw — so opening a PNG produced *"…/logo.png is not a text file"* in the
+  panel: true, addressed to nobody, and silent about what to do instead. It now has three, decided in
+  the backend next to the root check: **text**, **image**, or a named **unsupported** state carrying
+  the file's size and a button to open it with the platform's handler.
+
+  A picture is recognised **by its first bytes, never by its name** — PNG, JPEG, GIF, WebP, BMP, ICO,
+  AVIF and HEIC — so a `.png` full of zip bytes is refused and a picture called `.txt` still draws.
+  Its bytes travel over IPC rather than a `file://` the webview resolves: this app declares no
+  `assetProtocol` capability at all, so drawing a picture does not widen the sandbox (ADR-PROJ-004).
+  Too large to hold is its own state rather than a half-drawn grey block, and the ceiling is the one
+  `notes::images` already sets, from the same constant.
+
+  A note on what stays out: **SVG keeps opening as its own source.** It is text, that is usually what
+  somebody browsing a repository wants, and it is the one picture format that carries script.
+
+  This overturns a comment that said the opposite — *"no image renderer, deliberately … a read any
+  binary under root command is a wider door than the feature is worth"*. The door was already open:
+  `read_text` reads every file under the root and merely refuses to *return* binary. What replaced it
+  is strictly narrower — same root check, a size cap, and an allow-list of formats validated by
+  content.
+
+### Changed
+
+- **The Chain tool stopped judging a harness by its version number.** It held
+  `VERIFIED_VERSIONS = ["2.1.220", "2.1.223"]` and marked everything else *"written by an unverified
+  harness version"* — so it fired on almost every session, because the harness ships versions
+  constantly. The maintainer, meeting it at `2.1.224`: *"verified version ist doch bekloppt, die
+  versionen ändern sich andauernd"*, and: *"wer sich chain tool konform verhält und konfiguriert ist,
+  der wird auch gerendert, egal wie er heißt oder wie die version heißt."*
+
+  A warning that is always lit carries no information (ADR-CORE-039), it was the wrong measurement —
+  a patch bump changes nothing about a transcript while a format change could arrive inside a version
+  already on the list — and it would have refused to vouch for a different vendor's harness at all.
+  **The list also lived twice**, in Rust and in `ChainTool.tsx`, and the two had already drifted
+  (`2.1.221` on one side only).
+
+  What the marker was for is measured directly and the reader already counted it: **`seen` against
+  `understood`**. Below 40 % over at least 20 tool calls it says so; the floor comes from real
+  sessions — 3013/3662 and 26/37, so ordinary work is 70–85 %. The version is still shown as context
+  to quote in a report, and nothing branches on it.
+
+- One byte-array-to-`data:`-URL conversion for the whole app (`lib/dataUrl`). The notes view carried
+  it twice, character for character, and the file viewer would have been the third.
+
 ### Fixed
 
 - **A session that only ever reads is a session, and the Chain tool now says so.** Measured in a

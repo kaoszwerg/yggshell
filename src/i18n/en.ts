@@ -220,7 +220,8 @@ export const en = {
   "chain.disputed": "the project declares this as closer than it reaches",
   "chain.delegated": "{n} steps in a subagent",
   "chain.coverage": "{understood} of {seen} steps recognised",
-  "chain.unverifiedHarness": "written by an unverified harness version ({version})",
+  "chain.coverageLow":
+    "this reader understood only {understood} of {seen} steps — the transcript format may have moved",
   "chain.steps": "{n} steps",
   "chain.links": "{n} links",
   "chain.underMinute": "< 1 min",
@@ -305,6 +306,9 @@ export const en = {
   "files.viewRendered": "View as markdown",
   "files.viewSource": "View the source",
   "files.open": "Open with the default app",
+  "files.imageOpen": "Open {name} full size",
+  "files.notShowable": "This viewer cannot draw this file.",
+  "files.imageTooLarge": "This picture is too large to hold in the viewer.",
   "files.newTerminal": "Open in a new terminal",
   "files.thisTerminal": "Type cd into this terminal",
   "files.fileTruncated":

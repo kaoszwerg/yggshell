@@ -410,9 +410,17 @@ pub struct Chain {
     /// attribution renders another account's work in this tab.
     pub home: String,
     pub session_id: Option<String>,
-    /// The harness version the transcript was written by. When it is one this reader was never
-    /// verified against, the tool says it is on unproven ground rather than quietly showing less.
+    /// The harness version the transcript was written by. **Context, not a verdict** — it is what
+    /// you would quote when reporting that the chain looks wrong, and nothing in the tool branches
+    /// on it any more.
     pub harness_version: Option<String>,
+    /// True when this reader understood so little of the transcript that it should say so.
+    ///
+    /// **Measured, never inferred from a version number.** The tool used to hold a list of harness
+    /// versions it had been "verified against" and warn about everything else — which fired on
+    /// almost every session, because the harness ships versions constantly. Coverage is the thing
+    /// that list was a proxy for, and the reader already counts it (`chain::coverage_is_poor`).
+    pub coverage_poor: bool,
 }
 
 #[cfg(test)]

@@ -390,14 +390,38 @@ pub struct NoteImportReport {
     pub entries: Vec<NoteImportEntry>,
 }
 
-/// A file's contents for the inline viewer.
+/// What the file viewer can make of a file: text, a picture, or a named refusal.
+///
+/// **Three states on the wire, so the panel never has to read an error message to find out.** The
+/// viewer had two — text, or an error string rendered raw — so opening a PNG produced
+/// *"…/shot.png is not a text file"* on screen: true, addressed to nobody, and silent about what to
+/// do instead. A file this panel cannot draw is a **state**, and it is carried as one.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(export, export_to = "../../src/bindings/")]
-pub struct TextFileDto {
-    pub text: String,
-    /// True when the file was longer than the viewer's cap and only its head is here — said out loud
-    /// in the panel, because a file that silently stops is read as a file that ends there.
-    pub truncated: bool,
+pub enum FilePreviewDto {
+    Text {
+        text: String,
+        truncated: bool,
+    },
+    /// The bytes, and the type decided by **those bytes** rather than by the file's name.
+    ///
+    /// Sent whole rather than as a URL the webview fetches: this app has no `assetProtocol`
+    /// capability at all, so every byte on disk reaches the webview through a command confined by a
+    /// root check. Showing a picture does not widen the sandbox (ADR-PROJ-004), which is the same
+    /// bargain `notes::images` already makes.
+    Image {
+        bytes: Vec<u8>,
+        mime: String,
+    },
+    /// Nothing this panel can draw — and it says what the file is, so the answer is "open it with
+    /// something else" rather than "something went wrong".
+    Unsupported {
+        /// `binary` or `image_too_large`. A key rather than a sentence: the wording is the
+        /// frontend's, in the user's language (rule:i18n).
+        reason: String,
+        size: u64,
+    },
 }
 
 /// Whether the agent hooks are in place, and what they have reported.

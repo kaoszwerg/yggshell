@@ -131,7 +131,7 @@ pub fn run() {
             commands::container_stats,
             commands::container_logs,
             commands::reveal_in_file_manager,
-            commands::read_text_file,
+            commands::preview_file,
             commands::open_path,
             commands::list_terminal_themes,
             commands::import_terminal_theme,

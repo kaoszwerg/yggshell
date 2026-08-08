@@ -16,7 +16,7 @@ vi.mock("../../hooks/useSettings", () => ({
 }));
 
 vi.mock("../../api/files", () => ({
-  filesApi: { readText: vi.fn() },
+  filesApi: { preview: vi.fn(), open: vi.fn() },
 }));
 
 vi.mock("../../api/git", () => ({
@@ -259,7 +259,8 @@ describe("GitDetailPanel", () => {
 
 describe("reading a file here", () => {
   beforeEach(() => {
-    vi.mocked(filesApi.readText).mockResolvedValue({
+    vi.mocked(filesApi.preview).mockResolvedValue({
+      kind: "text",
       text: "# Title\n\nsome text\n",
       truncated: false,
     });
@@ -282,7 +283,11 @@ describe("reading a file here", () => {
   it("draws markdown when asked, and flips back from the panel itself", async () => {
     // Opening a document to find out it is the wrong lens, and having to walk back to the file tree
     // to say so, is the friction that stops the second lens being used at all.
-    vi.mocked(filesApi.readText).mockResolvedValue({ text: "# A heading\n", truncated: false });
+    vi.mocked(filesApi.preview).mockResolvedValue({
+      kind: "text",
+      text: "# A heading\n",
+      truncated: false,
+    });
     showDetail({ kind: "text", root: "/repo", path: "/repo/README.md", rendered: true });
     renderPanel();
 
@@ -298,7 +303,11 @@ describe("reading a file here", () => {
   });
 
   it("offers no lens for a file that has nothing to render", async () => {
-    vi.mocked(filesApi.readText).mockResolvedValue({ text: "fn main() {}", truncated: false });
+    vi.mocked(filesApi.preview).mockResolvedValue({
+      kind: "text",
+      text: "fn main() {}",
+      truncated: false,
+    });
     showDetail({ kind: "text", root: "/repo", path: "/repo/main.rs" });
     renderPanel();
 
@@ -308,19 +317,71 @@ describe("reading a file here", () => {
 
   it("says so when only part of the file is shown", async () => {
     // A file that silently stops is read as a file that ends there.
-    vi.mocked(filesApi.readText).mockResolvedValue({ text: "x", truncated: true });
+    vi.mocked(filesApi.preview).mockResolvedValue({ kind: "text", text: "x", truncated: true });
     showDetail({ kind: "text", root: "/repo", path: "/repo/big.log" });
     renderPanel();
 
     expect(await screen.findByText(/Only the first part/)).toBeTruthy();
   });
 
-  it("surfaces a refusal instead of an empty panel", async () => {
-    // "It is binary" and "it is gone" are different problems and only the message says which.
-    vi.mocked(filesApi.readText).mockRejectedValue(new Error("logo.png is not a text file"));
+  it("draws a picture instead of refusing it", async () => {
+    // **The request this exists for**: "view here" on an image used to end in the raw backend string
+    // *"…/logo.png is not a text file"*. The bytes come over IPC rather than a `file://` the webview
+    // resolves — this app declares no `assetProtocol` capability at all (ADR-PROJ-004).
+    vi.mocked(filesApi.preview).mockResolvedValue({
+      kind: "image",
+      // A one-pixel GIF, so the type in the data URL can be asserted against the type the backend
+      // decided from the bytes rather than against the file's name.
+      bytes: [71, 73, 70, 56, 57, 97],
+      mime: "image/gif",
+    });
     showDetail({ kind: "text", root: "/repo", path: "/repo/logo.png" });
     renderPanel();
 
-    expect(await screen.findByText(/not a text file/)).toBeTruthy();
+    // The picture is labelled by its name, not by its path: the header already carries the path.
+    const image = await screen.findByAltText("logo.png");
+    expect(image.getAttribute("src")).toMatch(/^data:image\/gif;base64,/);
+  });
+
+  it("names a file it cannot draw, and offers the way out", async () => {
+    // A viewer that cannot show something owes two facts: what it is, and what to do instead. The
+    // old panel printed a Rust error string and offered nothing.
+    vi.mocked(filesApi.preview).mockResolvedValue({
+      kind: "unsupported",
+      reason: "binary",
+      size: 2_400_000n as unknown as bigint,
+    });
+    showDetail({ kind: "text", root: "/repo", path: "/repo/a.pdf" });
+    renderPanel();
+
+    expect(await screen.findByText(/cannot draw this file/i)).toBeTruthy();
+    // Through the app's own `humanSize`, not a second formatter written for this panel — Files and
+    // Docker already print sizes and a third spelling of "2.3 MB" would be visible side by side.
+    expect(screen.getByText("2.4 MB")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /default app/i })).toBeTruthy();
+  });
+
+  it("says when a picture is too large rather than half-drawing it", async () => {
+    // Half a JPEG renders as a grey block, which reads as a corrupt file rather than as one the
+    // panel declined to hold.
+    vi.mocked(filesApi.preview).mockResolvedValue({
+      kind: "unsupported",
+      reason: "image_too_large",
+      size: 40_000_000n as unknown as bigint,
+    });
+    showDetail({ kind: "text", root: "/repo", path: "/repo/huge.png" });
+    renderPanel();
+
+    expect(await screen.findByText(/too large/i)).toBeTruthy();
+  });
+
+  it("surfaces a real failure instead of an empty panel", async () => {
+    // "It cannot be drawn" is a state now; "it is gone" is still an error, and they must not read
+    // the same (rule:logging).
+    vi.mocked(filesApi.preview).mockRejectedValue(new Error("logo.png is outside /repo"));
+    showDetail({ kind: "text", root: "/repo", path: "/repo/logo.png" });
+    renderPanel();
+
+    expect(await screen.findByText(/is outside/)).toBeTruthy();
   });
 });
