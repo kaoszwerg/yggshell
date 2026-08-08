@@ -32,6 +32,13 @@ triggers:
     resume,
     signing,
     notarisation,
+    codesign,
+    adhoc,
+    tcc,
+    permission,
+    prompt,
+    gatekeeper,
+    quarantine,
     release,
     scope,
     next,
@@ -837,8 +844,17 @@ change.
 
 - **Windows and Linux behavioural verification.** The ConPTY path compiles and is untested; so is
   WebKitGTK. Three of this session's defects were platform behaviour in a WebView that no test caught.
-- **macOS signing / notarisation.** `release.yml` supports it once the `APPLE_*` secrets exist
-  (ADR-APP-023); none are set. Builds are ad-hoc signed, so a fresh `.app` needs right-click → Open.
+- **macOS signing / notarisation.** `release.yml` supports it once the six `APPLE_*` secrets exist
+  (ADR-APP-023); none are set, so a release is unsigned and a fresh `.app` needs right-click → Open on
+  any machine but the one that built it. **That is the only half still open.**
+
+  **Local builds are signed since 2026-08-08** (`APPLE_SIGNING_IDENTITY` in the git-ignored
+  `.envrc.local`), and the reason is not Gatekeeper: macOS records a TCC permission against the code
+  *signature*, an ad-hoc build has none, and the fallback is the binary's `cdhash` — so every build
+  was a new application and every granted permission was void with the next DMG. Five installs in one
+  day, five prompts. Measured, and the whole diagnosis is in
+  [`docs/macos-signing-howto.md`](../../docs/macos-signing-howto.md) — including why an *Apple
+  Development* certificate suffices for that and cannot touch the notarisation half.
 
 ## Not owed upstream any more
 
