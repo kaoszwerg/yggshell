@@ -10,6 +10,8 @@ import {
   undeclaredExamples,
   ruleStampProblem,
   adoptedRuleProblem,
+  missingRunners,
+  deliveredForm,
   stampOf,
   RULE_STAMP,
 } from "./check-work-levels.mjs";
@@ -131,6 +133,44 @@ describe("the declaration", () => {
   });
 });
 
+describe("requiredRunners", () => {
+  it("does not accept a different program that merely contains the name", () => {
+    // **Reported against the delivered module, and it is the same fault `undeclaredScripts` was
+    // fixed for.** `./heimdal` is required, is declared nowhere, and counted as present because
+    // `./heimdal-alt` contains it as a substring. Harmless on long paths, and not on the short
+    // runner names a `requiredRunners` list is made of — the project names the short thing it
+    // insists on.
+    expect(
+      missingRunners({
+        requiredRunners: ["./heimdal"],
+        entrypoints: [{ run: "./heimdal-alt status", is: "probe" }],
+      }),
+    ).toEqual(["./heimdal"]);
+  });
+
+  it("accepts the required runner with arguments after it", () => {
+    // The point of naming a runner: the project insists it appears, not that it appears bare.
+    expect(
+      missingRunners({
+        requiredRunners: ["./heimdal", "scripts/run-tests.sh"],
+        entrypoints: [
+          { run: "./heimdal deploy prod", is: "ship/deploy@prod", reaches: "x" },
+          { run: "scripts/run-tests.sh core", is: "verify/unit@local" },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it("matches on whole words, so a longer required name is not covered by a shorter entry", () => {
+    expect(
+      missingRunners({
+        requiredRunners: ["npm run test:e2e"],
+        entrypoints: [{ run: "npm run test", is: "verify/unit@local" }],
+      }),
+    ).toEqual(["npm run test:e2e"]);
+  });
+});
+
 describe("the rule stamp", () => {
   /** A repository that looks like the one that PUBLISHES the rule: both markers present. */
   function publisher(ruleText) {
@@ -221,6 +261,48 @@ describe("the rule stamp", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("hashes what an adopter RECEIVES, not what is on disk here", () => {
+    // **The defect that made the whole mechanism unusable by the people it is for.** The app strips
+    // the YAML front-matter on the way out (`adoption::without_front_matter`), so a repository that
+    // pasted the rule exactly as instructed hashed the body alone and could never match a stamp
+    // computed over our file *with* its front-matter. A red gate, for doing what was asked.
+    //
+    // Reported with four measured hashes — the pasted text, the same without a trailing newline, the
+    // same with CRLF, and ours. The last two are the transport rather than the rule: this arrives
+    // through a clipboard, an editor and possibly another operating system.
+    const withMatter = "---\nid: rule:x\nload: core\n---\n\n# Title\n\nbody\n";
+    const asDelivered = "# Title\n\nbody\n";
+
+    expect(stampOf(withMatter)).toBe(stampOf(asDelivered));
+    expect(stampOf(asDelivered.replace(/\n/g, "\r\n"))).toBe(stampOf(asDelivered));
+    expect(stampOf(asDelivered.replace(/\n+$/, ""))).toBe(stampOf(asDelivered));
+    expect(stampOf(`${asDelivered}\n\n`)).toBe(stampOf(asDelivered));
+
+    // And whitespace INSIDE still counts: two rules differing by a word are two rules.
+    expect(stampOf(asDelivered)).not.toBe(stampOf("# Title\n\nbody changed\n"));
+  });
+
+  it("delivers the rule body and none of our front-matter", () => {
+    // **Pinned on this side too** — `adoption::without_front_matter` pins the same boundary in Rust
+    // (`the_delivered_rule_starts_at_its_first_heading`). There is no shared hash to compare, because
+    // this repository carries no hashing crate and taking one for a test is not a justified
+    // dependency; the boundary is the property that would actually drift.
+    const rule = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../.claude/rules/project/work-legibility.md",
+    );
+    const raw = readFileSync(rule, "utf8");
+    const delivered = deliveredForm(raw);
+
+    // The fence, not the keys: `load: core` appears in the rule's own PROSE, so asserting its
+    // absence tests a proxy rather than the boundary — and did, in the first draft of this test.
+    expect(raw.startsWith("---\n")).toBe(true);
+    expect(delivered.startsWith("---")).toBe(false);
+    expect(delivered.startsWith("# Every piece of work says what it is")).toBe(true);
+    expect(delivered.endsWith("\n")).toBe(true);
+    expect(delivered.endsWith("\n\n")).toBe(false);
   });
 
   it("is the hash of the rule this repository actually ships", () => {

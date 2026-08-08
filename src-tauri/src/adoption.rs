@@ -349,6 +349,46 @@ mod tests {
     }
 
     #[test]
+    fn the_delivered_rule_starts_at_its_first_heading() {
+        // **The boundary this side of a contract that lives in two languages.** The check ships with
+        // a fingerprint of the rule (`RULE_STAMP` in `scripts/project/check-work-levels.mjs`), and it
+        // must be a fingerprint of what an adopting repository actually RECEIVES — which is this
+        // function's output, not the file on disk. Hashing the file was the defect: a project that
+        // pasted the rule exactly as instructed could never match, so its gate went red for doing
+        // what was asked.
+        //
+        // Pinned as a property rather than as a shared hash, and deliberately: this crate carries no
+        // hashing dependency, and taking one for a test is not justified (rule:dependencies). The
+        // boundary is what would actually drift — someone changing what *this* strips while the
+        // script keeps normalising the old way, which no adopter could ever diagnose.
+        // `delivers the rule body and none of our front-matter` pins the same thing in JS.
+        let shipped = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../.claude/rules/project/work-legibility.md"
+        ))
+        .expect("the rule this repository ships");
+
+        let delivered = without_front_matter(&shipped);
+
+        // **The fence, not the keys.** An earlier attempt asserted the absence of `load: core`, which
+        // the rule's own PROSE contains — the second time today a test was written against a proxy
+        // for the property instead of the property. What is unfalsifiable is the boundary: the file
+        // has front-matter, the delivered text starts after it.
+        assert!(
+            shipped.starts_with("---\n"),
+            "there was front-matter to strip"
+        );
+        assert!(
+            !delivered.starts_with("---"),
+            "and none of it survived into the delivered text"
+        );
+        assert!(
+            delivered.starts_with("# Every piece of work says what it is"),
+            "which begins at the rule's own first line"
+        );
+    }
+
+    #[test]
     fn a_document_without_front_matter_survives_whole() {
         assert_eq!(without_front_matter("# Title\n"), "# Title\n");
         // An opening fence that never closes is not front-matter, and cutting on it would silently

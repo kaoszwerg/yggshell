@@ -239,10 +239,11 @@ things by the same word. `git commit` stays `@local`; a commit reaches nothing u
 "rule": ".claude/rules/project/work-legibility.md"
 ```
 
-Where this rule's own copy lives in your repository. Naming it lets a checker tell you when yours is
-behind the one it ships beside — **opt-in, because the rule invites you to extend or supersede it and
-a check that failed on an edited copy would punish exactly that.** Leave it out and nothing is
-checked; the promise is yours to make.
+Where this rule's own copy lives in your repository. Naming it lets a checker tell you when yours
+**differs** from the one it ships beside — *differs*, not "is behind": a hash cannot say which came
+first, and claiming a direction it has not established is the thing this mechanism exists to avoid.
+**Opt-in, because the rule invites you to extend or supersede it and a check that failed on an edited
+copy would punish exactly that.** Leave it out and nothing is checked; the promise is yours to make.
 
 **Two optional fields, for the shapes a checker cannot guess:**
 

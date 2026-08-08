@@ -82,6 +82,36 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The rule stamp hashed the wrong text, so nobody who followed the instructions could ever match
+  it.** The app strips the YAML front-matter on the way out — front-matter belongs to the system that
+  reads it — and the stamp was computed over the file *with* it. A repository that pasted the rule
+  exactly as asked, set `rule`, and ran its gate got a red build **for doing what was requested.**
+  Reported with four measured hashes: the pasted text, the same without a trailing newline, the same
+  with CRLF, and ours.
+
+  It now hashes what is **delivered**, and normalises what the transport can change: a clipboard,
+  through an editor, possibly onto another operating system, alters line endings and final newlines
+  and none of that is a change to a rule. Whitespace inside still counts.
+
+  Both proposed fixes were declined for one reason each — shipping our front-matter would push our
+  `id`, `load` and `triggers` into somebody else's governance, and pointing the reader at a file they
+  do not have replaces a check with an errand. Hashing the delivered form also buys something neither
+  would: adding a trigger to our front-matter is correctly **not** a rule change, so it no longer tells
+  every adopter their copy moved when it did not.
+
+- **"Behind" was a direction the comparison had not established.** A hash says two texts are not the
+  same; it cannot say which came first — and this app has been ahead of its adopters and behind them
+  at different moments, which is how it was noticed. The staleness offer, its hint, the manual and the
+  rule now all say **differs**. Same failure class as the three chain messages fixed earlier today: a
+  tool asserting more than it knows.
+
+- **`missingRunners` compared by substring** — the same fault `undeclaredScripts` was fixed for, still
+  in the delivered module. `requiredRunners: ["./heimdal"]` counted as satisfied by an entry declaring
+  `./heimdal-alt status`, because the required name is a substring of the other. Harmless on long
+  paths, and not on the short runner names such a list is made of. It compares words now, and drops
+  the same wrappers the chain's own matcher drops (`bash`, `sh`, `env`, `npx`, a leading `./`) — two
+  comparisons inside one tool answering differently is worse than either answer.
+
 - **The instruction to put the check in `scripts/` could not be followed in a governed repository,
   and said so nowhere.** Reported with evidence: 27 pinned files under `scripts/`, and the reporting
   project's own rules requiring a project script to live in `scripts/project/` — for exactly the

@@ -187,9 +187,9 @@ export const en = {
   "settings.interface.toolSize": "Tool content",
   "settings.interface.toolSizeHint":
     "How big the tools draw what they show. Separate from the terminal: a large terminal font does not mean the sidebar should eat the window.",
-  "chain.gateStale": "This project's copy of the check is behind",
+  "chain.gateStale": "This project's copy of the check differs from the one shipped here",
   "chain.gateStaleHint":
-    "The app ships a newer one. Nothing in your repository is touched until you say so.",
+    "Replacing it with the one shipped here is one press. Nothing in your repository is touched until you say so.",
   "chain.installGateDone": "Written to {path}",
   "chain.adoptionFailed": "That did not work — see the log",
   "chain.noTerminal": "This tab has no terminal running.",

@@ -41,11 +41,51 @@ import { fileURLToPath } from "node:url";
  * The price, stated: touching the rule now always means touching this file. That is the discipline
  * that was missing, made mechanical instead of remembered.
  */
-export const RULE_STAMP = "005408ac23b494b1";
+export const RULE_STAMP = "2b4461b9a70c26de";
 
-/** The rule's content hash, in the form [`RULE_STAMP`] carries. */
+/**
+ * The rule's content hash, in the form [`RULE_STAMP`] carries.
+ *
+ * **It hashes what is DELIVERED, not what is on disk here — and getting that wrong made the whole
+ * mechanism unusable by the people it is for.** The app strips the YAML front-matter on the way out
+ * (`adoption::without_front_matter`): front-matter belongs to the system that reads it, and the
+ * receiving project has its own or none. The first version hashed our file *with* it, so a
+ * repository that pasted the rule exactly as instructed could never match the stamp — a red gate for
+ * doing precisely what was asked. Reported with four measured hashes: the pasted text, the same
+ * without a trailing newline, the same with CRLF, and ours.
+ *
+ * Those last two are why this normalises rather than only stripping. The transport is a **clipboard**
+ * — through an editor, onto another operating system — and a line ending or a final newline is not a
+ * change to a rule. Whitespace *inside* the text still counts: two rules that differ by a word differ.
+ *
+ * **Both proposed fixes were declined for the same reason**: shipping our front-matter would push our
+ * `id`, `load` and `triggers` into somebody else's governance, and telling the reader to go and find
+ * a file they do not have replaces a check with an errand. Hashing the delivered form solves both —
+ * and buys something neither would have: adding a trigger to our front-matter is now correctly *not*
+ * a rule change, so it no longer tells every adopter their copy moved when it did not.
+ */
 export function stampOf(ruleText) {
-  return createHash("sha256").update(ruleText, "utf8").digest("hex").slice(0, 16);
+  return createHash("sha256").update(deliveredForm(ruleText), "utf8").digest("hex").slice(0, 16);
+}
+
+/**
+ * The rule as an adopting repository receives it: no front-matter, LF endings, no trailing blank.
+ *
+ * **This mirrors `adoption::without_front_matter`, and the two are pinned to each other** by
+ * `the_shipped_rule_hashes_to_the_stamp_the_script_carries` in `src-tauri/src/adoption.rs`. A
+ * duplicated definition that nothing compares is how the two would drift on the first edit to either.
+ */
+export function deliveredForm(ruleText) {
+  const text = ruleText.replace(/\r\n/g, "\n");
+  // An opening fence with no close is not front-matter — handing back the whole document loses
+  // nothing, and cutting on it would silently hash half a rule.
+  const body = text.startsWith("---\n")
+    ? (() => {
+        const end = text.indexOf("\n---\n", "---\n".length - 1);
+        return end === -1 ? text : text.slice(end + "\n---\n".length).replace(/^\n+/, "");
+      })()
+    : text;
+  return `${body.replace(/\s+$/, "")}\n`;
 }
 
 /**
@@ -70,8 +110,12 @@ export function ruleStampProblem(root, { stamp = RULE_STAMP } = {}) {
 }
 
 /**
- * The complaint when the *adopting* repository's own copy of the rule is behind this script, or
+ * The complaint when the *adopting* repository's own copy of the rule differs from this script's, or
  * `null`.
+ *
+ * **Differs, not "is behind".** A hash says the two texts are not the same and cannot say which came
+ * first — this app has been ahead of its adopters and behind them at different moments. Naming a
+ * direction the comparison has not established is the failure this whole mechanism exists to avoid.
  *
  * **The half that was missing, found by measuring the first adopter an hour after shipping the
  * stamp.** The stamp was printed on every run, and the chain was supposed to be: rule changes →
@@ -318,12 +362,35 @@ function packageScripts(root, declaration) {
  */
 export function missingRunners(declaration) {
   const required = Array.isArray(declaration?.requiredRunners) ? declaration.requiredRunners : [];
+  // **Words, never a substring — the same fault `undeclaredScripts` was fixed for, still here.**
+  // Reported against the delivered module: `requiredRunners: ["./heimdal"]` was satisfied by an
+  // entry declaring `./heimdal-alt status`, because the required name is a substring of the other
+  // one. Harmless on long paths and not on short runner names, which is exactly what a
+  // `requiredRunners` list is made of — the project names the short thing it insists on.
+  //
+  // A required runner is satisfied when its words are the leading words of some declared `run`:
+  // `./heimdal` covers `./heimdal status`, and `./heimdal-alt` is a different program.
+  //
+  // **The same wrappers the chain's own matcher drops** — `bash`, `sh`, `env`, `npx`, `bunx` and a
+  // leading `./`, which the rule names in its own text as "the wrappers a shell needs and nobody
+  // means". A project that declares `bash scripts/run-tests.sh e2e` has named `scripts/run-tests.sh`,
+  // and two comparisons inside one tool answering differently is worse than either answer.
+  const meaningful = (command) =>
+    command
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word.replace(/^\.\//, ""))
+      .filter((word) => !["npx", "bunx", "bash", "sh", "env"].includes(word));
   const declared = (declaration?.entrypoints ?? [])
-    .map((entry) => (typeof entry?.run === "string" ? entry.run : ""))
-    .join("\n");
+    .map((entry) => (typeof entry?.run === "string" ? meaningful(entry.run) : []))
+    .filter((words) => words.length > 0);
+  const covers = (runner) => {
+    const wanted = meaningful(runner);
+    return declared.some((words) => wanted.every((word, at) => words[at] === word));
+  };
   return required
-    .filter((runner) => typeof runner === "string" && runner.length > 0)
-    .filter((runner) => !declared.includes(runner));
+    .filter((runner) => typeof runner === "string" && runner.trim().length > 0)
+    .filter((runner) => !covers(runner));
 }
 
 function main() {
@@ -383,7 +450,7 @@ function main() {
   }
   // **The stamp is printed on every run, not only when something is wrong.** It is the one line an
   // adopting repository sees regularly, and it is how they learn the rule text moved: the number
-  // changes when they update this script, and the rule they hold is then the older one.
+  // changes when they update this script, and the rule they hold is then a different one.
   console.log(
     `check-work-levels OK — ${declaration.entrypoints.length} entrypoints, grammar valid. ` +
       `(rule:work-legibility @ ${RULE_STAMP} — if this changed, copy the rule again)`,

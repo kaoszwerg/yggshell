@@ -174,9 +174,9 @@ export const de: Translations = {
   "settings.interface.toolSize": "Tool-Inhalte",
   "settings.interface.toolSizeHint":
     "Wie groß die Tools zeichnen, was sie zeigen. Getrennt vom Terminal: eine große Terminalschrift heißt nicht, dass die Seitenleiste das Fenster auffressen soll.",
-  "chain.gateStale": "Die Kopie der Prüfung in diesem Projekt ist veraltet",
+  "chain.gateStale": "Die Kopie der Prüfung in diesem Projekt weicht von der hier gelieferten ab",
   "chain.gateStaleHint":
-    "Die App liefert eine neuere. In deinem Repo wird nichts angefasst, bevor du es sagst.",
+    "Sie durch die hier gelieferte zu ersetzen ist ein Druck. In deinem Repo wird nichts angefasst, bevor du es sagst.",
   "chain.installGateDone": "Abgelegt unter {path}",
   "chain.adoptionFailed": "Das hat nicht geklappt — siehe Log",
   "chain.noTerminal": "In diesem Tab läuft kein Terminal.",

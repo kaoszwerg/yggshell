@@ -61,7 +61,12 @@ nothing to compare. So the check carries the rule's fingerprint and prints it on
 check-work-levels OK — 85 entrypoints, grammar valid. (rule:work-legibility @ a8916909f181aa6f — if this changed, copy the rule again)
 ```
 
-**When that value changes, the rule you hold is the older one.** Take the copy again.
+**When that value changes, the rule you hold is not the one this check ships beside.** Take the copy
+again.
+
+*Not "older" — **different**.* A hash says the two texts are not the same; it cannot say which came
+first, and the app has been ahead of its own adopters and behind them at different moments. Claiming a
+direction it has not established is the one thing this whole mechanism exists to avoid.
 
 **Better: have it checked rather than noticed.** A printed number only speaks to somebody who saw the
 previous one, which a first-time reader never did — so point at your copy and the check compares it
