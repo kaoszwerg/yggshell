@@ -55,6 +55,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The Chain tool no longer folds its whole record away for an agent that keeps no task list.**
+  Reported as the tool *"behaving completely differently"* in a second repository, with the suspicion
+  that its `work-levels.json` was wrong. Both declarations were valid and gate-green; the difference
+  was **155 `TaskCreate`/`TaskUpdate` calls in one session against 0 in the other**.
+
+  The collapse asked `standing === "idle" && !showPlan`, and `!showPlan` is true in two unrelated
+  situations: a plan that *finished* — the case the collapse was built for, on the maintainer's own
+  request — and a session that **never kept a plan**, where the tool knows nothing about outstanding
+  work and was asserting "nothing outstanding" on no evidence. Sixteen links of edits, checks and
+  commits became one line the moment that agent paused.
+
+  `Chain.plan_done` already carried the distinction, and says so in its own doc: *"True when a plan
+  existed and every step of it finished. Distinct from an empty plan."* It is now the thing being
+  asked. The finished-plan case is unchanged.
+
 - **A session that only ever reads is a session, and the Chain tool now says so.** Measured in a
   fresh repository: an agent read the design and answered — twelve tool calls, ten `Read` and two
   `Bash`, every one a probe. The reader saw all twelve and folded them to **zero links**, so the

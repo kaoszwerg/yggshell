@@ -195,7 +195,16 @@ describe("ChainTool", () => {
     // The maintainer, twice: "plan abgeschlossen und du bist mit allem fertig … es wird gar nichts
     // angezeigt". Sixty-one links of finished work is a logbook, not a status — and a panel that
     // looks equally busy whether or not anything is happening has stopped answering its question.
-    state.chain = chain({ standing: "idle", links: [link({ refinement: "some-suite" })] });
+    //
+    // **`plan_done` is now part of the fixture, because it was always part of the case.** The comment
+    // above says "plan abgeschlossen" and the fixture did not set it: `!showPlan` was enough while
+    // the panel could not tell a finished plan from an absent one, and that conflation was the bug
+    // reported on 2026-08-08 (an agent keeping no task list had its whole record folded away).
+    state.chain = chain({
+      standing: "idle",
+      plan_done: true,
+      links: [link({ refinement: "some-suite" })],
+    });
     render(<ChainTool />);
 
     expect(screen.getByText(/nothing outstanding/i)).toBeTruthy();
@@ -255,6 +264,28 @@ describe("ChainTool", () => {
     render(<ChainTool />);
 
     expect(screen.getByText(/every planned step is finished/i)).toBeTruthy();
+  });
+
+  it("does not fold the record away for an agent that keeps no plan", async () => {
+    // **Reported as "chain behaves completely differently in the other repository", and the suspicion
+    // was its `work-levels.json`.** Both declarations were valid and gate-green. The difference was
+    // 155 `TaskCreate`/`TaskUpdate` calls in one session against 0 in the other: with no task list,
+    // `!showPlan` is true the moment the agent pauses, and sixteen links of edits, checks and commits
+    // collapsed to one line.
+    //
+    // `!showPlan` conflates "the plan finished" with "there never was one". Only the first is
+    // evidence that nothing is outstanding; the second is the tool knowing nothing and saying
+    // something.
+    state.chain = chain({
+      standing: "idle",
+      plan: [],
+      plan_done: false,
+      links: [link({ act: "edit", refinement: "CHANGELOG.md" })],
+    });
+    render(<ChainTool />);
+
+    expect(screen.getByText("CHANGELOG.md")).toBeTruthy();
+    expect(screen.queryByText(/show the record/i)).toBeNull();
   });
 
   it("shows the iteration count without anything being expanded", () => {

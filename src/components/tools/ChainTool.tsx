@@ -107,7 +107,22 @@ export function ChainTool() {
   // angezeigt, alles erledigt"*. Sixty-one links of finished work is a logbook, not a status — and
   // a panel that looks equally busy whether or not anything is happening has stopped answering the
   // question it was opened for. The record is still there, one keystroke away.
-  const atRest = chain.standing === "idle" && !showPlan;
+  //
+  // **`plan_done`, not `!showPlan` — and the difference is the whole bug.** `!showPlan` is true in
+  // two unrelated situations: a plan that finished (the case above, where collapsing is exactly
+  // right) and a session that **never kept a plan at all**, where the tool knows nothing about
+  // outstanding work and would be asserting "nothing outstanding" on no evidence.
+  //
+  // Measured, 2026-08-08, when the maintainer reported the tool behaving "completely differently" in
+  // a second repository and suspected its `work-levels.json`: both declarations were valid and
+  // gate-green. The difference was 155 `TaskCreate`/`TaskUpdate` calls in one session against **0**
+  // in the other. An agent that keeps no task list had every edit, check and commit folded away the
+  // moment it paused — 16 links, one line on screen.
+  //
+  // `Chain.plan_done` already carries the distinction and says so in its own doc: *"True when a plan
+  // existed and every step of it finished. **Distinct from an empty plan**"*. It was simply not the
+  // thing being asked.
+  const atRest = chain.standing === "idle" && !showPlan && chain.plan_done;
 
   return (
     // No header of its own: the tool column already draws one with this tool's name, and two
