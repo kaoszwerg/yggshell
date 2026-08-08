@@ -632,12 +632,26 @@ pub fn assemble(parsed: Parsed, home: &str, declaration: Option<&levels::Levels>
     //
     // Done here rather than during parsing on purpose: parsing is cached, and a project editing
     // `work-levels.json` must see the effect within one poll rather than after an app restart.
+    // **The declaration outranks the heuristic, and gating it on `recognised` was a defect.**
+    // `Step::new` marks every step recognised — including the ones that fell into a known program's
+    // catch-all arm, where the answer is `probe` because nothing better was known. So a project that
+    // had written down exactly what a command means was skipped for precisely the commands the
+    // heuristic cannot read.
+    //
+    // Reported from `lysisai-dsp`: six production deploys, all declared with `is` and `reaches`, none
+    // of them anywhere in the chain. `gh workflow run <file> -f environment=<name>` is not a shape
+    // the heuristic knows, so it became a `probe` — and a probe is absorbed into the block before it
+    // as noise (`fold::merge_runs`). **Six deployments to five hosts rendered as "looked something
+    // up" under whatever preceded them**, which is the most dangerous act in the vocabulary leaving
+    // no trace at all.
+    //
+    // `rule:work-legibility` already says which way this goes: the declaration is authoritative for
+    // *labelling* — which act, which refinement — and for *widening* the reach. It may never narrow
+    // one, and it does not: that stays in `Levels::apply`, where a claim closer than the heuristic
+    // recognised is kept as a visible contradiction rather than believed.
     let mut steps = parsed.steps;
     if let Some(levels) = declaration {
         for step in &mut steps {
-            if step.recognised {
-                continue;
-            }
             let Some(signature) = step.signature.clone() else {
                 continue;
             };
@@ -889,6 +903,62 @@ mod tests {
             plan[0].done_at, None,
             "it is open again, so it has no place among the finished"
         );
+    }
+
+    #[test]
+    fn a_declared_deployment_survives_the_fold_that_used_to_eat_it() {
+        // **Reported from `lysisai-dsp`, 2026-08-08: six production deploys, all declared with `is`
+        // and `reaches`, none of them anywhere in the chain.** Two independent faults, and the second
+        // hid the first.
+        //
+        // `gh workflow run …` is not a shape the heuristic reads, so it fell into the catch-all and
+        // became a `probe` — and `Step::new` marks a step `recognised`, which is what the pre-fold
+        // pass used to skip on. The project's own declaration was therefore never consulted for
+        // exactly the commands it exists to name. A probe is then absorbed into the block before it
+        // as noise, so the deployments did not merely lose their label: they left no trace at all,
+        // under whatever preceded them.
+        //
+        // The edit is here to give the fold something to swallow them into — without it the bug is
+        // invisible, which is how it survived.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let body = r#"{"type":"assistant","timestamp":"2026-08-08T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/repo/a.ts"}}]}}
+{"type":"assistant","timestamp":"2026-08-08T12:01:00.000Z","message":{"content":[{"type":"tool_use","id":"d1","name":"Bash","input":{"command":"gh workflow run deploy-hetzner.yml --ref next -f environment=lysis-portal-prod -f image_tag=next"}}]}}
+"#;
+        let path = write(dir.path(), "t.jsonl", body);
+        let declaration: levels::Levels = serde_json::from_str(
+            r#"{"entrypoints":[
+                {"run":"gh workflow run deploy-hetzner.yml -f environment=lysis-portal-prod","is":"ship/deploy@prod","reaches":"portal.lysis.ai"}
+            ]}"#,
+        )
+        .expect("fixture");
+
+        let chain = assemble(parse_transcript(&path, 0), "/h", Some(&declaration));
+
+        assert_eq!(chain.links.len(), 2, "the edit, and then the deployment");
+        let deploy = chain.links.last().expect("a link");
+        assert_eq!(deploy.act, Act::Ship);
+        assert_eq!(deploy.refinement.as_deref(), Some("deploy"));
+        let reach = deploy.reach.as_ref().expect("a declared reach");
+        assert_eq!(reach.target, "prod");
+        assert_eq!(reach.host.as_deref(), Some("portal.lysis.ai"));
+        assert!(!deploy.guessed, "the project said so, this is not a guess");
+    }
+
+    #[test]
+    fn an_undeclared_workflow_dispatch_is_still_a_delivery() {
+        // The resilient half: a project that has written no declaration at all must not have its
+        // deploys folded away either. Dispatching a workflow by hand reaches a registry, a cloud or
+        // the public — it is never a look-around, whatever the file is called.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let body = r#"{"type":"assistant","timestamp":"2026-08-08T12:00:00.000Z","message":{"content":[{"type":"tool_use","id":"e1","name":"Edit","input":{"file_path":"/repo/a.ts"}}]}}
+{"type":"assistant","timestamp":"2026-08-08T12:01:00.000Z","message":{"content":[{"type":"tool_use","id":"d1","name":"Bash","input":{"command":"gh workflow run release.yml"}}]}}
+"#;
+        let path = write(dir.path(), "t.jsonl", body);
+
+        let chain = assemble(parse_transcript(&path, 0), "/h", None);
+
+        assert_eq!(chain.links.len(), 2, "not swallowed as noise");
+        assert_eq!(chain.links[1].act, Act::Ship);
     }
 
     #[test]

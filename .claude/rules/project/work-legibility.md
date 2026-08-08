@@ -171,6 +171,53 @@ paragraphs after the adopter notes said the opposite. The first project to adopt
 the notes, correctly, and had to work out which of the two to believe — a document that contradicts
 itself makes every reader decide privately.)*
 
+### How `run` is matched, stated exactly — because guessing at it costs a deploy
+
+A reader compares **words, not strings**, and this is the whole contract:
+
+1. Split on whitespace.
+2. **A flag is dropped, and so is its detached value.** `--ref next` contributes nothing. A word
+   carrying its own `key=value` is **kept**: `-f environment=lysis-portal-prod` contributes
+   `environment=lysis-portal-prod`, which is usually the entire difference between two levels.
+3. The wrappers nobody means are dropped: `npx`, `bunx`, `bash`, `sh`, `env`, and a leading `./`.
+   A leading `VAR=value` assignment is not part of the command either (above).
+4. **Every remaining word of `run` must appear in the observed command, in order.** Anything extra in
+   the real command — more flags, in any position — is ignored.
+5. When several entries match, the one matching **the most** declared words wins.
+
+**What that means for writing the file, and it is the opposite of what it looks like:**
+
+- **Put in `run` only what identifies the level.** `-f environment=lysis-portal-prod` — yes. A
+  mandatory flag that is the same for every level, or whose value moves (`--ref next`,
+  `-f image_tag=next`), is **ignored by the matcher anyway**, and writing it in costs you the entry
+  the day that value changes. There is no way to declare a variable value, and none is needed.
+- **A flag being *mandatory to type* is not a reason to declare it.** Those are different questions:
+  one is about running the thing safely, the other about telling two levels apart.
+- **Declare the specific and the general together if you like.** The specific one wins on word count.
+
+> **Measured, and it is why this section exists.** `lysisai-dsp` declared
+> `gh workflow run deploy-hetzner.yml -f environment=lysis-portal-demo` and typed
+> `gh workflow run deploy-hetzner.yml --ref next -f environment=… -f image_tag=next …` — because
+> without `--ref` the workflow pulls plugin bundles from the wrong branch, which put two environments
+> into maintenance mode. Six production deploys, all declared, all green in the checker, and **not
+> one of them appeared in the chain**. The reader dropped `--ref` and kept `next`, so a flag's value
+> stood where the declaration expected the environment; matching was positional, so everything behind
+> it compared against the wrong word. Both are fixed, and the contract above is now written down
+> rather than inferred from the code.
+
+### A level that reaches something must never be silent
+
+The same report exposed a second and worse fault, and the lesson generalises beyond this rule: **the
+tool decided a command was uninteresting before it consulted the declaration.** A workflow dispatch
+was not a shape its heuristic knew, so it was filed as *looking around* — and a look-around is folded
+into whatever ran before it. The deployments did not merely lose their label; they left no trace.
+
+So: a declaration is authoritative for **which act** a command is, ahead of any built-in guess. It may
+widen a reach and never narrow one — a declaration claiming `@local` where the reader recognised
+production is shown as a contradiction, not believed. And **a manually dispatched delivery workflow is
+a `ship`, declared or not**: it reaches a registry, a cloud or the public, and a reader that has to be
+told that is a reader that will be wrong about the next project too.
+
 `is` is the vocabulary above.
 **`reaches` is required whenever the target is not `local`** — the host, cluster or account actually
 touched. It is what makes *"am I about to hit production?"* answerable without reading three files.

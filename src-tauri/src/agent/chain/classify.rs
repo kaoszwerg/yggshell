@@ -265,6 +265,15 @@ fn classify_segment(segment: &str) -> Option<Step> {
             (Some("pr"), Some("create")) => Step::new(Act::Ship, Some("review".into())),
             (Some("pr"), Some("merge")) => Step::new(Act::Ship, Some("merge".into())),
             (Some("release"), _) => Step::new(Act::Ship, Some("release".into())),
+            // **Dispatching a workflow by hand is a delivery, not a look-around.** It was the
+            // catch-all `probe` below, and a probe is absorbed into the preceding block as noise —
+            // so six production deploys left no trace (see `chain::assemble`). A declaration names
+            // *which* environment and how far it reaches; this is what the reader owes a project
+            // that has not written one, and `rule:work-legibility` says the same in its own words:
+            // a manually-triggerable delivery workflow "reaches a registry, a cloud or the public".
+            //
+            // Only the dispatch. `gh run watch`, `gh run view`, `gh workflow list` are looking.
+            (Some("workflow"), Some("run")) => Step::new(Act::Ship, Some("deploy".into())),
             _ => Step::new(Act::Probe, None),
         },
         "playwright" | "cypress" => Step::new(Act::Verify, Some("e2e".into())),

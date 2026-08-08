@@ -55,6 +55,39 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A declared deployment could vanish from the chain entirely.** Reported from `lysisai-dsp`: six
+  production deploys in a row, every one declared in `work-levels.json` with its `is` and `reaches`,
+  the checker green at 85 entrypoints — and not one of them anywhere in the chain. Two independent
+  faults, and the second hid the first.
+
+  **The declaration was never consulted.** The pre-fold pass that lets a project name its own commands
+  was gated on `!step.recognised`, and `Step::new` marks *every* step recognised — including the ones
+  that fell into a known program's catch-all arm because nothing better was known. `gh workflow run`
+  is not a shape the heuristic reads, so it became a `probe`, was marked recognised, and the project's
+  own answer was skipped for exactly the command it existed to name. A probe is then absorbed into the
+  preceding block as noise: **six deployments to five hosts rendered as "looked something up"** under
+  whatever ran before them. The declaration is now authoritative for *which act* a command is, ahead of
+  any built-in guess; it still may only ever widen a reach, never narrow one.
+
+  **And the match would have failed anyway.** `words()` dropped flag names but kept a flag's detached
+  value, so `--ref next` contributed `next` — which stood where the declaration expected
+  `environment=…`, shifting every word behind it. Matching was positional, so the comparison then ran
+  off the rails. It is now a **subsequence**: every declared word must appear, in order, and extra
+  arguments anywhere are ignored. Specificity still decides between overlapping entries, by how many
+  declared words matched.
+
+  The reporter's own diagnosis named `--ref`'s *position* as the cause. It was the surviving *value*.
+
+- **A hand-dispatched workflow is a delivery, declared or not.** `gh workflow run` was the catch-all
+  probe; it is now `ship/deploy`. A project that has written no declaration must not have its deploys
+  folded away either — and `rule:work-legibility` said as much in its own text already.
+
+- **`rule:work-legibility` now states the matching contract exactly** — which words count, that a
+  flag's detached value is dropped with the flag, that `key=value` is kept, and that extra arguments
+  are ignored. With the consequence spelled out: a flag being *mandatory to type* is not a reason to
+  declare it. The rule is the file the app ships to adopting repositories (`tauri.conf.json`), so this
+  reaches them through the button rather than through a release note.
+
 - **"Stopped" while the agent is working.** After a permission prompt the panel announced a stopped
   agent for the rest of the turn — reported live, with `vitest` running in the tab. Measured:
   `UserPromptSubmit` 24 minutes earlier, two permission prompts after it, the transcript written to
