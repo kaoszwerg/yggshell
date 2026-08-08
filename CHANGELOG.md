@@ -70,6 +70,16 @@ All notable changes to this project are documented here. The format follows
 
   It caught its own first case: the very next rule edit failed the gate before it could ship.
 
+  **And measuring the first adopter an hour later showed the chain has a hole**, so `work-levels.json`
+  gains an optional `"rule": "<path>"`. The stamp was printed on every run and the sequence was meant
+  to be: rule changes → check changes → the app offers a newer check → the printed number moves → the
+  reader re-copies the rule. Measured in `kaoszwerg/mot`: the project had **already taken the current
+  check and an older rule**, so nothing was stale, nothing was offered, and both halves of the evidence
+  sat in their own repository with nothing comparing them. A number only speaks to somebody who saw the
+  previous one — which a first-time adopter never did. Naming the path has the check compare it and
+  say so. **Opt-in**, because the rule invites a project to extend or supersede it and failing on an
+  edited copy would punish exactly that.
+
 ### Fixed
 
 - **The instruction to put the check in `scripts/` could not be followed in a governed repository,

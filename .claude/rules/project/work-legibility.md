@@ -233,6 +233,17 @@ it quietly. `prod` reads oddly for a repository the first time, which is why thi
 the alternative was every project deciding privately, and then two declarations meaning different
 things by the same word. `git commit` stays `@local`; a commit reaches nothing until it is pushed.
 
+**One optional field for the rule itself:**
+
+```json
+"rule": ".claude/rules/project/work-legibility.md"
+```
+
+Where this rule's own copy lives in your repository. Naming it lets a checker tell you when yours is
+behind the one it ships beside — **opt-in, because the rule invites you to extend or supersede it and
+a check that failed on an edited copy would punish exactly that.** Leave it out and nothing is
+checked; the promise is yours to make.
+
 **Two optional fields, for the shapes a checker cannot guess:**
 
 ```json

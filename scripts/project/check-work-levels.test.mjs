@@ -9,6 +9,7 @@ import {
   checkDeclaration,
   undeclaredExamples,
   ruleStampProblem,
+  adoptedRuleProblem,
   stampOf,
   RULE_STAMP,
 } from "./check-work-levels.mjs";
@@ -176,6 +177,47 @@ describe("the rule stamp", () => {
     writeFileSync(join(root, ".claude/rules/project/work-legibility.md"), "their edited copy\n");
     try {
       expect(ruleStampProblem(root, { stamp: "0000000000000000" })).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("tells an ADOPTING repository that its own copy is behind, when it asked to be told", () => {
+    // **The half the printed stamp could not cover, measured an hour after shipping it.** In
+    // `kaoszwerg/mot` the project had already taken the current script and an OLDER rule, so nothing
+    // was stale, no offer appeared, and both halves of the evidence sat in their own repository with
+    // nothing comparing them. A printed number only speaks to somebody who saw the previous one.
+    const root = mkdtempSync(join(tmpdir(), "adopted-"));
+    mkdirSync(join(root, "rules"), { recursive: true });
+    writeFileSync(join(root, "rules/work-legibility.md"), "an older rule\n");
+    try {
+      const problem = adoptedRuleProblem(root, { rule: "rules/work-legibility.md" });
+      expect(problem).toMatch(/not the one this check ships beside/);
+      expect(problem).toContain(stampOf("an older rule\n"));
+
+      writeFileSync(join(root, "rules/work-legibility.md"), "current\n");
+      expect(
+        adoptedRuleProblem(
+          root,
+          { rule: "rules/work-legibility.md" },
+          { stamp: stampOf("current\n") },
+        ),
+      ).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("stays silent unless the project asked, and says so when the pointer is dead", () => {
+    // **Opt-in, and it must stay that way.** The rule invites a project to extend or supersede it;
+    // failing on an edited copy would punish exactly that. Naming the path is the project promising
+    // to keep ours verbatim — a different promise, and theirs to make.
+    const root = mkdtempSync(join(tmpdir(), "adopted-"));
+    try {
+      expect(adoptedRuleProblem(root, { entrypoints: [] })).toBeNull();
+      expect(adoptedRuleProblem(root, { rule: "" })).toBeNull();
+      // A pointer at nothing is worse than none: it reads as a check and is not one.
+      expect(adoptedRuleProblem(root, { rule: "gone.md" })).toMatch(/no such file/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

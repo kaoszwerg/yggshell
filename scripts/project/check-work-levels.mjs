@@ -41,7 +41,7 @@ import { fileURLToPath } from "node:url";
  * The price, stated: touching the rule now always means touching this file. That is the discipline
  * that was missing, made mechanical instead of remembered.
  */
-export const RULE_STAMP = "92a6ca3c359da7ca";
+export const RULE_STAMP = "005408ac23b494b1";
 
 /** The rule's content hash, in the form [`RULE_STAMP`] carries. */
 export function stampOf(ruleText) {
@@ -66,6 +66,45 @@ export function ruleStampProblem(root, { stamp = RULE_STAMP } = {}) {
     `the rule changed and this script did not: RULE_STAMP is \`${stamp}\`, the rule hashes to ` +
     `\`${actual}\`. Set RULE_STAMP to that value — an adopting repository learns a rule has moved ` +
     `ONLY because this file's bytes changed, so a rule edit that leaves it alone reaches nobody`
+  );
+}
+
+/**
+ * The complaint when the *adopting* repository's own copy of the rule is behind this script, or
+ * `null`.
+ *
+ * **The half that was missing, found by measuring the first adopter an hour after shipping the
+ * stamp.** The stamp was printed on every run, and the chain was supposed to be: rule changes →
+ * script changes → the app offers a newer script → the printed number moves → the reader re-copies
+ * the rule. Measured in `kaoszwerg/mot`: the project had **already taken the current script** and an
+ * **older rule**, so nothing was stale, no offer appeared, and the two halves of the evidence sat in
+ * their own repository with nothing comparing them. A number only says something to somebody who saw
+ * the previous one — which a first-time adopter never did.
+ *
+ * So a project may point at its own copy and have it checked:
+ *
+ * ```json
+ * { "rule": ".claude/rules/project/work-legibility.md", "entrypoints": [ … ] }
+ * ```
+ *
+ * **Opt-in, and it must stay that way.** The rule invites a project to extend or supersede it, and a
+ * check that failed on an edited copy would punish exactly that. Naming the path is a project saying
+ * *"keep mine verbatim and tell me when yours moves"* — which is a different promise, and theirs to
+ * make.
+ */
+export function adoptedRuleProblem(root, declaration, { stamp = RULE_STAMP } = {}) {
+  const declared = declaration?.rule;
+  if (typeof declared !== "string" || declared.trim() === "") return null;
+  const path = join(root, declared);
+  if (!existsSync(path)) {
+    return `\`rule\` names \`${declared}\`, and there is no such file — a pointer to nothing checks nothing`;
+  }
+  const actual = stampOf(readFileSync(path, "utf8"));
+  if (actual === stamp) return null;
+  return (
+    `the copy of rule:work-legibility at \`${declared}\` is not the one this check ships beside: ` +
+    `it hashes to \`${actual}\`, the shipped rule to \`${stamp}\`. Take the rule again from the ` +
+    `Chain tool — or drop the \`rule\` field if this copy is deliberately your own`
   );
 }
 
@@ -328,6 +367,8 @@ function main() {
   }
   const drift = ruleStampProblem(ROOT);
   if (drift !== null) problems.push(drift);
+  const adopted = adoptedRuleProblem(ROOT, declaration);
+  if (adopted !== null) problems.push(adopted);
   if (problems.length > 0) {
     console.error("check-work-levels FAILED:");
     for (const problem of problems) console.error(`  - ${problem}`);

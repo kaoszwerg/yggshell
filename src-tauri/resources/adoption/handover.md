@@ -61,10 +61,23 @@ nothing to compare. So the check carries the rule's fingerprint and prints it on
 check-work-levels OK — 85 entrypoints, grammar valid. (rule:work-legibility @ a8916909f181aa6f — if this changed, copy the rule again)
 ```
 
-**When that value changes, the rule you hold is the older one.** Take the copy again. It changes only
-when the check is replaced, so the sequence is always: the app offers you a newer check → you take it
-→ the stamp moves → the rule is worth re-reading. Nothing is rewritten in your repository without you
-pressing something.
+**When that value changes, the rule you hold is the older one.** Take the copy again.
+
+**Better: have it checked rather than noticed.** A printed number only speaks to somebody who saw the
+previous one, which a first-time reader never did — so point at your copy and the check compares it
+for you:
+
+```json
+{ "rule": ".claude/rules/project/work-legibility.md", "entrypoints": [ … ] }
+```
+
+**Opt-in on purpose.** The rule invites you to extend or supersede it, and a check that failed on an
+edited copy would punish exactly that. Naming the path is you saying *"I keep theirs verbatim — tell
+me when it moves"*. Leave the field out and nothing is checked.
+
+*(This was added because the first project to adopt the stamp already had the current check and an
+older rule: nothing was stale, nothing was offered, and both halves of the evidence sat in their own
+repository with nothing comparing them.)*
 
 *(This exists because it was needed and was not there. A bug report from an adopting project was
 answered by writing the answer into the rule — and the check was left untouched, so no copy anywhere
